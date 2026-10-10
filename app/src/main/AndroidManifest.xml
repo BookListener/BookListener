@@ -31,7 +31,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="simplemusic"
+                    android:scheme="booklistener"
                     android:host="oauth" />
             </intent-filter>
             <!-- 文件管理器"用其他应用打开"音频文件进入播放器 -->

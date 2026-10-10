@@ -27,6 +27,6 @@ object AliyunConfig {
     const val TOKEN_URL = "https://openapi.alipan.com/oauth/token"
     const val FILE_LIST_URL = "https://openapi.alipan.com/adrive/v1.0/openFile/list"
     const val DOWNLOAD_URL = "https://openapi.alipan.com/adrive/v1.0/openFile/getDownloadUrl"
-    const val REDIRECT_URI = "simplemusic://oauth/callback"
+    const val REDIRECT_URI = "booklistener://oauth/callback"
     const val SCOPE = "file:list:read file:content:read"
 }

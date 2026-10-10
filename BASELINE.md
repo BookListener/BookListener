@@ -1,4 +1,4 @@
-# SimpleCloudPlayer 构建基线（BASELINE）
+# BookListener 构建基线（BASELINE）
 
 > 更新时间：2026-10-05・状态：
 >
@@ -103,7 +103,7 @@
 
 * `CrashLogger` 在 MainActivity.onCreate 首行安装，未捕获异常写入
 
-  `Android/data/com.simple.musicplayer/files/crash_log.txt`
+  `Android/data/com.booklistener/files/crash_log.txt`
 
 * 用户闪退后回传该文件即可定位（release 栈为 R8 混淆名，需对照本基线反推）
 

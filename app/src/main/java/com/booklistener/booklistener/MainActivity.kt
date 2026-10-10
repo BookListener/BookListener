@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         handleExternalOpen(intent)
     }
 
-    /** 处理阿里云盘 OAuth 回调 deep link：simplemusic://oauth/callback?code=xxx */
+    /** 处理阿里云盘 OAuth 回调 deep link：booklistener://oauth/callback?code=xxx */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleOAuthCallback(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme == "simplemusic" && data.host == "oauth") {
+        if (data.scheme == "booklistener" && data.host == "oauth") {
             val vm = ViewModelProvider(this)[PlayerViewModel::class.java]
             vm.handleAliyunCallback(data)
         }

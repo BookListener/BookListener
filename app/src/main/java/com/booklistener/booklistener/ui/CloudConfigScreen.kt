@@ -124,7 +124,7 @@ fun CloudConfigScreen(
         }
 
         Text(
-            text = "提示：阿里云盘授权回调地址为 simplemusic://oauth/callback，需在开放平台配置；" +
+            text = "提示：阿里云盘授权回调地址为 booklistener://oauth/callback，需在开放平台配置；" +
                 "百度网盘等传统 OAuth 平台需自行搭建服务端，本版本暂不内置。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

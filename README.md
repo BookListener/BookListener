@@ -34,12 +34,12 @@ app/src/main/java/com/simple/musicplayer/
 ```powershell
 $env:JAVA_HOME = "C:\Users\e\AppData\Local\Android\Tools\jdk-21.0.12.1+1"
 $env:PATH = "$env:JAVA_HOME\bin;" + $env:PATH
-cd SimpleCloudPlayer
+cd BookListener
 gradle assembleDebug   # 产出 app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## 使用前配置
-1. 阿里云盘：到阿里云开放平台注册应用，client_id 填入「网盘 → 阿里云盘」页，配置回调地址 `simplemusic://oauth/callback`；用户扫码授权后即可浏览。
+1. 阿里云盘：到阿里云开放平台注册应用，client_id 填入「网盘 → 阿里云盘」页，配置回调地址 `booklistener://oauth/callback`；用户扫码授权后即可浏览。
 2. WebDAV：在网盘后台开启 WebDAV 并生成应用密码，填入「网盘 → WebDAV 配置」。
 
 ## 已知边界（刻意裁剪）
