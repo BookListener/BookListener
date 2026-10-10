@@ -674,7 +674,7 @@ private fun CurrentAlbumCard(
     }
 }
 
-/** 专辑歌曲行（v1.7.0）：#音轨 · 标题 + 作者 + 时长；正在播放高亮 */
+/** 专辑歌曲行（v1.7.0）：音轨号/序号 · 标题 + 作者 + 时长；正在播放高亮 */
 @Composable
 private fun AlbumSongRow(
     file: IndexedFile,
@@ -701,7 +701,7 @@ private fun AlbumSongRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = file.track?.toString() ?: "#",
+            text = file.track?.toString() ?: "",
             style = MaterialTheme.typography.bodyMedium,
             color = if (isPlayingCurrent) {
                 MaterialTheme.colorScheme.primary

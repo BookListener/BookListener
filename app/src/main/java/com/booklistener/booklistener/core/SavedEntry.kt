@@ -178,6 +178,31 @@ fun AudioItem.toIndexedFile(): IndexedFile = IndexedFile(
     rawName = rawName
 )
 
+/**
+ * v1.6.13：无音轨号（tag 缺失）的条目，写库前按展示排序（名称自然序）赋予 1..N 序号；
+ * 有音轨号的保持标签原值不动。幂等：同一列表重复调用结果一致。
+ * 说明：序号只反映「无 tag 条目之间」的相对排序，有 tag 条目不参与重新编号。
+ */
+fun assignTrackNumbers(files: List<IndexedFile>): List<IndexedFile> {
+    // 按名称自然序给无音轨号条目排序，映射 原索引 → 序号
+    val ranks = files
+        .mapIndexed { index, f -> index to f }
+        .filter { (_, f) -> f.track == null }
+        .sortedWith { (_, a), (_, b) ->
+            AudioSortKey.byName.compare(
+                AudioSortKey(a.displayName, a.disc, a.track),
+                AudioSortKey(b.displayName, b.disc, b.track)
+            )
+        }
+        .mapIndexed { rank, (index, _) -> index to (rank + 1) }
+        .toMap()
+    if (ranks.isEmpty()) return files
+    return files.mapIndexed { index, f ->
+        val track = ranks[index]
+        if (track != null) f.copy(track = track) else f
+    }
+}
+
 /** 索引行 → AudioItem（专辑播放队列用；sourceType 由来源条目提供，网盘按类型解析） */
 fun IndexedFile.toAudioItem(sourceType: SourceType): AudioItem = AudioItem(
     id = uri,
@@ -204,7 +229,7 @@ class EntryIndexStore(private val dao: AppDao) {
     }
 
     fun save(entryId: String, files: List<IndexedFile>) = blockingRun {
-        dao.replaceEntryIndex(entryId, files.map { it.toEntity(entryId) })
+        dao.replaceEntryIndex(entryId, assignTrackNumbers(files).map { it.toEntity(entryId) })
     }
 
     /** 播放后补录/校正时长（网盘或扫描未知时长） */
