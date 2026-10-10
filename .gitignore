@@ -1,0 +1,25 @@
+# --- Android / Gradle ---
+.gradle/
+app/.gradle/
+.kotlin/
+app/.kotlin/
+build/
+app/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+
+# --- 构建产物与交付包 ---
+*.apk
+*.zip
+build-*.log
+hs_err_pid*.log
+
+# --- 临时目录 ---
+_tmp146/
