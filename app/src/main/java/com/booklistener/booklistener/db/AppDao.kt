@@ -102,6 +102,10 @@ interface AppDao {
     @Query("SELECT * FROM entry_index")
     suspend fun getAllEntryIndex(): List<EntryIndexEntity>
 
+    /** 按条目加载（v1.6.14：进入条目视图改从 db 读取，不再每次全量扫描） */
+    @Query("SELECT * FROM entry_index WHERE entryId = :entryId")
+    suspend fun getEntryIndex(entryId: String): List<EntryIndexEntity>
+
     @Query("DELETE FROM entry_index WHERE entryId = :entryId")
     suspend fun deleteEntryIndex(entryId: String)
 

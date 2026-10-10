@@ -188,12 +188,7 @@ fun assignTrackNumbers(files: List<IndexedFile>): List<IndexedFile> {
     val ranks = files
         .mapIndexed { index, f -> index to f }
         .filter { (_, f) -> f.track == null }
-        .sortedWith { (_, a), (_, b) ->
-            AudioSortKey.byName.compare(
-                AudioSortKey(a.displayName, a.disc, a.track),
-                AudioSortKey(b.displayName, b.disc, b.track)
-            )
-        }
+        .sortedWith { a, b -> IndexedFileByDisplayOrder.compare(a.second, b.second) }
         .mapIndexed { rank, (index, _) -> index to (rank + 1) }
         .toMap()
     if (ranks.isEmpty()) return files
@@ -201,6 +196,18 @@ fun assignTrackNumbers(files: List<IndexedFile>): List<IndexedFile> {
         val track = ranks[index]
         if (track != null) f.copy(track = track) else f
     }
+}
+
+/** 索引行按展示顺序排序（disc → track → 名称自然序），v1.6.14：db 读取后统一排序 */
+fun sortIndexedFiles(files: List<IndexedFile>): List<IndexedFile> =
+    files.sortedWith(IndexedFileByDisplayOrder)
+
+/** 索引行展示序比较器：disc → track → 名称自然序（缺失档位排后） */
+private val IndexedFileByDisplayOrder: Comparator<IndexedFile> = Comparator { a, b ->
+    AudioSortKey.byName.compare(
+        AudioSortKey(a.displayName, a.disc, a.track),
+        AudioSortKey(b.displayName, b.disc, b.track)
+    )
 }
 
 /** 索引行 → AudioItem（专辑播放队列用；sourceType 由来源条目提供，网盘按类型解析） */
@@ -226,6 +233,11 @@ class EntryIndexStore(private val dao: AppDao) {
 
     fun load(): Map<String, List<IndexedFile>> = kotlinx.coroutines.runBlocking {
         dao.getAllEntryIndex().groupBy({ it.entryId }, { IndexedFile.fromEntity(it) })
+    }
+
+    /** 按条目读取文件清单（v1.6.14：进入条目视图改从 db 读取，不再每次全量扫描） */
+    fun loadEntry(entryId: String): List<IndexedFile> = kotlinx.coroutines.runBlocking {
+        dao.getEntryIndex(entryId).map { IndexedFile.fromEntity(it) }
     }
 
     fun save(entryId: String, files: List<IndexedFile>) = blockingRun {

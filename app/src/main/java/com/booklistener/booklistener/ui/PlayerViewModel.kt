@@ -24,6 +24,7 @@ import com.booklistener.core.LastSessionLogic
 import com.booklistener.core.MessageCatalog
 import com.booklistener.core.OpenFileItemFactory
 import com.booklistener.core.SavedEntry
+import com.booklistener.core.sortIndexedFiles
 import com.booklistener.core.TagResolver
 import com.booklistener.core.SavedEntryStore
 import com.booklistener.core.SearchHit
@@ -652,24 +653,32 @@ class PlayerViewModel @JvmOverloads constructor(
 
     /** 扫描 SAF 文件夹并固化条目（含封面/文件数/内容索引），进入文件夹视图就绪不播 */
     fun scanFolder(treeUri: Uri, showSheet: Boolean = true) {
-        // 同步固化基础条目（保证 UI 与兼容 API 立即可见），异步扫描后原位补充封面/文件数
+        // 同步固化基础条目（保证 UI 与兼容 API 立即可见），异步加载后原位补充封面/文件数
         saveFolder(treeUri)
         openEntryView(
             entryId = treeUri.toString(),
             entryUri = treeUri,
             emptyMessage = MessageCatalog.EMPTY_DIR_AUDIO,
             showSheet = showSheet,
-            loadItems = { folderScanner.scan(treeUri.toString()) },
+            loadItems = {
+                loadFromIndex(treeUri.toString(), SourceType.LOCAL) ?: run {
+                    val items = folderScanner.scan(treeUri.toString())
+                    indexStore.save(treeUri.toString(), items.map { it.toIndexedFile() })
+                    items
+                }
+            },
             afterLoad = { items ->
                 val entry = buildLocalEntry(treeUri, items, _savedEntries.value.firstOrNull { it.id == treeUri.toString() })
                 setEntries(entryStore.replace(_savedEntries.value, entry))
-                // v1.7.0：索引全字段落库（专辑/作者/音轨/碟号/时长/原始文件名），专辑与播放列表从 db 加载
-                indexStore.save(
-                    entry.id,
-                    items.map { it.toIndexedFile() }
-                )
             }
         )
+    }
+
+    /** v1.6.14：从数据库索引读取条目文件清单（按展示序排序后转 AudioItem）；无数据返回 null 由调用方兜底 */
+    private suspend fun loadFromIndex(entryId: String, sourceType: SourceType): List<AudioItem>? {
+        val files = indexStore.loadEntry(entryId)
+        if (files.isEmpty()) return null
+        return sortIndexedFiles(files).map { it.toAudioItem(sourceType) }
     }
 
     /**
@@ -686,7 +695,8 @@ class PlayerViewModel @JvmOverloads constructor(
     fun savedEntryById(id: String): SavedEntry? =
         _savedEntries.value.firstOrNull { it.id == id }
 
-    /** 打开已添加条目：本地走 SAF 扫描，网盘走数据源目录浏览；showSheet=false 用于启动静默恢复 */
+    /** 打开已添加条目：本地走 SAF 扫描，网盘走数据源目录浏览；showSheet=false 用于启动静默恢复
+     *  v1.6.14：优先从 db 索引读取；db 无数据时兜底浏览一次并写库（强制重扫走文件夹管理页刷新） */
     fun openSavedEntry(entry: SavedEntry, showSheet: Boolean = true) {
         if (entry.isLocal) {
             scanFolder(Uri.parse(entry.uri), showSheet = showSheet)
@@ -697,8 +707,13 @@ class PlayerViewModel @JvmOverloads constructor(
             entryUri = Uri.parse(entry.id),
             emptyMessage = MessageCatalog.EMPTY_DIR_AUDIO,
             showSheet = showSheet,
-            loadItems = { repo.listDirectory(entry.sourceType, entry.uri).getOrThrow() },
-            afterLoad = { items -> indexStore.save(entry.id, items.map { it.toIndexedFile() }) }
+            loadItems = {
+                loadFromIndex(entry.id, entry.sourceType) ?: run {
+                    val items = repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                    indexStore.save(entry.id, items.map { it.toIndexedFile() })
+                    items
+                }
+            }
         )
     }
 
