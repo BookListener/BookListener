@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipeRight
 import com.booklistener.core.AudioItem
 import com.booklistener.core.SourceType
@@ -167,8 +168,17 @@ class PlayerDetailSheetContentTest {
                 onSeek = { seeked = it }
             )
         }
-        composeRule.onNodeWithTag("seek_bar").performTouchInput { swipeRight() }
-        // 容差 5%：swipeRight 起点含 thumb/padding 偏移，实际到 ~97%；
+        composeRule.onNodeWithTag("seek_bar").performTouchInput {
+            // Compose 1.11 手势语义：swipe 系列 up 落点可能在节点外导致手势取消、不触发提交。
+            // 显式手势：中心按下（Slider 跳转到 50%）→ 拖到 99% 节点内落点 → up。
+            // 落点 ~96%（含 thumb/padding 偏移），在下方 5% 容差内。
+            down(center)
+            advanceEventTime(50)
+            moveTo(Offset(width * 0.99f, center.y))
+            advanceEventTime(50)
+            up()
+        }
+        // 容差 5%：拖动起点含 thumb/padding 偏移，实际到 ~97%；
         // 该容差仍能抓住"seek 只到 0/1ms"的回归（偏差 100%）
         assertEquals(334_000.0, seeked.toDouble(), 334_000.0 * 0.05)
     }
