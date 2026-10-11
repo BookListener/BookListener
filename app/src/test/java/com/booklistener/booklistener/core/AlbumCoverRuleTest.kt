@@ -46,4 +46,31 @@ class AlbumCoverRuleTest {
         // 空列表边界：视为单专辑语义（沿用文件夹封面，无害）
         assertEquals(entryCover, manager.resolveAlbumCover(entryCover, albumCountInEntry = 0, firstAudioUri = null))
     }
+
+    // v1.6.22：条目视图进入的专辑数判定（修复"无封面专辑串用其他专辑图"回归）
+    @Test
+    fun albumCountOf_nullAlbums_groupAsOne() {
+        // 无 tag 文件 album=null：同一文件夹全部视为一组（单专辑）
+        assertEquals(1, manager.albumCountOf(listOf(audio(null), audio(null), audio(null))))
+    }
+
+    @Test
+    fun albumCountOf_distinctAlbums_counted() {
+        assertEquals(2, manager.albumCountOf(listOf(audio("A"), audio("B"), audio("A"))))
+        assertEquals(3, manager.albumCountOf(listOf(audio("A"), audio(null), audio("B"))))
+    }
+
+    @Test
+    fun albumCountOf_empty_isZero() {
+        assertEquals(0, manager.albumCountOf(emptyList()))
+    }
+
+    private fun audio(album: String?) = AudioItem(
+        id = "id-$album-${System.identityHashCode(album)}",
+        displayName = "t.mp3",
+        path = "content://audio/t.mp3",
+        sourceType = SourceType.LOCAL,
+        size = 1L,
+        album = album
+    )
 }

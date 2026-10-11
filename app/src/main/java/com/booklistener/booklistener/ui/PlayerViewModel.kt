@@ -808,11 +808,19 @@ class PlayerViewModel @JvmOverloads constructor(
         val (startIndex, startPos) = FolderProgressLogic.resolveStart(items.size, record)
         lastSavedIndex = startIndex
         lastSavedUri = folderUri.toString()
-        val entryCover = savedEntryById(folderUri.toString())?.coverUri
+        val entry = savedEntryById(folderUri.toString())
+        // v1.6.22：修复"无封面专辑串用其他专辑图"（老问题回归）。
+        // 文件夹视图进入的封面规则与专辑入口共用 resolveAlbumCover：
+        // 单专辑文件夹 → 文件夹封面；多专辑文件夹 → 记录定位曲目的内嵌封面（解析不到返回 null，绝不串图）
+        val cover = entry?.let { e ->
+            coverManager.resolveAlbumCover(
+                e.coverUri, coverManager.albumCountOf(items), items.getOrNull(startIndex)?.path
+            )
+        }
         MediaPlayService.start(getApplication())
         viewModelScope.launch {
             PlaybackController.prepareFolder(
-                resolveAll(items, coverUri = entryCover), startIndex, startPos, folderUri.toString()
+                resolveAll(items, coverUri = cover), startIndex, startPos, folderUri.toString()
             )
         }
     }

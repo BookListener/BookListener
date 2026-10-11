@@ -7,9 +7,16 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
@@ -28,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 前台播放服务：持有 ExoPlayer + MediaSession。
@@ -71,10 +79,50 @@ class MediaPlayService : MediaSessionService() {
         )
         // Android 8+ 要求 startForegroundService 后 5 秒内 startForeground（合规占位）
         startForegroundCompat()
-        // 播放状态驱动 MediaStyle 通知内容（曲目名 / 播放状态 / 进度 / 控件按钮）
+        // 播放状态驱动 MediaStyle 通知内容（曲目名 / 播放状态 / 进度 / 控件按钮 / 封面）
         notificationJob = notificationScope.launch {
-            PlaybackController.state.collect { state -> updateMediaNotification(state) }
+            PlaybackController.state.collect { state ->
+                // 封面在 IO 线程解码（file:// 直接解码 / content:// 流解码）
+                val icon = withContext(Dispatchers.IO) { loadLargeIcon() }
+                updateMediaNotification(state, icon)
+            }
         }
+    }
+
+    /**
+     * 当前曲目通知大图标（v1.6.22 修复"跨文件夹封面串图"）：
+     * 优先当前 MediaItem metadata 的 artworkUri；无封面时返回程序生成的占位图
+     * （圆形渐变，与 App 无封面占位一致）。绝不返回 null——Android 通知更新时
+     * 若不设置 largeIcon 会沿用上一次的图（播放无封面文件夹时显示上一个文件夹的封面）。
+     */
+    private fun loadLargeIcon(): Bitmap {
+        val artUri = mediaSession?.player?.currentMediaItem?.mediaMetadata?.artworkUri
+        val loaded = artUri?.let { loadBitmap(it) }
+        return loaded ?: placeholderCover()
+    }
+
+    private fun loadBitmap(uri: Uri): Bitmap? = runCatching {
+        when (uri.scheme) {
+            "file" -> BitmapFactory.decodeFile(uri.path)
+            "content" -> contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+            else -> null
+        }
+    }.getOrNull()
+
+    /** 无封面占位：与 App 内渐变占位同色系，显式覆盖旧图 */
+    private fun placeholderCover(): Bitmap {
+        val size = 128
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.shader = LinearGradient(
+            0f, 0f, size.toFloat(), size.toFloat(),
+            android.graphics.Color.parseColor("#2E5F8A"),
+            android.graphics.Color.parseColor("#3FA0B5"),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+        return bmp
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -150,8 +198,8 @@ class MediaPlayService : MediaSessionService() {
         }
     }
 
-    /** 播放状态驱动的 MediaStyle 通知：锁屏/状态栏显示曲目名、播放状态、进度与控件 */
-    private fun updateMediaNotification(state: PlaybackState) {
+    /** 播放状态驱动的 MediaStyle 通知：锁屏/状态栏显示曲目名、播放状态、进度、控件与封面 */
+    private fun updateMediaNotification(state: PlaybackState, largeIcon: Bitmap) {
         val session = mediaSession ?: return
         val title = state.currentItem?.displayName ?: return
         val playing = state.isPlaying
@@ -191,6 +239,7 @@ class MediaPlayService : MediaSessionService() {
             .setOngoing(true)
             .setShowWhen(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setLargeIcon(largeIcon)
             .setStyle(
                 MediaStyle()
                     .setMediaSession(session.sessionCompatToken)

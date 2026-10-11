@@ -90,6 +90,17 @@ class AlbumInteractionTest {
         assertEquals(expected, PlaybackController.currentQueueOwnerId)
     }
 
+    /** 通用异步断言：主 looper idle + 轮询，超时失败（避免全量跑时 IO 调度时序的偶发竞态） */
+    private fun awaitTrue(msg: String, block: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            if (block()) return
+            Thread.sleep(20)
+        }
+        assertTrue(msg, false)
+    }
+
     /** 核心回归：点击其他专辑 → 播放上下文切到该专辑记录，就绪不自动播放，弹详情 */
     @Test
     fun openOtherAlbum_switchesPlaybackRecord_pausedAndShowsSheet() {
@@ -101,8 +112,8 @@ class AlbumInteractionTest {
         awaitQueueOwner(treeA.toString())
         // 就绪不自动播放（暂停态）
         assertFalse("切换后不应自动开始播放", PlaybackController.state.value.isPlaying)
-        // 弹出播放详情
-        assertTrue("切换专辑后应弹播放详情", vm.requestPlayerSheet.value)
+        // 弹出播放详情（轮询等待：弹详情发生在 prepareFolder 之后同一续体，idle 时序偶发滞后）
+        awaitTrue("切换专辑后应弹播放详情") { vm.requestPlayerSheet.value }
         // 进入专辑视图
         assertTrue(vm.inFolderView.value)
         assertEquals(treeA, vm.currentFolderUri.value)
