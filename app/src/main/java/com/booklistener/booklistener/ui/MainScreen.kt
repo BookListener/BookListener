@@ -30,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -151,8 +150,7 @@ fun MainScreen(
                         tabIndex = 0
                     }
                 },
-                icon = { Icon(Icons.Outlined.MusicNote, contentDescription = "曲目") },
-                label = { Text("曲目") },
+                icon = { Icon(Icons.Outlined.MusicNote, contentDescription = "曲目", modifier = Modifier.size(30.dp)) },
                 modifier = Modifier.weight(1f)
             )
             // 中间：当前播放封面按钮（v1.6.8：84dp 圆形，播放中缓慢旋转；暂停显示半透明播放按钮），
@@ -245,8 +243,7 @@ fun MainScreen(
             NavigationBarItem(
                 selected = tabIndex == 2,
                 onClick = { tabIndex = 2 },
-                icon = { Icon(Icons.Outlined.Settings, contentDescription = "设置") },
-                label = { Text("设置") },
+                icon = { Icon(Icons.Outlined.Settings, contentDescription = "设置", modifier = Modifier.size(30.dp)) },
                 modifier = Modifier.weight(1f)
             )
         }
