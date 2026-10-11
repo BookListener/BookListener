@@ -116,22 +116,14 @@ fun FolderManageScreen(
     if (showCloudDialog) {
         AlertDialog(
             onDismissRequest = { showCloudDialog = false },
-            title = { Text("添加网盘内容") },
-            text = { Text("选择要添加的数据源（需先完成对应配置/授权）") },
+            title = { Text("添加 WebDAV 内容") },
+            text = { Text("将 WebDAV 根目录加入曲目列表（需先在设置中完成 WebDAV 配置）") },
             confirmButton = {
-                Row {
-                    TextButton(onClick = {
-                        viewModel.addCloudSource(SourceType.WEBDAV)
-                        showCloudDialog = false
-                    }) {
-                        Text("WebDAV")
-                    }
-                    TextButton(onClick = {
-                        viewModel.addCloudSource(SourceType.ALIYUN)
-                        showCloudDialog = false
-                    }) {
-                        Text("阿里云盘")
-                    }
+                TextButton(onClick = {
+                    viewModel.addCloudSource(SourceType.WEBDAV)
+                    showCloudDialog = false
+                }) {
+                    Text("添加")
                 }
             },
             dismissButton = {

@@ -174,7 +174,7 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
-        // 网盘配置（WebDAV 凭证 / 阿里云盘授权）
+        // 网盘配置（仅 WebDAV）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -189,7 +189,7 @@ fun SettingsScreen(
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text("网盘配置", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "WebDAV / 阿里云盘",
+                    text = "WebDAV",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -275,7 +275,7 @@ fun SettingsScreen(
         Text("关于", style = MaterialTheme.typography.titleLarge)
         Text(
             text = "BookListener v${currentVersionName()}\n" +
-                "数据源：本地 / WebDAV / 阿里云盘（PKCE）\n" +
+                "数据源：本地 / WebDAV\n" +
                 "音频格式：mp3 / m4a / flac / wav / ogg / aac",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 8.dp)
