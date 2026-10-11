@@ -1,4 +1,5 @@
 package com.booklistener.ui
+import com.booklistener.ui.icons.AppIcons
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -13,15 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.outlined.MusicNote
-import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Repeat
-import androidx.compose.material.icons.outlined.RepeatOne
-import androidx.compose.material.icons.outlined.SkipNext
-import androidx.compose.material.icons.outlined.SkipPrevious
-import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -87,7 +80,7 @@ fun PlayerDetailSheet(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.MusicNote,
+                    imageVector = AppIcons.MusicNote,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(64.dp)
@@ -341,7 +334,7 @@ fun PlayerDetailSheetContent(
             )
             IconButton(onClick = onToggleAbPoint) {
                 Icon(
-                    imageVector = Icons.Outlined.Flag,
+                    imageVector = AppIcons.Flag,
                     contentDescription = "设置复读区间",
                     tint = if (abA != null || abB != null) {
                         MaterialTheme.colorScheme.primary
@@ -365,19 +358,19 @@ fun PlayerDetailSheetContent(
             IconButton(onClick = onCycleRepeatMode, modifier = Modifier.size(48.dp)) {
                 when (repeatMode) {
                     androidx.media3.common.Player.REPEAT_MODE_ONE -> Icon(
-                        imageVector = Icons.Outlined.RepeatOne,
+                        imageVector = AppIcons.RepeatOne,
                         contentDescription = "单曲循环",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(26.dp)
                     )
                     androidx.media3.common.Player.REPEAT_MODE_ALL -> Icon(
-                        imageVector = Icons.Outlined.Repeat,
+                        imageVector = AppIcons.Repeat,
                         contentDescription = "列表循环",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(26.dp)
                     )
                     else -> Icon(
-                        imageVector = Icons.Outlined.Repeat,
+                        imageVector = AppIcons.Repeat,
                         contentDescription = "顺序播放",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(26.dp)
@@ -387,7 +380,7 @@ fun PlayerDetailSheetContent(
             Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onPrevious, modifier = Modifier.size(56.dp)) {
                 Icon(
-                    imageVector = Icons.Outlined.SkipPrevious,
+                    imageVector = AppIcons.SkipPrevious,
                     contentDescription = "Previous",
                     modifier = Modifier.size(36.dp)
                 )
@@ -402,7 +395,7 @@ fun PlayerDetailSheetContent(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = if (state.isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                        imageVector = if (state.isPlaying) AppIcons.Pause else Icons.Outlined.PlayArrow,
                         contentDescription = if (state.isPlaying) "Pause" else "Play",
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(44.dp)
@@ -411,7 +404,7 @@ fun PlayerDetailSheetContent(
             }
             IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
                 Icon(
-                    imageVector = Icons.Outlined.SkipNext,
+                    imageVector = AppIcons.SkipNext,
                     contentDescription = "Next",
                     modifier = Modifier.size(36.dp)
                 )
@@ -421,7 +414,7 @@ fun PlayerDetailSheetContent(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = onOpenSleepTimer, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        imageVector = Icons.Outlined.Timer,
+                        imageVector = AppIcons.Timer,
                         contentDescription = "定时关闭",
                         tint = if (sleepRemainingMs != null) {
                             MaterialTheme.colorScheme.primary
@@ -573,7 +566,7 @@ fun AlbumCover(displayName: String, size: Dp, modifier: Modifier = Modifier) {
     ) {
         if (initial.isEmpty()) {
             Icon(
-                imageVector = Icons.Outlined.MusicNote,
+                imageVector = AppIcons.MusicNote,
                 contentDescription = "专辑封面",
                 tint = Color.White,
                 modifier = Modifier.size(size * 0.42f)
@@ -586,7 +579,7 @@ fun AlbumCover(displayName: String, size: Dp, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.Bold
             )
             Icon(
-                imageVector = Icons.Outlined.MusicNote,
+                imageVector = AppIcons.MusicNote,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.55f),
                 modifier = Modifier

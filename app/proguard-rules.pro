@@ -1,6 +1,7 @@
 # ============ Media3 / ExoPlayer ============
-# media3 库自带 consumer 规则，此处再加全量 keep 兜底（R8 误删会导致运行时 NoClassDefFoundError）
--keep class androidx.media3.** { *; }
+# v1.6.23：全量 keep 使 R8 工作集过大（4G 环境 OOM）。media3 库自带 consumer 规则
+# 已覆盖反射点（MediaSession/DefaultMediaNotificationProvider 等）；如运行时出现
+# media3 相关 NoClassDefFoundError，再按具体反射点补充 keep，不恢复全量。
 -dontwarn androidx.media3.**
 
 # ============ androidx.media（MediaStyle 通知，media3-session 的 runtime 依赖） ============
@@ -14,8 +15,10 @@
 -dontwarn androidx.security.**
 -dontwarn com.google.crypto.tink.**
 
-# ============ Kotlin 协程（Main dispatcher 通过反射实例化 HandlerDispatcher） ============
--keep class kotlinx.coroutines.** { *; }
+# ============ Kotlin 协程 ============
+# v1.6.23：去掉全量 keep（自带 consumer 规则），仅保留 Android 平台反射点
+# （Dispatchers.Main 通过反射实例化 HandlerDispatcher）
+-keep class kotlinx.coroutines.android.** { *; }
 -dontwarn kotlinx.coroutines.**
 
 # ============ Room 生成的 DAO 实现通过反射/注解调用 ============

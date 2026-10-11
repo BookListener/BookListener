@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-
 package com.booklistener.ui
+import com.booklistener.ui.icons.AppIcons
+
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -25,15 +26,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.MusicNote
-import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.SkipNext
-import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -495,7 +490,7 @@ private fun CurrentEntryCard(
             trailing = {
                 IconButton(onClick = onToggle) {
                     Icon(
-                        imageVector = if (state.isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                        imageVector = if (state.isPlaying) AppIcons.Pause else Icons.Outlined.PlayArrow,
                         contentDescription = if (state.isPlaying) "暂停" else "播放"
                     )
                 }
@@ -528,13 +523,13 @@ private fun FileResultRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Outlined.MusicNote,
+            imageVector = AppIcons.MusicNote,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(48.dp)
         )
         Icon(
-            imageVector = if (sourceType == SourceType.LOCAL) Icons.Outlined.Folder else Icons.Outlined.Cloud,
+            imageVector = if (sourceType == SourceType.LOCAL) AppIcons.Folder else AppIcons.Cloud,
             contentDescription = if (sourceType == SourceType.LOCAL) "本地" else "网盘",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp)
@@ -599,7 +594,7 @@ private fun AlbumRow(
                 )
                 // v1.6.5：来源图标调小（16dp），与时长同行右对齐
                 Icon(
-                    imageVector = if (entry?.isLocal != false) Icons.Outlined.Folder else Icons.Outlined.Cloud,
+                    imageVector = if (entry?.isLocal != false) AppIcons.Folder else AppIcons.Cloud,
                     contentDescription = if (entry?.isLocal != false) "本地" else "网盘",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp).padding(start = 6.dp)
@@ -662,7 +657,7 @@ private fun CurrentAlbumCard(
             }
             IconButton(onClick = onToggle) {
                 Icon(
-                    imageVector = if (state.isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    imageVector = if (state.isPlaying) AppIcons.Pause else Icons.Outlined.PlayArrow,
                     contentDescription = if (state.isPlaying) "暂停" else "播放"
                 )
             }
@@ -830,16 +825,16 @@ fun NowPlayingBar(
                 )
             }
             IconButton(onClick = onPrevious) {
-                Icon(Icons.Outlined.SkipPrevious, contentDescription = "Previous")
+                Icon(AppIcons.SkipPrevious, contentDescription = "Previous")
             }
             IconButton(onClick = onToggle) {
                 Icon(
-                    imageVector = if (state.isPlaying) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                    imageVector = if (state.isPlaying) AppIcons.Pause else Icons.Outlined.PlayArrow,
                     contentDescription = if (state.isPlaying) "Pause" else "Play"
                 )
             }
             IconButton(onClick = onNext) {
-                Icon(Icons.Outlined.SkipNext, contentDescription = "Next")
+                Icon(AppIcons.SkipNext, contentDescription = "Next")
             }
         }
         if (state.isBuffering) {

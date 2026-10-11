@@ -1,4 +1,5 @@
 package com.booklistener.ui
+import com.booklistener.ui.icons.AppIcons
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -10,9 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -158,7 +156,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Outlined.Folder,
+                imageVector = AppIcons.Folder,
                 contentDescription = "文件夹管理"
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
@@ -185,7 +183,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Outlined.Cloud,
+                imageVector = AppIcons.Cloud,
                 contentDescription = "网盘配置"
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
@@ -213,7 +211,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Outlined.Timer,
+                imageVector = AppIcons.Timer,
                 contentDescription = "定时关闭"
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {

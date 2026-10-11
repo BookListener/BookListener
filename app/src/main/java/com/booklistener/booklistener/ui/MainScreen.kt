@@ -1,4 +1,5 @@
 package com.booklistener.ui
+import com.booklistener.ui.icons.AppIcons
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -150,7 +150,7 @@ fun MainScreen(
                         tabIndex = 0
                     }
                 },
-                icon = { Icon(Icons.Outlined.MusicNote, contentDescription = "曲目", modifier = Modifier.size(30.dp)) },
+                icon = { Icon(AppIcons.MusicNote, contentDescription = "曲目", modifier = Modifier.size(30.dp)) },
                 modifier = Modifier.weight(1f)
             )
             // 中间：当前播放封面按钮（v1.6.8：84dp 圆形，播放中缓慢旋转；暂停显示半透明播放按钮），

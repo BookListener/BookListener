@@ -1,4 +1,5 @@
 package com.booklistener.ui
+import com.booklistener.ui.icons.AppIcons
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -8,8 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -99,7 +98,7 @@ fun EntrySummaryRow(
             subtitle?.invoke()
         }
         Icon(
-            imageVector = if (entry.isLocal) Icons.Outlined.Folder else Icons.Outlined.Cloud,
+            imageVector = if (entry.isLocal) AppIcons.Folder else AppIcons.Cloud,
             contentDescription = if (entry.isLocal) "本地" else "网盘",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(start = 8.dp)
