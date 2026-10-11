@@ -113,13 +113,15 @@ fun MainScreen(
                     .padding(bottom = 96.dp)
             ) {
                 when (tabIndex) {
-                    0 -> DirectoryScreen(playerViewModel)
+                    0 -> DirectoryScreen(playerViewModel, backdrop = backdrop)
                     2 -> SettingsScreen(playerViewModel, cloudConfigViewModel)
                 }
             }
         }
 
         // 玻璃底栏：高度 96dp 容纳增大的 84dp 中间播放封面
+        // v1.6.19：增强特效可见度——blur 4→12dp、lens 16/32→24/48dp、
+        // 表面遮盖 45%→25%（深色主题下原参数几乎看不出模糊/折射，已按头条毛玻璃风格校准）
         Row(
             modifier = Modifier
                 .safeContentPadding()
@@ -128,10 +130,10 @@ fun MainScreen(
                     shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                     effects = {
                         vibrancy()
-                        blur(4f.dp.toPx())
-                        lens(16f.dp.toPx(), 32f.dp.toPx())
+                        blur(12f.dp.toPx())
+                        lens(24f.dp.toPx(), 48f.dp.toPx())
                     },
-                    onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.45f)) }
+                    onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.25f)) }
                 )
                 .height(96.dp)
                 .fillMaxWidth()

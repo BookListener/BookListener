@@ -9,6 +9,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,6 +54,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +74,11 @@ import com.booklistener.core.formatDuration
 import com.booklistener.core.splitHomeSections
 import com.booklistener.player.PlaybackQueueLogic
 import com.booklistener.player.PlaybackState
+// v1.6.19：搜索框液态玻璃（共享主页 backdrop）
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
@@ -82,7 +89,10 @@ import kotlinx.coroutines.withContext
  * 本地/网盘已添加内容合并展示，条目带来源小标识与封面。
  */
 @Composable
-fun DirectoryScreen(viewModel: PlayerViewModel) {
+fun DirectoryScreen(
+    viewModel: PlayerViewModel,
+    backdrop: com.kyant.backdrop.backdrops.LayerBackdrop? = null
+) {
     val inFolderView by viewModel.inFolderView.collectAsStateWithLifecycle()
     val folderItems by viewModel.folderItems.collectAsStateWithLifecycle()
 
@@ -262,28 +272,49 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         }
 
         // 顶部搜索框（替代原三标签，配色调淡）
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = viewModel::onSearchQueryChange,
-            placeholder = { Text("搜索已添加内容") },
-            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
-                        Icon(Icons.Outlined.Close, contentDescription = "清除搜索")
+        // v1.6.19：液态玻璃化——drawBackdrop 挂外层 Box（v1.6.17 直接挂 TextField
+        // 导致内部 GraphicsLayer 冲突闪退，改为容器方案），TextField 容器透明，折射底层列表内容
+        val searchBaseModifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+        val searchSurfaceColor = MaterialTheme.colorScheme.surfaceVariant
+        Box(
+            modifier = if (backdrop != null) {
+                searchBaseModifier.drawBackdrop(
+                    backdrop = backdrop,
+                    shape = { RoundedCornerShape(20.dp) },
+                    effects = {
+                        vibrancy()
+                        blur(12f.dp.toPx())
+                        lens(24f.dp.toPx(), 48f.dp.toPx())
+                    },
+                    onDrawSurface = {
+                        drawRect(searchSurfaceColor.copy(alpha = 0.35f))
                     }
-                }
-            },
-            singleLine = true,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                cursorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-            ),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-        )
+                )
+            } else searchBaseModifier
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = viewModel::onSearchQueryChange,
+                placeholder = { Text("搜索已添加内容") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                            Icon(Icons.Outlined.Close, contentDescription = "清除搜索")
+                        }
+                    }
+                },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
         if (searchQuery.isNotBlank()) {
             // 搜索态：文件夹命中 + 文件命中（混合，带来源标识）
