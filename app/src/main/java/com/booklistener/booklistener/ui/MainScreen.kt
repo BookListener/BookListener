@@ -113,7 +113,7 @@ fun MainScreen(
                     .padding(bottom = 96.dp)
             ) {
                 when (tabIndex) {
-                    0 -> DirectoryScreen(playerViewModel)
+                    0 -> DirectoryScreen(playerViewModel, backdrop = backdrop)
                     2 -> SettingsScreen(playerViewModel, cloudConfigViewModel)
                 }
             }

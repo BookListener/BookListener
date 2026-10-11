@@ -79,40 +79,51 @@ fun PlayerDetailSheet(
     if (!state.hasItem) {
         // 空态引导：无播放队列时点击播放不应"毫无反应"，给出明确指引
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 48.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.MusicNote,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(64.dp)
-                )
-                Text(
-                    text = MessageCatalog.EMPTY_PLAYER_TITLE,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 16.dp)
-                )
-                Text(
-                    text = MessageCatalog.EMPTY_PLAYER_GUIDE,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            containerColor = Color.Transparent
+        ) {
+            GlassPanel {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Text(
+                        text = MessageCatalog.EMPTY_PLAYER_TITLE,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                    Text(
+                        text = MessageCatalog.EMPTY_PLAYER_GUIDE,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
         }
         return
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSleepOptions by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        PlayerDetailSheetContent(
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color.Transparent
+    ) {
+        GlassPanel {
+            PlayerDetailSheetContent(
             state = state,
             entry = entry,
             albumCoverUri = albumCoverUri,
@@ -129,6 +140,7 @@ fun PlayerDetailSheet(
             onNext = viewModel::next,
             onSeek = viewModel::seekTo
         )
+        }
     }
     if (showSleepOptions) {
         SleepTimerSheet(
@@ -458,10 +470,15 @@ private fun SleepTimerSheet(
     var customInput by remember { mutableStateOf(false) }
     var customMinutes by remember { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Text(
-                text = "定时停止播放",
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = sheetState,
+        containerColor = Color.Transparent
+    ) {
+        GlassPanel {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                Text(
+                    text = "定时停止播放",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                 textAlign = TextAlign.Center
@@ -519,6 +536,7 @@ private fun SleepTimerSheet(
                 onClick = onClose,
                 modifier = Modifier.align(Alignment.End).padding(end = 24.dp, top = 4.dp)
             ) { Text("关闭") }
+        }
         }
     }
 }
