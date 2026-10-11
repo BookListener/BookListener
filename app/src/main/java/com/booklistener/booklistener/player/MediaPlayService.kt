@@ -82,8 +82,10 @@ class MediaPlayService : MediaSessionService() {
         // 播放状态驱动 MediaStyle 通知内容（曲目名 / 播放状态 / 进度 / 控件按钮 / 封面）
         notificationJob = notificationScope.launch {
             PlaybackController.state.collect { state ->
-                // 封面在 IO 线程解码（file:// 直接解码 / content:// 流解码）
-                val icon = withContext(Dispatchers.IO) { loadLargeIcon() }
+                // v1.6.23：读取 ExoPlayer 必须在主线程（application thread），
+                // 仅把位图解码放到 IO（file:// 直接解码 / content:// 流解码）
+                val artUri = mediaSession?.player?.currentMediaItem?.mediaMetadata?.artworkUri
+                val icon = withContext(Dispatchers.IO) { loadLargeIcon(artUri) }
                 updateMediaNotification(state, icon)
             }
         }
@@ -91,12 +93,12 @@ class MediaPlayService : MediaSessionService() {
 
     /**
      * 当前曲目通知大图标（v1.6.22 修复"跨文件夹封面串图"）：
-     * 优先当前 MediaItem metadata 的 artworkUri；无封面时返回程序生成的占位图
-     * （圆形渐变，与 App 无封面占位一致）。绝不返回 null——Android 通知更新时
-     * 若不设置 largeIcon 会沿用上一次的图（播放无封面文件夹时显示上一个文件夹的封面）。
+     * 优先 artworkUri；无封面时返回程序生成的占位图（圆形渐变，与 App 无封面占位一致）。
+     * 绝不返回 null——Android 通知更新时不设置 largeIcon 会沿用上一次的图
+     * （播放无封面文件夹时显示上一个文件夹的封面）。
+     * 注意：本函数只做位图解码/绘制，不访问 ExoPlayer（必须在 IO 线程调用）。
      */
-    private fun loadLargeIcon(): Bitmap {
-        val artUri = mediaSession?.player?.currentMediaItem?.mediaMetadata?.artworkUri
+    private fun loadLargeIcon(artUri: Uri?): Bitmap {
         val loaded = artUri?.let { loadBitmap(it) }
         return loaded ?: placeholderCover()
     }
