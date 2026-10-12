@@ -4,6 +4,7 @@ import com.booklistener.ui.icons.AppIcons
 
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -65,6 +66,8 @@ fun FolderManageScreen(
     var showCloudDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<SavedEntry?>(null) }
     var selectedEntry by remember { mutableStateOf<SavedEntry?>(null) }
+    // v1.6.28：网盘文件夹选择器（null = 账号列表阶段，非 null = 该账号目录树）
+    var pickerCred by remember { mutableStateOf<com.booklistener.source.WebDavCredential?>(null) }
     var pendingNameDetail by remember { mutableStateOf<NameDetail?>(null) }
     val nameDetail = pendingNameDetail
     if (nameDetail != null) {
@@ -118,7 +121,7 @@ fun FolderManageScreen(
         val accounts by viewModel.webDavAccounts.collectAsStateWithLifecycle()
         AlertDialog(
             onDismissRequest = { showCloudDialog = false },
-            title = { Text("添加 WebDAV 内容") },
+            title = { Text("选择网盘账号") },
             text = {
                 if (accounts.isEmpty()) {
                     Text("尚未配置 WebDAV 账号，请先到 设置 → 网盘配置 中添加")
@@ -129,8 +132,10 @@ fun FolderManageScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        viewModel.addWebDavEntry(cred)
                                         showCloudDialog = false
+                                        // v1.6.28：不直接固化根条目，进入目录树选择具体文件夹
+                                        pickerCred = cred
+                                        viewModel.openWebDavPicker(cred)
                                     }
                                     .padding(vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -159,6 +164,120 @@ fun FolderManageScreen(
                 }
             }
         )
+    }
+
+    // ---- v1.6.28：网盘文件夹选择器（目录树逐层浏览，保存当前目录为固化条目）----
+    val picker = pickerCred
+    if (picker != null) {
+        val pickerUrl by viewModel.pickerUrl.collectAsStateWithLifecycle()
+        val pickerStack by viewModel.pickerStack.collectAsStateWithLifecycle()
+        val pickerDirs by viewModel.pickerDirs.collectAsStateWithLifecycle()
+        val pickerItems by viewModel.pickerItems.collectAsStateWithLifecycle()
+        val pickerLoading by viewModel.pickerLoading.collectAsStateWithLifecycle()
+        BackHandler(onBack = {
+            if (pickerStack.isNotEmpty()) viewModel.backPickerDir() else {
+                viewModel.closePicker()
+                pickerCred = null
+            }
+        })
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = {
+                    if (pickerStack.isNotEmpty()) viewModel.backPickerDir() else {
+                        viewModel.closePicker()
+                        pickerCred = null
+                    }
+                }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Text(
+                    text = pickerUrl?.let {
+                        android.net.Uri.decode(it.trimEnd('/').substringAfterLast('/'))
+                    } ?: picker.host,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { viewModel.savePickerFolder(picker) }) {
+                    Text("保存此文件夹")
+                }
+            }
+            when {
+                pickerLoading -> Text(
+                    text = "加载中…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)
+                )
+                pickerDirs.isEmpty() && pickerItems.isEmpty() -> Text(
+                    text = "该目录为空",
+                    modifier = Modifier.padding(top = 48.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                else -> LazyColumn {
+                    items(pickerDirs, key = { it.href }) { dir ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.enterPickerDir(dir.href) }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                text = dir.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(start = 12.dp)
+                            )
+                        }
+                        HorizontalDivider()
+                    }
+                    items(pickerItems, key = { it.id }) { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = item.displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(start = 10.dp)
+                            )
+                            Text(
+                                text = formatBytes(item.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        return
     }
 
     val deleting = pendingDelete
@@ -388,4 +507,12 @@ private fun ManageFileRow(file: com.booklistener.core.IndexedFile) {
             )
         }
     }
+}
+
+/** 字节数友好格式化（网盘选择器音频行显示大小用） */
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1024L * 1024 * 1024 -> "%.1f GB".format(bytes / 1024.0 / 1024 / 1024)
+    bytes >= 1024L * 1024 -> "%.1f MB".format(bytes / 1024.0 / 1024)
+    bytes >= 1024L -> "${bytes / 1024} KB"
+    else -> "$bytes B"
 }

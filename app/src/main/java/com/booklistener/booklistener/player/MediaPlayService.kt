@@ -274,9 +274,13 @@ class MediaPlayService : MediaSessionService() {
      * http/https 走 OkHttp（Range、UA、代理），
      * content:// / file:// / asset:// 等本地 URI 走系统 ContentDataSource/FileDataSource，
      * 使 SAF 选择的本地音频与文件夹内文件可直接播放。
+     * v1.6.28：WebDAV 播放需 Basic 认证，OkHttp 客户端挂按 URL 前缀匹配账号的拦截器。
      */
     private fun buildPlayer(): ExoPlayer {
-        val okHttpDs = OkHttpDataSource.Factory(OkHttpHolder.client)
+        val authClient = OkHttpHolder.client.newBuilder()
+            .addInterceptor(WebDavAuthInterceptor(com.booklistener.auth.CredentialStore(this)))
+            .build()
+        val okHttpDs = OkHttpDataSource.Factory(authClient)
             .setUserAgent("BookListener/1.0")
         val compositeDs = DefaultDataSource.Factory(this, okHttpDs)
         return ExoPlayer.Builder(this)

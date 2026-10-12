@@ -139,7 +139,7 @@ interface AppDao {
                 FROM entry_index i2 JOIN saved_entry s2 ON s2.id = i2.entryId
                 WHERE s2.id = s.id) AS albumCountInEntry
         FROM entry_index i JOIN saved_entry s ON s.id = i.entryId
-        WHERE s.lastPlayedAt > 0
+        WHERE s.lastPlayedAt > 0 AND s.sourceType != 'WEBDAV'
         GROUP BY album, s.id
         ORDER BY s.lastPlayedAt DESC, album ASC
         LIMIT :limit OFFSET :offset
@@ -159,7 +159,7 @@ interface AppDao {
                 FROM entry_index i2 JOIN saved_entry s2 ON s2.id = i2.entryId
                 WHERE s2.id = s.id) AS albumCountInEntry
         FROM entry_index i JOIN saved_entry s ON s.id = i.entryId
-        WHERE s.lastPlayedAt <= 0
+        WHERE s.lastPlayedAt <= 0 AND s.sourceType != 'WEBDAV'
         GROUP BY album, s.id
         ORDER BY s.sortOrder ASC
         LIMIT :limit OFFSET :offset

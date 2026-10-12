@@ -16,9 +16,10 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 /**
- * WebDAV 全链路列举回归（v1.6.26）：MockWebServer 模拟坚果云风格 PROPFIND 响应
+ * WebDAV 全链路列举回归（v1.6.26 / v1.6.28）：MockWebServer 模拟坚果云风格 PROPFIND 响应
  * （相对 href、目录带 collection、无 displayname 的条目回退文件名），
  * 验证 listDirectory 真实产出音频条目。此前用户实测"明明有 m4a 却显示没有"。
+ * v1.6.28：listDirEntries/probeDirectory 接收完整目录 URL；href 解析为完整 URL。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -97,7 +98,7 @@ class WebDavAudioSourceListTest {
         val cred = WebDavCredential(baseUrl, "user", "pass")
         val source = WebDavAudioSource { cred }
 
-        val result = runBlocking { source.listDirectory("") }
+        val result = runBlocking { source.listDirectory(baseUrl) }
 
         assertTrue("PROPFIND 应成功，实际失败: ${result.exceptionOrNull()}", result.isSuccess)
         val items = result.getOrThrow()
@@ -105,7 +106,8 @@ class WebDavAudioSourceListTest {
         val item = items[0]
         assertEquals("第一章", item.displayName)
         assertEquals("第一章.m4a", item.rawName)
-        assertEquals("/dav/%E7%AC%AC%E4%B8%80%E7%AB%A0.m4a", item.path)
+        // v1.6.28：href 解析为完整 URL
+        assertEquals(baseUrl + "%E7%AC%AC%E4%B8%80%E7%AB%A0.m4a", item.path)
         assertEquals(1234567L, item.size)
     }
 
@@ -115,7 +117,7 @@ class WebDavAudioSourceListTest {
         val cred = WebDavCredential(baseUrl, "user", "pass")
         val source = WebDavAudioSource { cred }
 
-        val result = runBlocking { source.probeDirectory("") }
+        val result = runBlocking { source.probeDirectory(baseUrl) }
 
         assertTrue("PROPFIND 应成功，实际失败: ${result.exceptionOrNull()}", result.isSuccess)
         val (items, dirs) = result.getOrThrow()
@@ -130,13 +132,14 @@ class WebDavAudioSourceListTest {
         val cred = WebDavCredential(baseUrl, "user", "pass")
         val source = WebDavAudioSource { cred }
 
-        val result = runBlocking { source.listDirEntries("") }
+        val result = runBlocking { source.listDirEntries(baseUrl) }
 
         assertTrue("PROPFIND 应成功，实际失败: ${result.exceptionOrNull()}", result.isSuccess)
         val (dirs, items) = result.getOrThrow()
         assertEquals("响应中根(/dav/)与 /dav/books/ 两个目录条目，根排除后子目录 1 个", 1, dirs.size)
         assertEquals("books", dirs[0].name)
-        assertEquals("/dav/books/", dirs[0].href)
+        // v1.6.28：href 解析为完整 URL
+        assertEquals(baseUrl + "books/", dirs[0].href)
         assertEquals(1, items.size)
         assertEquals("第一章", items[0].displayName)
     }
@@ -147,12 +150,25 @@ class WebDavAudioSourceListTest {
         val cred = WebDavCredential(baseUrl, "user", "wrong")
         val source = WebDavAudioSource { cred }
 
-        val result = runBlocking { source.listDirectory("") }
+        val result = runBlocking { source.listDirectory(baseUrl) }
 
         assertTrue(result.isFailure)
         assertTrue(
             "应为 AuthFailed，实际 ${result.exceptionOrNull()?.javaClass?.simpleName}",
             result.exceptionOrNull() is com.booklistener.core.AudioSourceException.AuthFailed
         )
+    }
+
+    /** 相对 href（服务器根 / 当前目录相对）解析为完整 URL（v1.6.28 播放/导航前置） */
+    @Test
+    fun resolveWebDavHref_relativeAndAbsolute() {
+        val base = "https://dav.jianguoyun.com/dav/"
+        assertEquals("https://dav.jianguoyun.com/dav/Movies/", resolveWebDavHref(base, "/dav/Movies/"))
+        assertEquals("https://dav.jianguoyun.com/dav/Movies/", resolveWebDavHref(base, "Movies/"))
+        assertEquals("https://dav.jianguoyun.com/dav/%E7%AC%AC%E4%B8%80%E7%AB%A0.m4a",
+            resolveWebDavHref(base, "/dav/%E7%AC%AC%E4%B8%80%E7%AB%A0.m4a"))
+        // 已是完整 URL 原样返回
+        val absolute = "https://other.example/x/1.m4a"
+        assertEquals(absolute, resolveWebDavHref(base, absolute))
     }
 }

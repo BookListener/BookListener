@@ -42,11 +42,20 @@ fun normalizeWebDavUrl(url: String): String {
     return "$trimmed/"
 }
 
-/** WebDAV 子目录条目（目录导航用，v1.6.27）：name 为解码后目录名，href 供下一层 PROPFIND */
+/** WebDAV 子目录条目（目录导航用，v1.6.27）：name 为解码后目录名，href 为完整 URL 供下一层 PROPFIND */
 data class WebDavDirEntry(
     val name: String,
     val href: String
 )
+
+/**
+ * 把 WebDAV href 解析为完整 URL（v1.6.28 播放/导航必需）：
+ * 相对服务器根（"/dav/..."）与相对当前目录（"x/…"）都基于 PROPFIND 的 base 补全。
+ */
+internal fun resolveWebDavHref(base: String, href: String): String {
+    if (href.startsWith("http://") || href.startsWith("https://")) return href
+    return runCatching { java.net.URI(base).resolve(href).toString() }.getOrElse { href }
+}
 
 class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?) : AudioSource {
 
@@ -56,14 +65,13 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
         probeDirectory(path).map { it.first }
 
     /** 列举目录并同时统计子目录数量（不含根自身），供"测试连接"区分"根目录无音频但有子目录" */
-    suspend fun probeDirectory(path: String): Result<Pair<List<AudioItem>, Int>> =
-        listDirEntries(path).map { (dirs, items) -> items to dirs.size }
+    suspend fun probeDirectory(url: String): Result<Pair<List<AudioItem>, Int>> =
+        listDirEntries(url).map { (dirs, items) -> items to dirs.size }
 
-    /** 列举目录：返回 (子目录列表, 音频列表)，支持逐层目录导航 */
-    suspend fun listDirEntries(path: String): Result<Pair<List<WebDavDirEntry>, List<AudioItem>>> = runCatching {
+    /** 列举目录：返回 (子目录列表, 音频列表)；url 为完整目录 URL（账号根或子目录，v1.6.28） */
+    suspend fun listDirEntries(url: String): Result<Pair<List<WebDavDirEntry>, List<AudioItem>>> = runCatching {
         val cred = credentialProvider()
             ?: throw AudioSourceException.AuthFailed("WebDAV not configured")
-        val url = if (path.isEmpty()) normalize(cred.baseUrl) else path
         val body = propfindBody()
         val request = Request.Builder()
             .url(url)
@@ -184,7 +192,9 @@ internal fun parseWebDavDirEntries(xml: String, base: String): Pair<List<WebDavD
             }
             XmlPullParser.END_TAG -> {
                 if (localTag(parser.name) == "response" && inResponse) {
-                    val href = currentHref
+                    val rawHref = currentHref
+                    // 相对 href（"/dav/x/" 或 "x/"）→ 完整 URL；根自身判定在 resolve 后进行
+                    val href = resolveWebDavHref(base, rawHref)
                     if (href.isNotEmpty() && !isSelf(href, base)) {
                         if (isCollection || href.endsWith("/")) {
                             // 目录条目：子目录（非根自身）收集为 WebDavDirEntry；目录名解码
@@ -195,7 +205,7 @@ internal fun parseWebDavDirEntries(xml: String, base: String): Pair<List<WebDavD
                         } else {
                             // displayname 缺省时回退 href 文件名并做 URL 解码（%E7%AC%AC…→第一章）
                             val name = currentDisplayName.ifEmpty {
-                                android.net.Uri.decode(href.substringAfterLast('/'))
+                                android.net.Uri.decode(rawHref.substringAfterLast('/'))
                             }
                             if (AudioExt.isAudio(name)) {
                                 val display = name.substringBeforeLast('.').takeUnless { it.isEmpty() } ?: name

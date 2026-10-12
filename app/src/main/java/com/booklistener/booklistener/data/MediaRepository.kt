@@ -47,13 +47,13 @@ class MediaRepository(
     )
 
     /**
-     * v1.6.25 多账号：按归一化地址找到对应 WebDAV 数据源；未配置返回 null。
-     * 每个账号独立持有凭证，互不影响。
+     * 按 URL 匹配 WebDAV 账号（v1.6.28：支持子目录 URL，按账号 baseUrl 前缀匹配，
+     * 同一账号固化的多个子目录文件夹共用同一凭证）。
      */
-    fun webDavSourceFor(baseUrl: String): WebDavAudioSource? {
-        val norm = normalizeWebDavUrl(baseUrl)
+    fun webDavSourceFor(url: String): WebDavAudioSource? {
+        val norm = normalizeWebDavUrl(url)
         val cred = credentialStore.webDavAccounts()
-            .firstOrNull { it.normalizedUrl == norm }
+            .firstOrNull { norm.startsWith(it.normalizedUrl) }
             ?: return null
         return WebDavAudioSource { cred }
     }
@@ -65,14 +65,11 @@ class MediaRepository(
         return source.listDirectory(path)
     }
 
-    /** 按账号列 WebDAV 目录（子目录 + 音频混合，v1.6.27 目录导航用） */
-    suspend fun listWebDavDirEntries(
-        baseUrl: String,
-        path: String
-    ): Result<Pair<List<WebDavDirEntry>, List<AudioItem>>> {
-        val source = webDavSourceFor(baseUrl)
+    /** 列举 WebDAV 目录（子目录 + 音频混合）；url 为完整目录 URL（账号根或子目录），凭证按前缀匹配 */
+    suspend fun listWebDavDirEntries(url: String): Result<Pair<List<WebDavDirEntry>, List<AudioItem>>> {
+        val source = webDavSourceFor(url)
             ?: return Result.failure(AudioSourceException.AuthFailed("WebDAV not configured"))
-        return source.listDirEntries(path)
+        return source.listDirEntries(url)
     }
 
     val resolver: DefaultSourceResolver by lazy {

@@ -301,7 +301,13 @@ class PlayerViewModel @JvmOverloads constructor(
     private val appDb = database ?: com.booklistener.db.AppDatabase.getInstance(app)
     private val entryStore = SavedEntryStore(appDb.dao())
     private val indexStore = EntryIndexStore(appDb.dao())
-    private val _savedEntries = MutableStateFlow(entryStore.load())
+    // v1.6.28：加载时过滤旧的"网盘根条目"（自动固化、uri 非完整 URL）——
+    // 网盘改为只通过文件夹管理固化具体文件夹；账号凭证保留在 CredentialStore。
+    private val _savedEntries = MutableStateFlow(
+        entryStore.load().filterNot {
+            it.sourceType == SourceType.WEBDAV && !it.uri.startsWith("http")
+        }
+    )
     val savedEntries: StateFlow<List<SavedEntry>> = _savedEntries.asStateFlow()
 
     /** 兼容旧 API：本地固化文件夹 Uri 列表（由新模型同步派生，保证立即读取一致） */
@@ -762,7 +768,7 @@ class PlayerViewModel @JvmOverloads constructor(
 
     fun consumeWebDavSavedMsg() = _webDavForm.update { it.copy(savedMsg = null) }
 
-    /** 保存并测试连接：凭证落盘 + 自动加入曲目列表 + 立即 PROPFIND 验证登录 */
+    /** 保存并测试连接：凭证落盘（v1.6.28：不再自动固化根条目）+ 立即 PROPFIND 验证登录 */
     fun saveAndTestWebDav() {
         val f = _webDavForm.value
         if (f.url.isBlank() || f.user.isBlank() || f.pass.isBlank()) {
@@ -771,7 +777,6 @@ class PlayerViewModel @JvmOverloads constructor(
         }
         val cred = WebDavCredential(f.url.trim(), f.user.trim(), f.pass)
         repo.credentialStore.addWebDavAccount(cred)
-        upsertWebDavEntry(cred)
         refreshWebDavAccounts()
         _webDavForm.update {
             it.copy(
@@ -801,7 +806,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private fun testWebDavWith(cred: WebDavCredential) {
         viewModelScope.launch(Dispatchers.IO) {
             val source = WebDavAudioSource { cred }
-            val result = source.probeDirectory("")
+            val result = source.probeDirectory(cred.baseUrl)
             _webDavForm.update {
                 it.copy(
                     testing = false,
@@ -834,11 +839,12 @@ class PlayerViewModel @JvmOverloads constructor(
         )
     }
 
-    /** 删除 WebDAV 账号：移除凭证 + 级联清理曲目条目/索引/进度/封面 */
+    /** 删除 WebDAV 账号：移除凭证 + 级联清理该账号全部曲目条目（旧根条目 + 固化的文件夹）/索引/进度/封面 */
     fun removeWebDavAccount(baseUrl: String) {
         repo.credentialStore.removeWebDavAccount(baseUrl)
-        val id = webDavEntryId(baseUrl)
-        _savedEntries.value.firstOrNull { it.id == id }?.let { clearSavedEntry(it) }
+        val prefix = "webdav://" + normalizeWebDavUrl(baseUrl)
+        _savedEntries.value.filter { it.id.startsWith(prefix) }
+            .forEach { clearSavedEntry(it) }
         refreshWebDavAccounts()
         if (_webDavForm.value.editingBaseUrl == normalizeWebDavUrl(baseUrl)) {
             cancelWebDavForm()
@@ -846,21 +852,26 @@ class PlayerViewModel @JvmOverloads constructor(
         _eventMsg.value = "WebDAV 账号已删除"
     }
 
-    /** 把已配置账号作为网盘内容条目加入曲目列表（FolderManageScreen 添加对话框用） */
+    /**
+     * v1.6.28：网盘账号为凭证，不再自动固化为条目；需在文件夹管理中
+     * 通过目录树选择具体文件夹固化（addWebDavFolder）。此处仅保留账号。
+     */
     fun addWebDavEntry(cred: WebDavCredential) {
         repo.credentialStore.addWebDavAccount(cred)
-        upsertWebDavEntry(cred)
         refreshWebDavAccounts()
     }
 
-    /** 保存账号并同步曲目条目（配置页保存路径） */
-    private fun upsertWebDavEntry(cred: WebDavCredential) {
-        val id = webDavEntryId(cred.baseUrl)
+    /** 固化 WebDAV 文件夹条目：folderUrl 为完整目录 URL（账号根或子目录），同一账号可固化多个 */
+    fun addWebDavFolder(cred: WebDavCredential, folderUrl: String) {
+        val id = webDavFolderEntryId(folderUrl)
         val existing = _savedEntries.value.firstOrNull { it.id == id }
+        val name = android.net.Uri.decode(
+            folderUrl.trimEnd('/').substringAfterLast('/')
+        ).ifEmpty { cred.host }
         val entry = SavedEntry(
             id = id,
-            displayName = cred.host,
-            uri = "",
+            displayName = name,
+            uri = folderUrl,
             sourceType = SourceType.WEBDAV,
             coverUri = existing?.coverUri,
             fileCount = existing?.fileCount ?: 0,
@@ -869,10 +880,22 @@ class PlayerViewModel @JvmOverloads constructor(
             lastOpenedAt = existing?.lastOpenedAt ?: 0L
         )
         setEntries(entryStore.upsert(_savedEntries.value, entry))
+        // 固化即预扫一次索引（文件夹管理文件列表立即可见；曲目页不聚合网盘）
+        prefillWebDavIndex(folderUrl, entry)
     }
 
-    /** WebDAV 条目 id = webdav:// + 归一化地址（账号唯一） */
-    private fun webDavEntryId(baseUrl: String): String = "webdav://" + normalizeWebDavUrl(baseUrl)
+    /** WebDAV 文件夹条目 id（v1.6.28）：完整目录 URL 去 scheme 前缀，账号下多个文件夹各自独立 */
+    fun webDavFolderEntryId(folderUrl: String): String = "webdav://" + folderUrl
+
+    /** 固化/进入前预扫：PROPFIND 一次写索引（含播放进度补录所需的时长字段），失败静默 */
+    private fun prefillWebDavIndex(folderUrl: String, entry: SavedEntry) {
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val (_, list) = repo.listWebDavDirEntries(folderUrl).getOrThrow()
+                indexStore.save(entry.id, list.map { it.toIndexedFile() })
+            }
+        }
+    }
 
     fun openSavedEntry(entry: SavedEntry, showSheet: Boolean = true) {
         if (entry.isLocal) {
@@ -893,9 +916,7 @@ class PlayerViewModel @JvmOverloads constructor(
                 when (entry.sourceType) {
                     // 网盘目录会变化：每次进入直接 PROPFIND（子目录实时可见），同时写索引供专辑聚合
                     SourceType.WEBDAV -> {
-                        val (dirs, list) = repo.listWebDavDirEntries(
-                            entry.id.removePrefix("webdav://"), entry.uri
-                        ).getOrThrow()
+                        val (dirs, list) = repo.listWebDavDirEntries(entry.uri).getOrThrow()
                         _webDavDirs.value = dirs
                         indexStore.save(entry.id, list.map { it.toIndexedFile() })
                         list
@@ -910,14 +931,12 @@ class PlayerViewModel @JvmOverloads constructor(
         )
     }
 
-    // ---- WebDAV 目录导航（v1.6.27）----
+    // ---- WebDAV 目录导航（v1.6.27；v1.6.28 基于完整 URL 逐层浏览）----
 
     /** 进入 WebDAV 子目录：路径栈 push 并加载该目录内容（不自动播放、不固化条目） */
     fun enterWebDavDir(href: String) {
-        val baseUrl = (_currentFolderUri.value?.toString()?.removePrefix("webdav://")).orEmpty()
-        if (baseUrl.isEmpty()) return
         _webDavPathStack.update { it + href }
-        loadWebDavDirContent(baseUrl, href)
+        loadWebDavDirContent(href)
     }
 
     /** 返回 WebDAV 上一级目录；已在根目录时退出条目视图 */
@@ -929,17 +948,18 @@ class PlayerViewModel @JvmOverloads constructor(
         }
         val newStack = stack.dropLast(1)
         _webDavPathStack.value = newStack
-        val baseUrl = (_currentFolderUri.value?.toString()?.removePrefix("webdav://")).orEmpty()
-        if (baseUrl.isEmpty()) return
-        loadWebDavDirContent(baseUrl, newStack.lastOrNull() ?: "")
+        // 上一级 = 栈顶（栈空 = 条目根目录 URL）
+        val parent = newStack.lastOrNull() ?: _currentFolderUri.value?.toString()?.removePrefix("webdav://").orEmpty()
+        if (parent.isEmpty()) return
+        loadWebDavDirContent(parent)
     }
 
-    private fun loadWebDavDirContent(baseUrl: String, path: String) {
+    private fun loadWebDavDirContent(url: String) {
         viewModelScope.launch {
             val (dirs, items) = withContext(Dispatchers.IO) {
-                runCatching { repo.listWebDavDirEntries(baseUrl, path).getOrThrow() }
+                runCatching { repo.listWebDavDirEntries(url).getOrThrow() }
                     .getOrElse { e ->
-                        AppLog.e("load webdav dir failed: $path", e)
+                        AppLog.e("load webdav dir failed: $url", e)
                         emptyList<WebDavDirEntry>() to emptyList<AudioItem>()
                     }
             }
@@ -949,6 +969,77 @@ class PlayerViewModel @JvmOverloads constructor(
                 MessageCatalog.EMPTY_DIR_AUDIO
             else
                 MessageCatalog.MSG_FOUND.format(items.size)
+        }
+    }
+
+    // ---- WebDAV 文件夹选择器（v1.6.28：文件夹管理 → 添加 → 网盘目录树选文件夹固化）----
+
+    private val _pickerUrl = MutableStateFlow<String?>(null)
+    val pickerUrl: StateFlow<String?> = _pickerUrl.asStateFlow()
+    private val _pickerStack = MutableStateFlow<List<String>>(emptyList())
+    val pickerStack: StateFlow<List<String>> = _pickerStack.asStateFlow()
+    private val _pickerDirs = MutableStateFlow<List<WebDavDirEntry>>(emptyList())
+    val pickerDirs: StateFlow<List<WebDavDirEntry>> = _pickerDirs.asStateFlow()
+    private val _pickerItems = MutableStateFlow<List<AudioItem>>(emptyList())
+    val pickerItems: StateFlow<List<AudioItem>> = _pickerItems.asStateFlow()
+    private val _pickerLoading = MutableStateFlow(false)
+    val pickerLoading: StateFlow<Boolean> = _pickerLoading.asStateFlow()
+
+    /** 进入网盘目录选择器：从账号根目录开始浏览（账号已在凭证库） */
+    fun openWebDavPicker(cred: WebDavCredential) {
+        _pickerStack.value = emptyList()
+        loadPickerDir(cred.baseUrl)
+    }
+
+    /** 选择器进入子目录 */
+    fun enterPickerDir(href: String) {
+        _pickerStack.update { it + href }
+        loadPickerDir(href)
+    }
+
+    /** 选择器返回上一级（根目录时清空回到账号列表，由 UI 处理关闭） */
+    fun backPickerDir() {
+        val stack = _pickerStack.value
+        if (stack.isEmpty()) {
+            _pickerUrl.value = null
+            _pickerDirs.value = emptyList()
+            _pickerItems.value = emptyList()
+            return
+        }
+        val newStack = stack.dropLast(1)
+        _pickerStack.value = newStack
+        loadPickerDir(newStack.lastOrNull() ?: _pickerUrl.value.orEmpty())
+    }
+
+    /** 保存选择器当前目录为固化条目（凭证复用账号库） */
+    fun savePickerFolder(cred: WebDavCredential) {
+        val url = _pickerUrl.value ?: cred.baseUrl
+        addWebDavFolder(cred, url)
+        closePicker()
+    }
+
+    /** 关闭选择器并清理状态 */
+    fun closePicker() {
+        _pickerUrl.value = null
+        _pickerStack.value = emptyList()
+        _pickerDirs.value = emptyList()
+        _pickerItems.value = emptyList()
+    }
+
+    private fun loadPickerDir(url: String) {
+        _pickerLoading.value = true
+        _pickerUrl.value = url
+        viewModelScope.launch {
+            val (dirs, items) = withContext(Dispatchers.IO) {
+                runCatching { repo.listWebDavDirEntries(url).getOrThrow() }
+                    .getOrElse { e ->
+                        AppLog.e("load webdav picker dir failed: $url", e)
+                        emptyList<WebDavDirEntry>() to emptyList<AudioItem>()
+                    }
+            }
+            _pickerDirs.value = dirs
+            _pickerItems.value = items
+            _pickerLoading.value = false
         }
     }
 
@@ -987,8 +1078,8 @@ class PlayerViewModel @JvmOverloads constructor(
         }
         when (type) {
             SourceType.WEBDAV -> {
-                repo.credentialStore.webDavAccounts().firstOrNull()?.let { addWebDavEntry(it) }
-                _eventMsg.value = "已添加 WebDAV 内容"
+                // v1.6.28：网盘不再自动固化根条目，改由文件夹管理目录树选文件夹
+                _eventMsg.value = "请在文件夹管理中选择要添加的网盘文件夹"
             }
             SourceType.ALIYUN -> {
                 val entry = SavedEntry(
