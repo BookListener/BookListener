@@ -61,8 +61,7 @@ import com.kyant.backdrop.effects.vibrancy
  */
 @Composable
 fun MainScreen(
-    playerViewModel: PlayerViewModel = viewModel(),
-    cloudConfigViewModel: CloudConfigViewModel = viewModel()
+    playerViewModel: PlayerViewModel = viewModel()
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showPlayerSheet by rememberSaveable { mutableStateOf(false) }
@@ -113,7 +112,7 @@ fun MainScreen(
             ) {
                 when (tabIndex) {
                     0 -> DirectoryScreen(playerViewModel)
-                    2 -> SettingsScreen(playerViewModel, cloudConfigViewModel)
+                    2 -> SettingsScreen(playerViewModel)
                 }
             }
         }

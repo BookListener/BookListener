@@ -28,7 +28,19 @@ data class WebDavCredential(
     val baseUrl: String,
     val username: String,
     val password: String
-)
+) {
+    /** 归一化地址（去空白/尾斜杠后统一补 "/"），多账号匹配与条目 id 共用 */
+    val normalizedUrl: String get() = normalizeWebDavUrl(baseUrl)
+
+    /** 显示名：URL 主机名（取不到时回退完整地址） */
+    val host: String get() = runCatching { java.net.URI(baseUrl).host }.getOrNull() ?: baseUrl
+}
+
+/** WebDAV 地址归一化：去空白与多余尾斜杠，统一以 "/" 结尾（v1.6.25 账号匹配用） */
+fun normalizeWebDavUrl(url: String): String {
+    val trimmed = url.trim().trimEnd('/')
+    return "$trimmed/"
+}
 
 class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?) : AudioSource {
 
@@ -65,13 +77,7 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
         AudioMeta(item.displayName, AudioMetaDefaults.UNKNOWN_ARTIST, 0L)
     }
 
-    private fun normalize(url: String): String {
-        val trimmed = url.trimEnd('/')
-        return if (trimmed.endsWith("dav", ignoreCase = true) ||
-            trimmed.endsWith("remote.php", ignoreCase = true) ||
-            trimmed.endsWith("webdav", ignoreCase = true)
-        ) "$trimmed/" else "$trimmed/"
-    }
+    private fun normalize(url: String): String = normalizeWebDavUrl(url)
 
     private fun propfindBody(): String {
         return """<?xml version="1.0" encoding="utf-8"?>

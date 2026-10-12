@@ -36,8 +36,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun SettingsScreen(
-    viewModel: PlayerViewModel,
-    cloudConfigViewModel: CloudConfigViewModel
+    viewModel: PlayerViewModel
 ) {
     var showCloud by remember { mutableStateOf(false) }
     var showFolderManage by remember { mutableStateOf(false) }
@@ -117,21 +116,7 @@ fun SettingsScreen(
     if (showCloud) {
         // 系统返回键：网盘配置页 → 设置主页
         BackHandler(onBack = { showCloud = false })
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { showCloud = false }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-            CloudConfigScreen(viewModel = cloudConfigViewModel, playerViewModel = viewModel)
-        }
+        CloudConfigScreen(viewModel = viewModel, onBack = { showCloud = false })
         return
     }
 

@@ -29,7 +29,11 @@ class PlayerDetailSheetEmptyStateTest {
                     database = androidx.room.Room.inMemoryDatabaseBuilder(
                         androidx.test.core.app.ApplicationProvider.getApplicationContext(),
                         com.booklistener.db.AppDatabase::class.java
-                    ).allowMainThreadQueries().build()
+                    ).allowMainThreadQueries().build(),
+                    credentialStore = com.booklistener.auth.CredentialStore(
+                        androidx.test.core.app.ApplicationProvider.getApplicationContext(),
+                        secure = false
+                    )
                 ),
                 state = PlaybackState(),
                 onDismiss = {}

@@ -1,5 +1,6 @@
 package com.booklistener.ui
 
+import com.booklistener.auth.CredentialStore
 import android.net.Uri
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.room.Room
@@ -73,7 +74,7 @@ class MainScreenNavigationTest {
     private lateinit var db: AppDatabase
 
     private fun newViewModel(): PlayerViewModel =
-        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db)
+        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
     @Test
     fun shouldRestartOnEnter_samePlayingFolder_keepsPlaying() {

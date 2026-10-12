@@ -38,6 +38,9 @@ import com.booklistener.player.MediaPlayService
 import com.booklistener.player.PlayableItem
 import com.booklistener.player.PlaybackController
 import com.booklistener.player.PlaybackState
+import com.booklistener.source.WebDavAudioSource
+import com.booklistener.source.WebDavCredential
+import com.booklistener.source.normalizeWebDavUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +57,19 @@ import java.io.File
 /** v1.6.7 一次性定时模式（详情页定时弹窗选中态） */
 enum class SleepTimerMode { OFF, END_OF_TRACK, MINUTES }
 
+/** v1.6.25 WebDAV 账号编辑表单状态（配置页账号管理） */
+data class WebDavFormState(
+    val url: String = "",
+    val user: String = "",
+    val pass: String = "",
+    val editing: Boolean = false,
+    val editingBaseUrl: String = "",
+    val testing: Boolean = false,
+    val testOk: Boolean? = null,
+    val testResult: String? = null,
+    val savedMsg: String? = null
+)
+
 /** 主界面 ViewModel：已添加内容（本地文件夹 + 网盘源）浏览、搜索、播放控制入口。
  * 播放动作统一走 PlaybackController（进程单例），Service 由首次播放时拉起。
  *
@@ -63,10 +79,12 @@ enum class SleepTimerMode { OFF, END_OF_TRACK, MINUTES }
 class PlayerViewModel @JvmOverloads constructor(
     app: Application,
     /** 测试注入：默认生产单例（全局 db）；UI 测试传 in-memory 避免跨用例串数据 */
-    private val database: com.booklistener.db.AppDatabase? = null
+    private val database: com.booklistener.db.AppDatabase? = null,
+    /** 测试注入：默认加密 CredentialStore；JVM 单测传 secure=false 避免 AndroidKeyStore 缺失 */
+    credentialStore: com.booklistener.auth.CredentialStore? = null
 ) : AndroidViewModel(app) {
 
-    private val repo = MediaRepository(app)
+    private val repo = MediaRepository(app, credentialStore)
     private val openFileFactory = OpenFileItemFactory { uri ->
         runCatching {
             getApplication<Application>().contentResolver.query(
@@ -99,6 +117,13 @@ class PlayerViewModel @JvmOverloads constructor(
     /** 一次性事件：切换条目后就绪时请求弹出播放详情（MainScreen 消费后复位） */
     private val _requestPlayerSheet = MutableStateFlow(false)
     val requestPlayerSheet: StateFlow<Boolean> = _requestPlayerSheet.asStateFlow()
+
+    // ---- WebDAV 账号管理状态（v1.6.25 多账号；声明须在 init 之前） ----
+    private val _webDavAccounts = MutableStateFlow<List<WebDavCredential>>(emptyList())
+    val webDavAccounts: StateFlow<List<WebDavCredential>> = _webDavAccounts.asStateFlow()
+
+    private val _webDavForm = MutableStateFlow(WebDavFormState())
+    val webDavForm: StateFlow<WebDavFormState> = _webDavForm.asStateFlow()
 
     // ---- 专辑内标题显示模式（v1.6.3）：true=标签标题（默认）/ false=原始文件名 ----
     private val prefs = app.getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
@@ -494,6 +519,7 @@ class PlayerViewModel @JvmOverloads constructor(
 
     init {
         refreshDirectory()
+        refreshWebDavAccounts()
         // 存量修正：早期 folderDisplayName 把路径当文件夹名，启动归一为纯文件夹名（写回 db）
         normalizeFolderDisplayNames()
         // 杀后台重启恢复：回到最近播放条目的条目视图（就绪、不自动播放、不弹详情）
@@ -697,6 +723,144 @@ class PlayerViewModel @JvmOverloads constructor(
 
     /** 打开已添加条目：本地走 SAF 扫描，网盘走数据源目录浏览；showSheet=false 用于启动静默恢复
      *  v1.6.14：优先从 db 索引读取；db 无数据时兜底浏览一次并写库（强制重扫走文件夹管理页刷新） */
+    // ---- WebDAV 账号管理（v1.6.25 多账号：列表/添加/编辑/删除/测试） ----
+
+    private fun refreshWebDavAccounts() {
+        _webDavAccounts.value = repo.credentialStore.webDavAccounts()
+    }
+
+    fun webDavFormUrlChange(v: String) = _webDavForm.update { it.copy(url = v) }
+    fun webDavFormUserChange(v: String) = _webDavForm.update { it.copy(user = v) }
+    fun webDavFormPassChange(v: String) = _webDavForm.update { it.copy(pass = v) }
+
+    /** 打开"添加账号"空表单 */
+    fun startNewWebDavForm() {
+        _webDavForm.value = WebDavFormState()
+    }
+
+    /** 打开已有账号编辑表单 */
+    fun startEditWebDavForm(cred: WebDavCredential) {
+        _webDavForm.value = WebDavFormState(
+            url = cred.baseUrl,
+            user = cred.username,
+            pass = cred.password,
+            editing = true,
+            editingBaseUrl = cred.normalizedUrl
+        )
+    }
+
+    fun cancelWebDavForm() {
+        _webDavForm.value = WebDavFormState()
+    }
+
+    fun consumeWebDavSavedMsg() = _webDavForm.update { it.copy(savedMsg = null) }
+
+    /** 保存并测试连接：凭证落盘 + 自动加入曲目列表 + 立即 PROPFIND 验证登录 */
+    fun saveAndTestWebDav() {
+        val f = _webDavForm.value
+        if (f.url.isBlank() || f.user.isBlank() || f.pass.isBlank()) {
+            _webDavForm.update { it.copy(savedMsg = "WebDAV 地址、用户名、密码不能为空") }
+            return
+        }
+        val cred = WebDavCredential(f.url.trim(), f.user.trim(), f.pass)
+        repo.credentialStore.addWebDavAccount(cred)
+        upsertWebDavEntry(cred)
+        refreshWebDavAccounts()
+        _webDavForm.update {
+            it.copy(
+                editing = true,
+                editingBaseUrl = cred.normalizedUrl,
+                testing = true,
+                testOk = null,
+                testResult = null,
+                savedMsg = "已保存，正在测试连接…"
+            )
+        }
+        testWebDavWith(cred)
+    }
+
+    /** 仅验证当前表单输入能否登录（不落盘、不改条目） */
+    fun testWebDavOnly() {
+        val f = _webDavForm.value
+        if (f.url.isBlank() || f.user.isBlank() || f.pass.isBlank()) {
+            _webDavForm.update { it.copy(savedMsg = "请先填写 WebDAV 地址、用户名、密码") }
+            return
+        }
+        val cred = WebDavCredential(f.url.trim(), f.user.trim(), f.pass)
+        _webDavForm.update { it.copy(testing = true, testOk = null, testResult = null, savedMsg = null) }
+        testWebDavWith(cred)
+    }
+
+    private fun testWebDavWith(cred: WebDavCredential) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val source = WebDavAudioSource { cred }
+            val result = source.listDirectory("")
+            _webDavForm.update {
+                it.copy(
+                    testing = false,
+                    savedMsg = null,
+                    testOk = result.isSuccess,
+                    testResult = formatWebDavTestResult(result)
+                )
+            }
+        }
+    }
+
+    private fun formatWebDavTestResult(result: Result<List<AudioItem>>): String {
+        return result.fold(
+            onSuccess = { items -> "登录成功：可访问 ${items.size} 个音频文件" },
+            onFailure = { e ->
+                when (e) {
+                    is com.booklistener.core.AudioSourceException.AuthFailed ->
+                        "登录失败：账号或应用密码不正确（HTTP 401/403）"
+                    is com.booklistener.core.AudioSourceException.NetworkLimit ->
+                        "连接失败：请求过于频繁（HTTP 429），请稍后重试"
+                    else -> "连接失败：${e.message ?: e.javaClass.simpleName}"
+                }
+            }
+        )
+    }
+
+    /** 删除 WebDAV 账号：移除凭证 + 级联清理曲目条目/索引/进度/封面 */
+    fun removeWebDavAccount(baseUrl: String) {
+        repo.credentialStore.removeWebDavAccount(baseUrl)
+        val id = webDavEntryId(baseUrl)
+        _savedEntries.value.firstOrNull { it.id == id }?.let { clearSavedEntry(it) }
+        refreshWebDavAccounts()
+        if (_webDavForm.value.editingBaseUrl == normalizeWebDavUrl(baseUrl)) {
+            cancelWebDavForm()
+        }
+        _eventMsg.value = "WebDAV 账号已删除"
+    }
+
+    /** 把已配置账号作为网盘内容条目加入曲目列表（FolderManageScreen 添加对话框用） */
+    fun addWebDavEntry(cred: WebDavCredential) {
+        repo.credentialStore.addWebDavAccount(cred)
+        upsertWebDavEntry(cred)
+        refreshWebDavAccounts()
+    }
+
+    /** 保存账号并同步曲目条目（配置页保存路径） */
+    private fun upsertWebDavEntry(cred: WebDavCredential) {
+        val id = webDavEntryId(cred.baseUrl)
+        val existing = _savedEntries.value.firstOrNull { it.id == id }
+        val entry = SavedEntry(
+            id = id,
+            displayName = cred.host,
+            uri = "",
+            sourceType = SourceType.WEBDAV,
+            coverUri = existing?.coverUri,
+            fileCount = existing?.fileCount ?: 0,
+            lastPlayedAt = existing?.lastPlayedAt ?: 0L,
+            artist = cred.username,
+            lastOpenedAt = existing?.lastOpenedAt ?: 0L
+        )
+        setEntries(entryStore.upsert(_savedEntries.value, entry))
+    }
+
+    /** WebDAV 条目 id = webdav:// + 归一化地址（账号唯一） */
+    private fun webDavEntryId(baseUrl: String): String = "webdav://" + normalizeWebDavUrl(baseUrl)
+
     fun openSavedEntry(entry: SavedEntry, showSheet: Boolean = true) {
         if (entry.isLocal) {
             scanFolder(Uri.parse(entry.uri), showSheet = showSheet)
@@ -709,7 +873,12 @@ class PlayerViewModel @JvmOverloads constructor(
             showSheet = showSheet,
             loadItems = {
                 loadFromIndex(entry.id, entry.sourceType) ?: run {
-                    val items = repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                    val items = when (entry.sourceType) {
+                        SourceType.WEBDAV ->
+                            repo.listWebDavDirectory(entry.id.removePrefix("webdav://"), entry.uri).getOrThrow()
+                        else ->
+                            repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                    }
                     indexStore.save(entry.id, items.map { it.toIndexedFile() })
                     items
                 }
@@ -736,10 +905,13 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    /** 添加网盘源条目（WebDAV / 阿里云盘根目录）；未配置/未授权时提示 */
+    /**
+     * 添加网盘源条目（v1.6.25：多账号后 WebDAV 走 addWebDavEntry 选账号；本方法仅兼容旧调用，
+     * WEBDAV 分支取第一个已配置账号）。
+     */
     fun addCloudSource(type: SourceType) {
         val ok = when (type) {
-            SourceType.WEBDAV -> repo.credentialStore.webDav() != null
+            SourceType.WEBDAV -> repo.credentialStore.webDavAccounts().isNotEmpty()
             SourceType.ALIYUN -> repo.aliyunAuth.isAuthorized()
             else -> false
         }
@@ -747,19 +919,23 @@ class PlayerViewModel @JvmOverloads constructor(
             _eventMsg.value = "请先在网盘配置中完成" + cloudDisplayName(type) + "配置/授权"
             return
         }
-        val id = when (type) {
-            SourceType.WEBDAV -> "webdav://root"
-            SourceType.ALIYUN -> "aliyun://root"
+        when (type) {
+            SourceType.WEBDAV -> {
+                repo.credentialStore.webDavAccounts().firstOrNull()?.let { addWebDavEntry(it) }
+                _eventMsg.value = "已添加 WebDAV 内容"
+            }
+            SourceType.ALIYUN -> {
+                val entry = SavedEntry(
+                    id = "aliyun://root",
+                    displayName = cloudDisplayName(type),
+                    uri = "",
+                    sourceType = type
+                )
+                setEntries(entryStore.upsert(_savedEntries.value, entry))
+                _eventMsg.value = "已添加 ${entry.displayName}"
+            }
             else -> return
         }
-        val entry = SavedEntry(
-            id = id,
-            displayName = cloudDisplayName(type),
-            uri = "",
-            sourceType = type
-        )
-        setEntries(entryStore.upsert(_savedEntries.value, entry))
-        _eventMsg.value = "已添加 ${entry.displayName}"
     }
 
     // ---- 兼容旧 API（DirectoryScreen 旧测试依赖，语义不变）----

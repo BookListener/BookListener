@@ -1,5 +1,6 @@
 package com.booklistener.ui
 
+import com.booklistener.auth.CredentialStore
 import android.net.Uri
 import android.os.Looper
 import androidx.activity.ComponentActivity
@@ -51,7 +52,7 @@ class DirectoryScreenFolderViewTest {
     }
 
     private fun newViewModel(): PlayerViewModel =
-        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db)
+        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
     @Test
     fun scanFolder_entersFolderView() {

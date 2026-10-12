@@ -1,5 +1,6 @@
 package com.booklistener.ui
 
+import com.booklistener.auth.CredentialStore
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -31,7 +32,7 @@ class AlbumTitleModeTest {
     }
 
     private fun newViewModel(): PlayerViewModel =
-        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db)
+        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
     private fun clearPrefs() {
         ApplicationProvider.getApplicationContext<Context>()

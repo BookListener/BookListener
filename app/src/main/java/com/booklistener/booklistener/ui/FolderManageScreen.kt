@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -114,19 +115,45 @@ fun FolderManageScreen(
     }
 
     if (showCloudDialog) {
+        val accounts by viewModel.webDavAccounts.collectAsStateWithLifecycle()
         AlertDialog(
             onDismissRequest = { showCloudDialog = false },
             title = { Text("添加 WebDAV 内容") },
-            text = { Text("将 WebDAV 根目录加入曲目列表（需先在设置中完成 WebDAV 配置）") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.addCloudSource(SourceType.WEBDAV)
-                    showCloudDialog = false
-                }) {
-                    Text("添加")
+            text = {
+                if (accounts.isEmpty()) {
+                    Text("尚未配置 WebDAV 账号，请先到 设置 → 网盘配置 中添加")
+                } else {
+                    Column {
+                        accounts.forEach { cred ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.addWebDavEntry(cred)
+                                        showCloudDialog = false
+                                    }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = cred.host,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = cred.username,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            HorizontalDivider()
+                        }
+                    }
                 }
             },
-            dismissButton = {
+            confirmButton = {
                 TextButton(onClick = { showCloudDialog = false }) {
                     Text("取消")
                 }

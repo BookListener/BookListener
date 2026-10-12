@@ -1,5 +1,6 @@
 package com.booklistener.ui
 
+import com.booklistener.auth.CredentialStore
 import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -44,7 +45,7 @@ class AlbumInteractionTest {
     }
 
     private fun newViewModel(): PlayerViewModel =
-        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db)
+        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
     private fun seedAlbumA(album: String = "哈利·波特与魔法石") {
         runBlocking {

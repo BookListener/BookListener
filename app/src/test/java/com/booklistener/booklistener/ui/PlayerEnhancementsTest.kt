@@ -1,5 +1,6 @@
 package com.booklistener.ui
 
+import com.booklistener.auth.CredentialStore
 import androidx.media3.common.Player
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -34,7 +35,7 @@ class RepeatModeTest {
     }
 
     private fun newViewModel(): PlayerViewModel =
-        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db)
+        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
     @Test
     fun defaultMode_isOff() {
@@ -80,7 +81,7 @@ class SleepTimerTest {
     }
 
     private fun newViewModel(): PlayerViewModel =
-        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db)
+        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
     private fun idleFor(millis: Long) {
         ShadowLooper.idleMainLooper(TimeUnit.MILLISECONDS.toMillis(millis), TimeUnit.MILLISECONDS)
@@ -146,7 +147,7 @@ class AbLoopLogicTest {
     }
 
     private fun vm(): PlayerViewModel =
-        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db)
+        PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
     @Test
     fun noPoints_noLoop() {
