@@ -887,13 +887,14 @@ class PlayerViewModel @JvmOverloads constructor(
     /** WebDAV 文件夹条目 id（v1.6.28）：完整目录 URL 去 scheme 前缀，账号下多个文件夹各自独立 */
     fun webDavFolderEntryId(folderUrl: String): String = "webdav://" + folderUrl
 
-    /** 固化/进入前预扫：PROPFIND 一次写索引（含播放进度补录所需的时长字段），失败静默 */
+    /** 固化/进入前预扫：PROPFIND 一次写索引（含播放进度补录所需的时长字段），完成后刷新曲目分区 */
     private fun prefillWebDavIndex(folderUrl: String, entry: SavedEntry) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val (_, list) = repo.listWebDavDirEntries(folderUrl).getOrThrow()
                 indexStore.save(entry.id, list.map { it.toIndexedFile() })
             }
+            withContext(Dispatchers.Main) { refreshAlbums() }
         }
     }
 
@@ -1225,13 +1226,19 @@ class PlayerViewModel @JvmOverloads constructor(
      * 刷新条目数据库（v1.6.3，文件夹管理文件列表"刷新"按钮）：
      * 重读该条目全部文件（本地重扫文件头/网盘重列目录）→ 重建内容索引（标签/时长/原始文件名）
      * → 本地条目重算封面与作者（保留 lastPlayedAt/lastOpenedAt/进度）→ 刷新专辑聚合与当前文件列表。
+     * v1.6.28 修复：网盘刷新曾走占位 source（无凭证）导致 AuthFailed 后空列表清空索引。
      */
     fun refreshEntry(entry: SavedEntry) {
         viewModelScope.launch {
             val items = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (entry.isLocal) folderScanner.scan(entry.uri)
-                    else repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                    if (entry.isLocal) {
+                        folderScanner.scan(entry.uri)
+                    } else if (entry.sourceType == SourceType.WEBDAV) {
+                        repo.listWebDavDirEntries(entry.uri).getOrThrow().second
+                    } else {
+                        repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                    }
                 }.getOrElse { e ->
                     AppLog.e("refresh entry failed: ${entry.id}", e)
                     emptyList()

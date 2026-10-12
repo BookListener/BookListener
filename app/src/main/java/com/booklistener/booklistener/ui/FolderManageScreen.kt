@@ -206,7 +206,11 @@ fun FolderManageScreen(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = { viewModel.savePickerFolder(picker) }) {
+                TextButton(onClick = {
+                    viewModel.savePickerFolder(picker)
+                    // v1.6.28：保存后立即关闭选择器（否则停留在"该目录为空"的空状态）
+                    pickerCred = null
+                }) {
                     Text("保存此文件夹")
                 }
             }
