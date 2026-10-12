@@ -107,4 +107,88 @@ class WebDavMultiStatusTest {
 
         assertTrue(parseWebDavMultiStatus(xml, "https://dav.example.com/dav/").isEmpty())
     }
+
+    @Test
+    fun detailed_countsSubdirs_excludesSelf() {
+        // 根 href 用相对路径（坚果云风格），不应计入子目录；两个子目录应计数为 2
+        val xml = """<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/dav/</d:href>
+    <d:propstat>
+      <d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/dav/Movies/</d:href>
+    <d:propstat>
+      <d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/dav/Books/</d:href>
+    <d:propstat>
+      <d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/dav/song.flac</d:href>
+    <d:propstat>
+      <d:prop><d:resourcetype/></d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"""
+
+        val (items, dirs) = parseWebDavMultiStatusDetailed(xml, "https://dav.example.com/dav/")
+
+        assertEquals("根自身(相对 href)不应计入子目录", 2, dirs)
+        assertEquals(1, items.size)
+        assertEquals("song", items[0].displayName)
+    }
+
+    @Test
+    fun dirEntries_returnsDirsAndAudio_separated() {
+        val xml = """<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/dav/</d:href>
+    <d:propstat>
+      <d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/dav/Movies/</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>Movies</d:displayname>
+        <d:resourcetype><d:collection/></d:resourcetype>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/dav/%E5%8F%A4%E8%AF%97/</d:href>
+    <d:propstat>
+      <d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/dav/part01.m4a</d:href>
+    <d:propstat>
+      <d:prop>
+        <d:displayname>part01.m4a</d:displayname>
+        <d:resourcetype/>
+      </d:prop>
+    </d:propstat>
+  </d:response>
+</d:multistatus>"""
+
+        val (dirs, items) = parseWebDavDirEntries(xml, "https://dav.example.com/dav/")
+
+        assertEquals("子目录 2 个（根自身排除）", 2, dirs.size)
+        assertEquals("有 displayname 用明文", "Movies", dirs[0].name)
+        assertEquals("无 displayname 回退 href 末段并解码", "古诗", dirs[1].name)
+        assertEquals("href 保留原样供下一层 PROPFIND", "/dav/%E5%8F%A4%E8%AF%97/", dirs[1].href)
+        assertEquals(1, items.size)
+        assertEquals("part01", items[0].displayName)
+    }
 }

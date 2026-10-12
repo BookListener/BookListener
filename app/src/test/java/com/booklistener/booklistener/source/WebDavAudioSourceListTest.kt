@@ -110,6 +110,38 @@ class WebDavAudioSourceListTest {
     }
 
     @Test
+    fun probeDirectory_countsAudioAndSubdirs() {
+        enqueuePropfindResponse()
+        val cred = WebDavCredential(baseUrl, "user", "pass")
+        val source = WebDavAudioSource { cred }
+
+        val result = runBlocking { source.probeDirectory("") }
+
+        assertTrue("PROPFIND 应成功，实际失败: ${result.exceptionOrNull()}", result.isSuccess)
+        val (items, dirs) = result.getOrThrow()
+        assertEquals(1, items.size)
+        // 响应含根自身(/dav/)与 /dav/books/ 两个目录条目，根不计入 → 子目录 1
+        assertEquals("子目录计数应为 1（根自身不计）", 1, dirs)
+    }
+
+    @Test
+    fun listDirEntries_returnsSubdirsAndAudio() {
+        enqueuePropfindResponse()
+        val cred = WebDavCredential(baseUrl, "user", "pass")
+        val source = WebDavAudioSource { cred }
+
+        val result = runBlocking { source.listDirEntries("") }
+
+        assertTrue("PROPFIND 应成功，实际失败: ${result.exceptionOrNull()}", result.isSuccess)
+        val (dirs, items) = result.getOrThrow()
+        assertEquals("响应中根(/dav/)与 /dav/books/ 两个目录条目，根排除后子目录 1 个", 1, dirs.size)
+        assertEquals("books", dirs[0].name)
+        assertEquals("/dav/books/", dirs[0].href)
+        assertEquals(1, items.size)
+        assertEquals("第一章", items[0].displayName)
+    }
+
+    @Test
     fun wrongPassword_returnsAuthFailed() {
         server.enqueue(MockResponse().setResponseCode(401))
         val cred = WebDavCredential(baseUrl, "user", "wrong")

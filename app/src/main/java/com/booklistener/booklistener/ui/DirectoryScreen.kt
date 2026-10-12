@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -67,6 +68,7 @@ import com.booklistener.core.formatDuration
 import com.booklistener.core.splitHomeSections
 import com.booklistener.player.PlaybackQueueLogic
 import com.booklistener.player.PlaybackState
+import com.booklistener.source.WebDavDirEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
@@ -80,6 +82,9 @@ import kotlinx.coroutines.withContext
 fun DirectoryScreen(viewModel: PlayerViewModel) {
     val inFolderView by viewModel.inFolderView.collectAsStateWithLifecycle()
     val folderItems by viewModel.folderItems.collectAsStateWithLifecycle()
+    // v1.6.27：WebDAV 目录导航状态（子目录列表 + 路径栈）
+    val webDavDirs by viewModel.webDavDirs.collectAsStateWithLifecycle()
+    val webDavPathStack by viewModel.webDavPathStack.collectAsStateWithLifecycle()
 
     // v1.6.4：长按条目查看完整名称/信息
     var pendingNameDetail by remember { mutableStateOf<NameDetail?>(null) }
@@ -196,12 +201,15 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
 
         if (inFolderView) {
             // 条目视图（兼容路径：搜索命中文件夹 / 旧入口）：目录名 + 返回箭头 + 目录内可播放音频列表
-            BackHandler(onBack = { viewModel.exitFolderView() })
+            // v1.6.27：WebDAV 目录导航——子目录行可进入，返回键逐级退回（根目录时退出条目视图）
+            val isWebDav = currentFolderUri?.toString()?.startsWith("webdav://") == true
+            val isWebDavSubDir = isWebDav && webDavPathStack.isNotEmpty()
+            BackHandler(onBack = { viewModel.backWebDavDirOrExit() })
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { viewModel.exitFolderView() }) {
+                IconButton(onClick = { viewModel.backWebDavDirOrExit() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = "返回",
@@ -209,14 +217,20 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                     )
                 }
                 Text(
-                    text = currentFolderUri?.let { entryDisplayName(it.toString(), savedEntries) } ?: "文件夹",
+                    text = when {
+                        // 当前 WebDAV 子目录：显示目录名（栈顶 href 末段解码）
+                        isWebDavSubDir -> android.net.Uri.decode(
+                            webDavPathStack.last().trimEnd('/').substringAfterLast('/')
+                        )
+                        else -> currentFolderUri?.let { entryDisplayName(it.toString(), savedEntries) } ?: "文件夹"
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
             }
-            if (folderItems.isEmpty()) {
+            if (webDavDirs.isEmpty() && folderItems.isEmpty()) {
                 Text(
                     text = MessageCatalog.EMPTY_DIR_AUDIO,
                     modifier = Modifier.padding(top = 48.dp),
@@ -238,6 +252,11 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                     sessionKey = currentFolderUri?.toString() ?: ""
                 )
                 LazyColumn(state = folderListState) {
+                    if (isWebDav) {
+                        items(webDavDirs, key = { dir -> dir.href }) { dir ->
+                            WebDavDirRow(dir = dir, onClick = { viewModel.enterWebDavDir(dir.href) })
+                        }
+                    }
                     itemsIndexed(folderItems, key = { _, item -> item.id }) { index, item ->
                         AudioRow(
                             item = item,
@@ -743,6 +762,34 @@ private fun AlbumSongRow(
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
+    }
+}
+
+@Composable
+/** WebDAV 子目录行（v1.6.27 目录导航）：文件夹图标 + 目录名，点击进入下一层 */
+private fun WebDavDirRow(dir: WebDavDirEntry, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = AppIcons.Folder,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = dir.name,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

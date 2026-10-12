@@ -40,6 +40,7 @@ import com.booklistener.player.PlaybackController
 import com.booklistener.player.PlaybackState
 import com.booklistener.source.WebDavAudioSource
 import com.booklistener.source.WebDavCredential
+import com.booklistener.source.WebDavDirEntry
 import com.booklistener.source.normalizeWebDavUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -288,6 +289,12 @@ class PlayerViewModel @JvmOverloads constructor(
     val folderItems: StateFlow<List<AudioItem>> = _folderItems.asStateFlow()
     private val _inFolderView = MutableStateFlow(false)
     val inFolderView: StateFlow<Boolean> = _inFolderView.asStateFlow()
+
+    // ---- WebDAV 目录导航（v1.6.27）：当前目录的子目录 + 路径栈（href，空=根） ----
+    private val _webDavDirs = MutableStateFlow<List<WebDavDirEntry>>(emptyList())
+    val webDavDirs: StateFlow<List<WebDavDirEntry>> = _webDavDirs.asStateFlow()
+    private val _webDavPathStack = MutableStateFlow<List<String>>(emptyList())
+    val webDavPathStack: StateFlow<List<String>> = _webDavPathStack.asStateFlow()
 
     // ---- 已添加内容（本地文件夹 + 网盘源，统一模型）----
     // v1.6.0：三个 Store 迁移到 Room（prefs 旧数据由 StoreMigration 首启搬运）
@@ -794,7 +801,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private fun testWebDavWith(cred: WebDavCredential) {
         viewModelScope.launch(Dispatchers.IO) {
             val source = WebDavAudioSource { cred }
-            val result = source.listDirectory("")
+            val result = source.probeDirectory("")
             _webDavForm.update {
                 it.copy(
                     testing = false,
@@ -806,9 +813,15 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    private fun formatWebDavTestResult(result: Result<List<AudioItem>>): String {
+    private fun formatWebDavTestResult(result: Result<Pair<List<AudioItem>, Int>>): String {
         return result.fold(
-            onSuccess = { items -> "登录成功：可访问 ${items.size} 个音频文件" },
+            onSuccess = { (items, dirs) ->
+                when {
+                    items.isNotEmpty() -> "登录成功：可访问 ${items.size} 个音频文件"
+                    dirs > 0 -> "登录成功：根目录无音频，发现 $dirs 个子目录（音频在子目录中，进入后可见）"
+                    else -> "登录成功：该目录为空（无音频、无子目录）"
+                }
+            },
             onFailure = { e ->
                 when (e) {
                     is com.booklistener.core.AudioSourceException.AuthFailed ->
@@ -866,24 +879,77 @@ class PlayerViewModel @JvmOverloads constructor(
             scanFolder(Uri.parse(entry.uri), showSheet = showSheet)
             return
         }
+        if (entry.sourceType == SourceType.WEBDAV) {
+            // 目录导航：进入网盘条目时重置到根目录
+            _webDavPathStack.value = emptyList()
+            _webDavDirs.value = emptyList()
+        }
         openEntryView(
             entryId = entry.id,
             entryUri = Uri.parse(entry.id),
             emptyMessage = MessageCatalog.EMPTY_DIR_AUDIO,
             showSheet = showSheet,
             loadItems = {
-                loadFromIndex(entry.id, entry.sourceType) ?: run {
-                    val items = when (entry.sourceType) {
-                        SourceType.WEBDAV ->
-                            repo.listWebDavDirectory(entry.id.removePrefix("webdav://"), entry.uri).getOrThrow()
-                        else ->
-                            repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                when (entry.sourceType) {
+                    // 网盘目录会变化：每次进入直接 PROPFIND（子目录实时可见），同时写索引供专辑聚合
+                    SourceType.WEBDAV -> {
+                        val (dirs, list) = repo.listWebDavDirEntries(
+                            entry.id.removePrefix("webdav://"), entry.uri
+                        ).getOrThrow()
+                        _webDavDirs.value = dirs
+                        indexStore.save(entry.id, list.map { it.toIndexedFile() })
+                        list
                     }
-                    indexStore.save(entry.id, items.map { it.toIndexedFile() })
-                    items
+                    else -> loadFromIndex(entry.id, entry.sourceType) ?: run {
+                        val items = repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                        indexStore.save(entry.id, items.map { it.toIndexedFile() })
+                        items
+                    }
                 }
             }
         )
+    }
+
+    // ---- WebDAV 目录导航（v1.6.27）----
+
+    /** 进入 WebDAV 子目录：路径栈 push 并加载该目录内容（不自动播放、不固化条目） */
+    fun enterWebDavDir(href: String) {
+        val baseUrl = (_currentFolderUri.value?.toString()?.removePrefix("webdav://")).orEmpty()
+        if (baseUrl.isEmpty()) return
+        _webDavPathStack.update { it + href }
+        loadWebDavDirContent(baseUrl, href)
+    }
+
+    /** 返回 WebDAV 上一级目录；已在根目录时退出条目视图 */
+    fun backWebDavDirOrExit() {
+        val stack = _webDavPathStack.value
+        if (stack.isEmpty()) {
+            exitFolderView()
+            return
+        }
+        val newStack = stack.dropLast(1)
+        _webDavPathStack.value = newStack
+        val baseUrl = (_currentFolderUri.value?.toString()?.removePrefix("webdav://")).orEmpty()
+        if (baseUrl.isEmpty()) return
+        loadWebDavDirContent(baseUrl, newStack.lastOrNull() ?: "")
+    }
+
+    private fun loadWebDavDirContent(baseUrl: String, path: String) {
+        viewModelScope.launch {
+            val (dirs, items) = withContext(Dispatchers.IO) {
+                runCatching { repo.listWebDavDirEntries(baseUrl, path).getOrThrow() }
+                    .getOrElse { e ->
+                        AppLog.e("load webdav dir failed: $path", e)
+                        emptyList<WebDavDirEntry>() to emptyList<AudioItem>()
+                    }
+            }
+            _webDavDirs.value = dirs
+            _folderItems.value = items
+            _eventMsg.value = if (dirs.isEmpty() && items.isEmpty())
+                MessageCatalog.EMPTY_DIR_AUDIO
+            else
+                MessageCatalog.MSG_FOUND.format(items.size)
+        }
     }
 
     /**
@@ -1033,6 +1099,8 @@ class PlayerViewModel @JvmOverloads constructor(
     /** 退出条目视图（退出前保存当前进度） */
     fun exitFolderView() {
         saveCurrentPlaybackProgress()
+        _webDavPathStack.value = emptyList()
+        _webDavDirs.value = emptyList()
         _inFolderView.value = false
         _folderItems.value = emptyList()
         _currentFolderUri.value = null

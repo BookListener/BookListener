@@ -42,11 +42,25 @@ fun normalizeWebDavUrl(url: String): String {
     return "$trimmed/"
 }
 
+/** WebDAV 子目录条目（目录导航用，v1.6.27）：name 为解码后目录名，href 供下一层 PROPFIND */
+data class WebDavDirEntry(
+    val name: String,
+    val href: String
+)
+
 class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?) : AudioSource {
 
     private val baseUrl: String get() = credentialProvider()?.baseUrl.orEmpty()
 
-    override suspend fun listDirectory(path: String): Result<List<AudioItem>> = runCatching {
+    override suspend fun listDirectory(path: String): Result<List<AudioItem>> =
+        probeDirectory(path).map { it.first }
+
+    /** 列举目录并同时统计子目录数量（不含根自身），供"测试连接"区分"根目录无音频但有子目录" */
+    suspend fun probeDirectory(path: String): Result<Pair<List<AudioItem>, Int>> =
+        listDirEntries(path).map { (dirs, items) -> items to dirs.size }
+
+    /** 列举目录：返回 (子目录列表, 音频列表)，支持逐层目录导航 */
+    suspend fun listDirEntries(path: String): Result<Pair<List<WebDavDirEntry>, List<AudioItem>>> = runCatching {
         val cred = credentialProvider()
             ?: throw AudioSourceException.AuthFailed("WebDAV not configured")
         val url = if (path.isEmpty()) normalize(cred.baseUrl) else path
@@ -60,7 +74,7 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
         OkHttpHolder.client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw mapHttpError(resp)
             val xml = resp.body?.string().orEmpty()
-            parseMultiStatus(xml, url)
+            parseWebDavDirEntries(xml, url)
         }
     }
 
@@ -90,13 +104,6 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
 </d:propfind>""".trimIndent()
     }
 
-    /**
-     * 解析 PROPFIND 的 multistatus 响应，提取当前目录下的音频文件。
-     * href 为完整 URL，可直接用于 GET（支持 Range）。
-     */
-    private fun parseMultiStatus(xml: String, base: String): List<AudioItem> =
-        parseWebDavMultiStatus(xml, base)
-
     private fun mapHttpError(resp: Response): AudioSourceException {
         return when (resp.code) {
             401, 403 -> AudioSourceException.AuthFailed("WebDAV auth failed (${resp.code})")
@@ -110,11 +117,24 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
  * WebDAV multistatus 响应解析（v1.6.26 修复：XmlPullParser 未开启 namespace 处理时
  * parser.name 返回带前缀的 "d:response" 等，导致所有分支失配、目录永远解析为空。
  * 现统一取局部名匹配；并用 resourcetype/collection 排除目录条目）。
+ * v1.6.27：泛化返回 (音频列表, 子目录计数)（不含根自身），供"测试连接"区分
+ * "根目录无音频但有子目录"的误报场景。
  */
-internal fun parseWebDavMultiStatus(xml: String, base: String): List<AudioItem> {
+internal fun parseWebDavMultiStatus(xml: String, base: String): List<AudioItem> =
+    parseWebDavDirEntries(xml, base).second
+
+/** 解析 multistatus 并同时统计子目录数量（根自身不计入），目录计数供测试连接提示用 */
+internal fun parseWebDavMultiStatusDetailed(xml: String, base: String): Pair<List<AudioItem>, Int> {
+    val (dirs, items) = parseWebDavDirEntries(xml, base)
+    return items to dirs.size
+}
+
+/** 解析 multistatus 为 (子目录列表, 音频列表)（v1.6.27 目录导航）：目录名解码、href 保留供下一层 PROPFIND */
+internal fun parseWebDavDirEntries(xml: String, base: String): Pair<List<WebDavDirEntry>, List<AudioItem>> {
     val parser = Xml.newPullParser()
     parser.setInput(StringReader(xml))
     val items = mutableListOf<AudioItem>()
+    val dirs = mutableListOf<WebDavDirEntry>()
     var currentHref = ""
     var currentDisplayName = ""
     var currentLength = 0L
@@ -139,6 +159,17 @@ internal fun parseWebDavMultiStatus(xml: String, base: String): List<AudioItem> 
         isCollection = false
     }
 
+    /** href 是否指向目录根自身：兼容完整 URL 与相对路径（提取 path 比较，忽略 scheme/host） */
+    fun isSelf(href: String, base: String): Boolean {
+        fun pathOf(u: String): String {
+            val s = u.trim().trimEnd('/')
+            val afterScheme = if (s.contains("://")) s.substring(s.indexOf("://") + 3) else s
+            val slash = afterScheme.indexOf('/')
+            return if (slash >= 0) afterScheme.substring(slash) else "/"
+        }
+        return pathOf(href) == pathOf(base)
+    }
+
     var event = parser.eventType
     while (event != XmlPullParser.END_DOCUMENT) {
         when (event) {
@@ -154,22 +185,29 @@ internal fun parseWebDavMultiStatus(xml: String, base: String): List<AudioItem> 
             XmlPullParser.END_TAG -> {
                 if (localTag(parser.name) == "response" && inResponse) {
                     val href = currentHref
-                    // 目录条目（href 以 "/" 结尾 或 resourcetype 含 collection）不入音频列表
-                    if (href.isNotEmpty() && href != base && !href.endsWith("/") && !isCollection) {
-                        // displayname 缺省时回退 href 文件名并做 URL 解码（%E7%AC%AC…→第一章）
-                        val name = currentDisplayName.ifEmpty {
-                            android.net.Uri.decode(href.substringAfterLast('/'))
-                        }
-                        if (AudioExt.isAudio(name)) {
-                            val display = name.substringBeforeLast('.').takeUnless { it.isEmpty() } ?: name
-                            items.add(
-                                AudioItemFactory.fromWebDav(
-                                    href = href,
-                                    displayName = display,
-                                    size = currentLength,
-                                    rawName = name
+                    if (href.isNotEmpty() && !isSelf(href, base)) {
+                        if (isCollection || href.endsWith("/")) {
+                            // 目录条目：子目录（非根自身）收集为 WebDavDirEntry；目录名解码
+                            val dirName = currentDisplayName.ifEmpty {
+                                android.net.Uri.decode(href.trimEnd('/').substringAfterLast('/'))
+                            }
+                            dirs.add(WebDavDirEntry(name = dirName, href = href))
+                        } else {
+                            // displayname 缺省时回退 href 文件名并做 URL 解码（%E7%AC%AC…→第一章）
+                            val name = currentDisplayName.ifEmpty {
+                                android.net.Uri.decode(href.substringAfterLast('/'))
+                            }
+                            if (AudioExt.isAudio(name)) {
+                                val display = name.substringBeforeLast('.').takeUnless { it.isEmpty() } ?: name
+                                items.add(
+                                    AudioItemFactory.fromWebDav(
+                                        href = href,
+                                        displayName = display,
+                                        size = currentLength,
+                                        rawName = name
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                     inResponse = false
@@ -178,5 +216,6 @@ internal fun parseWebDavMultiStatus(xml: String, base: String): List<AudioItem> 
         }
         event = parser.next()
     }
-    return items.sortedWith(compareBy(NaturalOrder.bySortKey) { it.displayName })
+    val sortedItems = items.sortedWith(compareBy(NaturalOrder.bySortKey) { it.displayName })
+    return dirs to sortedItems
 }

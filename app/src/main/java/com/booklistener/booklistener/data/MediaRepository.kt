@@ -15,6 +15,7 @@ import com.booklistener.player.DefaultSourceResolver
 import com.booklistener.source.AliyunAudioSource
 import com.booklistener.source.LocalAudioSource
 import com.booklistener.source.WebDavAudioSource
+import com.booklistener.source.WebDavDirEntry
 import com.booklistener.source.normalizeWebDavUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -49,7 +50,7 @@ class MediaRepository(
      * v1.6.25 多账号：按归一化地址找到对应 WebDAV 数据源；未配置返回 null。
      * 每个账号独立持有凭证，互不影响。
      */
-    fun webDavSourceFor(baseUrl: String): AudioSource? {
+    fun webDavSourceFor(baseUrl: String): WebDavAudioSource? {
         val norm = normalizeWebDavUrl(baseUrl)
         val cred = credentialStore.webDavAccounts()
             .firstOrNull { it.normalizedUrl == norm }
@@ -62,6 +63,16 @@ class MediaRepository(
         val source = webDavSourceFor(baseUrl)
             ?: return Result.failure(AudioSourceException.AuthFailed("WebDAV not configured"))
         return source.listDirectory(path)
+    }
+
+    /** 按账号列 WebDAV 目录（子目录 + 音频混合，v1.6.27 目录导航用） */
+    suspend fun listWebDavDirEntries(
+        baseUrl: String,
+        path: String
+    ): Result<Pair<List<WebDavDirEntry>, List<AudioItem>>> {
+        val source = webDavSourceFor(baseUrl)
+            ?: return Result.failure(AudioSourceException.AuthFailed("WebDAV not configured"))
+        return source.listDirEntries(path)
     }
 
     val resolver: DefaultSourceResolver by lazy {
