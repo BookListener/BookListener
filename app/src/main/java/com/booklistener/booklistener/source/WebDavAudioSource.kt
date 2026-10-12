@@ -94,60 +94,8 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
      * 解析 PROPFIND 的 multistatus 响应，提取当前目录下的音频文件。
      * href 为完整 URL，可直接用于 GET（支持 Range）。
      */
-    private fun parseMultiStatus(xml: String, base: String): List<AudioItem> {
-        val parser = Xml.newPullParser()
-        parser.setInput(StringReader(xml))
-        val items = mutableListOf<AudioItem>()
-        var currentHref = ""
-        var currentDisplayName = ""
-        var currentLength = 0L
-        var isCollection = false
-        var inResponse = false
-
-        fun resetFields() {
-            currentHref = ""
-            currentDisplayName = ""
-            currentLength = 0L
-            isCollection = false
-        }
-
-        var event = parser.eventType
-        while (event != XmlPullParser.END_DOCUMENT) {
-            when (event) {
-                XmlPullParser.START_TAG -> {
-                    when (parser.name) {
-                        "response" -> { inResponse = true; resetFields() }
-                        "href" -> currentHref = parser.nextText()
-                        "displayname" -> currentDisplayName = parser.nextText()
-                        "getcontentlength" -> currentLength = parser.nextText().toLongOrNull() ?: 0L
-                        "collection" -> isCollection = true
-                    }
-                }
-                XmlPullParser.END_TAG -> {
-                    if (parser.name == "response" && inResponse) {
-                        val href = currentHref
-                        if (href.isNotEmpty() && href != base && !href.endsWith("/")) {
-                            val name = currentDisplayName.ifEmpty { href.substringAfterLast('/') }
-                            if (AudioExt.isAudio(name)) {
-                                val display = name.substringBeforeLast('.').takeUnless { it.isEmpty() } ?: name
-                                items.add(
-                                    AudioItemFactory.fromWebDav(
-                                        href = href,
-                                        displayName = display,
-                                        size = currentLength,
-                                        rawName = name
-                                    )
-                                )
-                            }
-                        }
-                        inResponse = false
-                    }
-                }
-            }
-            event = parser.next()
-        }
-        return items.sortedWith(compareBy(NaturalOrder.bySortKey) { it.displayName })
-    }
+    private fun parseMultiStatus(xml: String, base: String): List<AudioItem> =
+        parseWebDavMultiStatus(xml, base)
 
     private fun mapHttpError(resp: Response): AudioSourceException {
         return when (resp.code) {
@@ -156,4 +104,79 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
             else -> AudioSourceException.NetworkError("WebDAV error ${resp.code}", null)
         }
     }
+}
+
+/**
+ * WebDAV multistatus 响应解析（v1.6.26 修复：XmlPullParser 未开启 namespace 处理时
+ * parser.name 返回带前缀的 "d:response" 等，导致所有分支失配、目录永远解析为空。
+ * 现统一取局部名匹配；并用 resourcetype/collection 排除目录条目）。
+ */
+internal fun parseWebDavMultiStatus(xml: String, base: String): List<AudioItem> {
+    val parser = Xml.newPullParser()
+    parser.setInput(StringReader(xml))
+    val items = mutableListOf<AudioItem>()
+    var currentHref = ""
+    var currentDisplayName = ""
+    var currentLength = 0L
+    var isCollection = false
+    var inResponse = false
+
+    /**
+     * 取元素局部名（去命名空间前缀）："d:response" → "response"、"response" → "response"。
+     * 注意不能用 substringAfter(':', "")：它在无冒号时返回 missingDelimiterValue 而非原串，
+     * 会导致无前缀标签全部失配（v1.6.26 回归教训，已有 UT 覆盖）。
+     */
+    fun localTag(name: String?): String {
+        if (name.isNullOrEmpty()) return ""
+        val idx = name.indexOf(':')
+        return if (idx >= 0) name.substring(idx + 1) else name
+    }
+
+    fun resetFields() {
+        currentHref = ""
+        currentDisplayName = ""
+        currentLength = 0L
+        isCollection = false
+    }
+
+    var event = parser.eventType
+    while (event != XmlPullParser.END_DOCUMENT) {
+        when (event) {
+            XmlPullParser.START_TAG -> {
+                when (localTag(parser.name)) {
+                    "response" -> { inResponse = true; resetFields() }
+                    "href" -> currentHref = parser.nextText()
+                    "displayname" -> currentDisplayName = parser.nextText()
+                    "getcontentlength" -> currentLength = parser.nextText().toLongOrNull() ?: 0L
+                    "collection" -> isCollection = true
+                }
+            }
+            XmlPullParser.END_TAG -> {
+                if (localTag(parser.name) == "response" && inResponse) {
+                    val href = currentHref
+                    // 目录条目（href 以 "/" 结尾 或 resourcetype 含 collection）不入音频列表
+                    if (href.isNotEmpty() && href != base && !href.endsWith("/") && !isCollection) {
+                        // displayname 缺省时回退 href 文件名并做 URL 解码（%E7%AC%AC…→第一章）
+                        val name = currentDisplayName.ifEmpty {
+                            android.net.Uri.decode(href.substringAfterLast('/'))
+                        }
+                        if (AudioExt.isAudio(name)) {
+                            val display = name.substringBeforeLast('.').takeUnless { it.isEmpty() } ?: name
+                            items.add(
+                                AudioItemFactory.fromWebDav(
+                                    href = href,
+                                    displayName = display,
+                                    size = currentLength,
+                                    rawName = name
+                                )
+                            )
+                        }
+                    }
+                    inResponse = false
+                }
+            }
+        }
+        event = parser.next()
+    }
+    return items.sortedWith(compareBy(NaturalOrder.bySortKey) { it.displayName })
 }
