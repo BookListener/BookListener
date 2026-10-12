@@ -303,10 +303,11 @@ class PlayerViewModel @JvmOverloads constructor(
     private val indexStore = EntryIndexStore(appDb.dao())
     // v1.6.28：加载时过滤旧的"网盘根条目"（自动固化、uri 非完整 URL）——
     // 网盘改为只通过文件夹管理固化具体文件夹；账号凭证保留在 CredentialStore。
+    // v1.6.30：存量网盘条目若把账号邮箱写进了 artist（旧固化逻辑），启动时清掉。
     private val _savedEntries = MutableStateFlow(
-        entryStore.load().filterNot {
-            it.sourceType == SourceType.WEBDAV && !it.uri.startsWith("http")
-        }
+        entryStore.load()
+            .filterNot { it.sourceType == SourceType.WEBDAV && !it.uri.startsWith("http") }
+            .map { if (it.sourceType == SourceType.WEBDAV && it.artist != null) it.copy(artist = null) else it }
     )
     val savedEntries: StateFlow<List<SavedEntry>> = _savedEntries.asStateFlow()
 
@@ -535,6 +536,8 @@ class PlayerViewModel @JvmOverloads constructor(
         refreshWebDavAccounts()
         // 存量修正：早期 folderDisplayName 把路径当文件夹名，启动归一为纯文件夹名（写回 db）
         normalizeFolderDisplayNames()
+        // v1.6.30：存量网盘条目把账号邮箱写进 artist 的，清空并写回（显示不再出现云盘账号）
+        cleanStaleWebDavArtist()
         // 杀后台重启恢复：回到最近播放条目的条目视图（就绪、不自动播放、不弹详情）
         restoreLastSession()
         // 切歌/播放状态变化时即时保存进度（避免 5s 节流窗口丢失）；播放开始时更新条目 lastPlayedAt
@@ -876,7 +879,8 @@ class PlayerViewModel @JvmOverloads constructor(
             coverUri = existing?.coverUri,
             fileCount = existing?.fileCount ?: 0,
             lastPlayedAt = existing?.lastPlayedAt ?: 0L,
-            artist = cred.username,
+            // v1.6.30：作者信息不取自云盘账号（此前会显示成邮箱）；网盘音频作者由 tag 解析落索引
+            artist = null,
             lastOpenedAt = existing?.lastOpenedAt ?: 0L
         )
         setEntries(entryStore.upsert(_savedEntries.value, entry))
@@ -1267,6 +1271,17 @@ class PlayerViewModel @JvmOverloads constructor(
         if (toFix.isEmpty()) return
         toFix.forEach { entry ->
             list = entryStore.replace(list, entry.copy(displayName = folderDisplayName(Uri.parse(entry.uri))))
+        }
+        setEntries(list)
+    }
+
+    /** v1.6.30：存量网盘条目曾把云盘账号邮箱写入 artist，启动清空并写回（显示层不再出现账号） */
+    private fun cleanStaleWebDavArtist() {
+        var list = _savedEntries.value
+        val toFix = list.filter { it.sourceType == SourceType.WEBDAV && it.artist != null }
+        if (toFix.isEmpty()) return
+        toFix.forEach { entry ->
+            list = entryStore.replace(list, entry.copy(artist = null))
         }
         setEntries(list)
     }

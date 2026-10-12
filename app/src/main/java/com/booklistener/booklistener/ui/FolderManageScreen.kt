@@ -462,10 +462,13 @@ private fun FolderManageRow(
             modifier = Modifier.weight(1f),
             subtitle = {
                 Text(
-                    text = if (entry.isLocal) {
-                        entry.uri
-                    } else {
-                        entry.displayName
+                    text = when {
+                        entry.isLocal -> entry.uri
+                        // v1.6.30：网盘条目副标题显示文件夹路径（不再重复目录名/账号）
+                        entry.sourceType == com.booklistener.core.SourceType.WEBDAV ->
+                            runCatching { java.net.URI(entry.uri).path.orEmpty() }
+                                .getOrDefault(entry.displayName)
+                        else -> entry.displayName
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
