@@ -79,16 +79,6 @@ fun MainScreen(
         }
     }
 
-    if (showPlayerSheet) {
-        PlayerDetailSheet(
-            viewModel = playerViewModel,
-            state = playbackState,
-            entry = PlaybackController.currentQueueOwnerId?.let { playerViewModel.savedEntryById(it) },
-            albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
-            onDismiss = { showPlayerSheet = false }
-        )
-    }
-
     // 设置 tab 顶层：系统返回键回到曲目页（子页内部返回由各 Screen 内层 BackHandler 优先处理）
     BackHandler(enabled = tabIndex == 2) { tabIndex = 0 }
 
@@ -244,6 +234,19 @@ fun MainScreen(
                 onClick = { tabIndex = 2 },
                 icon = { Icon(Icons.Outlined.Settings, contentDescription = "设置", modifier = Modifier.size(30.dp)) },
                 modifier = Modifier.weight(1f)
+            )
+        }
+
+        // v2.0.1：播放详情液态玻璃浮层——挂在主页 backdrop Box 内（同合成树），
+        // 直接复用动作条同一 backdrop，实现完全一致的液态玻璃材质
+        if (showPlayerSheet) {
+            PlayerDetailSheet(
+                viewModel = playerViewModel,
+                state = playbackState,
+                entry = PlaybackController.currentQueueOwnerId?.let { playerViewModel.savedEntryById(it) },
+                albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
+                backdrop = backdrop,
+                onDismiss = { showPlayerSheet = false }
             )
         }
     }

@@ -1,6 +1,12 @@
 package com.booklistener.ui
 import com.booklistener.ui.icons.AppIcons
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,11 +15,13 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -57,12 +65,17 @@ import com.booklistener.core.MessageCatalog
 import com.booklistener.core.PlaybackSpeedTiers
 import com.booklistener.core.formatDuration
 import com.booklistener.player.PlaybackState
+// v2.0.1 液态玻璃：详情弹层复用主页底部动作条同款 backdrop（AndroidLiquidGlass 开源组件能力）
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 
 /**
- * 播放详情弹层：底部向上弹出（网易云风格）。
- * 显示封面、歌名、作者/专辑两行、进度条（可拖动 seek）、
- * 循环模式 / 上一曲 / 播放暂停 / 下一曲 / 定时关闭、
- * AB 段重复（设 A / 设 B / 清除）。
+ * 播放详情弹层：底部向上弹出（网易云风格），v2.0.1 起材质与主页底部动作条一致（液态玻璃 backdrop）。
+ * 显示封面、歌名、专辑名、进度条（可拖动 seek）、
+ * 速度入口（弹动作条）/ 上一曲 / 播放暂停 / 下一曲 / 定时关闭、AB 段重复。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,12 +84,12 @@ fun PlayerDetailSheet(
     state: PlaybackState,
     entry: com.booklistener.core.SavedEntry? = null,
     albumCoverUri: String? = null,
+    backdrop: Backdrop? = null,
     onDismiss: () -> Unit
 ) {
     if (!state.hasItem) {
-        // 空态引导：无播放队列时点击播放不应"毫无反应"，给出明确指引
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        // 空态引导：无播放队列时点击播放不应"毫无反应"，给出明确指引（v2.0.1 同款液态玻璃浮层）
+        PlayerSheetGlassPanel(backdrop = backdrop, onDismiss = onDismiss) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,10 +119,9 @@ fun PlayerDetailSheet(
         }
         return
     }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSleepOptions by remember { mutableStateOf(false) }
     var showSpeedOptions by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    PlayerSheetGlassPanel(backdrop = backdrop, onDismiss = onDismiss) {
         PlayerDetailSheetContent(
             state = state,
             entry = entry,
@@ -154,6 +166,65 @@ fun PlayerDetailSheet(
             onSelect = viewModel::setPlaybackSpeed,
             onClose = { showSpeedOptions = false }
         )
+    }
+}
+
+/**
+ * v2.0.1 液态玻璃详情浮层：复用主页底部动作条同一 backdrop（AndroidLiquidGlass 开源组件能力），
+ * 特效参数完全一致（vibrancy + blur12 + lens24/48 + 25% 表面遮盖、顶部圆角 28dp），
+ * 由半透明遮罩 + 底部玻璃面板组成；进入滑入渐显，点击遮罩关闭。
+ * 说明：ModalBottomSheet 为独立窗口，无法采样主页 backdrop 层，故改为同合成树内浮层以真正复用组件能力。
+ */
+@Composable
+private fun PlayerSheetGlassPanel(
+    backdrop: Backdrop?,
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val backgroundColor = MaterialTheme.colorScheme.background
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 半透明遮罩：点击关闭
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.4f))
+                .clickable(onClick = onDismiss)
+        )
+        // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
+        // backdrop 为 null（测试/无 backdrop 上下文）时回退普通表面底
+        AnimatedVisibility(
+            visible = true,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(320)) + fadeIn(tween(220)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(200)) + fadeOut(tween(160))
+        ) {
+            if (backdrop != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .drawBackdrop(
+                            backdrop = backdrop,
+                            shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
+                            effects = {
+                                vibrancy()
+                                blur(12f.dp.toPx())
+                                lens(24f.dp.toPx(), 48f.dp.toPx())
+                            },
+                            onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.25f)) }
+                        )
+                ) {
+                    content()
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
+                    content()
+                }
+            }
+        }
     }
 }
 
