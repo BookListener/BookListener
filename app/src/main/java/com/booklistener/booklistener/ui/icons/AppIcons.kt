@@ -63,8 +63,18 @@ object AppIcons {
         build("SkipNext", "M6,18l8.5,-6L6,6v12zM16,6v12h2V6h-2z")
     }
 
+    /**
+     * 竖条 + 等腰三角形（顶点水平居中朝左），Material 官方 skip_previous 语义。
+     * 注意：官方 path 为 "M6,6h2v12H6zm3.5,6l8.5,6V6z"，其中「z 闭合后紧跟相对移动 m」在
+     * 部分旧安卓版本的 path 解析中相对基准出错，导致三角形渲染成直角三角形（顶点被顶到左上角）。
+     * 故改写为两个独立子路径 + 纯绝对命令，几何等价（竖条 x6-8、三角顶点 (9.5,12) 等腰），
+     * 规避该解析兼容性问题；同时加 UT 断言解析后节点坐标锁定几何。
+     */
     val SkipPrevious: ImageVector by lazy {
-        build("SkipPrevious", "M6,6h2v12H6zm3.5,6l8.5,6V6z")
+        build(
+            "SkipPrevious",
+            "M6,6L8,6L8,18L6,18ZM9.5,12L18,18L18,6Z"
+        )
     }
 
     val Flag: ImageVector by lazy {
