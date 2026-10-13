@@ -18,14 +18,14 @@ import java.io.File
  * - Room 记录缓存索引，超容量时按 lastAccess 淘汰
  * - 文件写入加锁，防止并发重复下载；异常退出残留的半截文件启动时清理
  */
-class CacheManager(private val context: Context) {
+class CacheManager(private val context: Context) : CacheStore {
 
     private val db = AppDatabase.getInstance(context)
     private val lock = Mutex()
     private val maxBytes get() = CacheConfig.DEFAULT_MAX_BYTES
 
     /** 返回已缓存的完整文件；未缓存或缓存损坏返回 null */
-    suspend fun cachedFile(item: AudioItem): File? = withContext(Dispatchers.IO) {
+    override suspend fun cachedFile(item: AudioItem): File? = withContext(Dispatchers.IO) {
         val index = db.dao().getCacheByItemId(item.id) ?: return@withContext null
         val f = File(index.localFilePath)
         if (f.exists() && f.length() == index.fileSize) {
@@ -37,11 +37,7 @@ class CacheManager(private val context: Context) {
         }
     }
 
-    /**
-     * 下载完整音频到缓存目录并记录索引。
-     * downloader 负责把网盘直链完整写入 target 文件并返回字节数。
-     */
-    suspend fun cacheFull(
+    override suspend fun cacheFull(
         item: AudioItem,
         downloader: suspend (target: File) -> Long
     ): File = lock.withLock {
@@ -89,7 +85,7 @@ class CacheManager(private val context: Context) {
     }
 
     /** 清除全部缓存文件与索引 */
-    suspend fun clearAll() {
+    override suspend fun clearAll() {
         withContext(Dispatchers.IO) {
             db.dao().getAllCacheIndexList().forEach { index ->
                 File(index.localFilePath).delete()
@@ -101,7 +97,7 @@ class CacheManager(private val context: Context) {
     }
 
     /** 启动时调用：清理残留 .part 半截文件（进程被杀中断的下载） */
-    fun cleanupPartialFiles() {
+    override fun cleanupPartialFiles() {
         val dir = CacheDirs.audioCacheDir(context)
         dir.listFiles { _, name -> name.endsWith(".part") }?.forEach { it.delete() }
     }

@@ -41,8 +41,9 @@ fun SettingsScreen(
     var showCloud by remember { mutableStateOf(false) }
     var showFolderManage by remember { mutableStateOf(false) }
     var showGlobalSleep by remember { mutableStateOf(false) }
+    var showCache by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var cacheOn by remember { mutableStateOf(true) }
 
     if (showGlobalSleep) {
         // 系统返回键：全局定时关闭 → 设置主页
@@ -124,6 +125,108 @@ fun SettingsScreen(
         // 系统返回键：文件夹管理页 → 设置主页
         BackHandler(onBack = { showFolderManage = false })
         FolderManageScreen(viewModel = viewModel, onBack = { showFolderManage = false })
+        return
+    }
+
+    if (showCache) {
+        // 系统返回键：缓存管理子页 → 设置主页
+        BackHandler(onBack = { showCache = false })
+        val fullFileCache by viewModel.fullFileCacheEnabled.collectAsStateWithLifecycle()
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { showCache = false }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Text(
+                    text = "缓存",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "完整文件缓存",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = "开启后，网络音频会先整体下载到本地再播放，\n" +
+                                "断网也能继续，适合 ≤200MB 的文件；\n" +
+                                "关闭则直接在线播放，不占用本地空间",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = fullFileCache,
+                        onCheckedChange = { viewModel.setFullFileCacheEnabled(it) }
+                    )
+                }
+                Text(
+                    text = "缓存上限 5GB，超出后自动按最近使用淘汰",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Button(
+                    onClick = {
+                        scope.launch {
+                            viewModel.clearCache()
+                        }
+                    },
+                    modifier = Modifier.padding(top = 12.dp)
+                ) {
+                    Text("清除全部缓存")
+                }
+            }
+        }
+        return
+    }
+
+    if (showAbout) {
+        // 系统返回键：关于子页 → 设置主页
+        BackHandler(onBack = { showAbout = false })
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { showAbout = false }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Text(
+                    text = "关于",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            Text(
+                text = "BookListener v${currentVersionName()}",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            Text(
+                text = "数据源：本地 / WebDAV\n" +
+                    "音频格式：mp3 / m4a / flac / wav / ogg / aac",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
         return
     }
 
@@ -218,53 +321,58 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
-        Text(
-            text = "缓存",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(top = 12.dp)
-        )
-
+        // 缓存管理（图标+文字行，点开子页）
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showCache = true }
+                .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "完整文件缓存（下载后播放，适合 ≤200MB 音频）",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
+            Icon(
+                imageVector = AppIcons.Storage,
+                contentDescription = "缓存管理"
             )
-            Switch(
-                checked = cacheOn,
-                onCheckedChange = { cacheOn = it }
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("缓存管理", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "网络音频本地缓存设置与缓存清理",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = "进入缓存管理"
             )
         }
-        Text(
-            text = "缓存上限 5GB，超出自动按最近使用淘汰",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        HorizontalDivider()
 
-        Button(
-            onClick = {
-                scope.launch {
-                    viewModel.clearCache()
-                }
-            },
-            modifier = Modifier.padding(top = 12.dp)
+        // 关于（图标+文字行，点开子页）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showAbout = true }
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("清除全部缓存")
+            Icon(
+                imageVector = AppIcons.Info,
+                contentDescription = "关于"
+            )
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("关于", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "版本、数据源与音频格式",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = "查看关于"
+            )
         }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
-
-        Text("关于", style = MaterialTheme.typography.titleLarge)
-        Text(
-            text = "BookListener v${currentVersionName()}\n" +
-                "数据源：本地 / WebDAV\n" +
-                "音频格式：mp3 / m4a / flac / wav / ogg / aac",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 8.dp)
-        )
     }
 }
 

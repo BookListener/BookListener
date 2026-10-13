@@ -128,6 +128,17 @@ class PlayerViewModel @JvmOverloads constructor(
 
     // ---- 专辑内标题显示模式（v1.6.3）：true=标签标题（默认）/ false=原始文件名 ----
     private val prefs = app.getSharedPreferences("player_prefs", Context.MODE_PRIVATE)
+
+    // ---- v1.6.31 完整文件缓存开关（持久化）：true=网络源先整体下载到本地再播放 / false=在线播放 ----
+    private val _fullFileCacheEnabled = MutableStateFlow(prefs.getBoolean(KEY_FULL_FILE_CACHE, true))
+    val fullFileCacheEnabled: StateFlow<Boolean> = _fullFileCacheEnabled.asStateFlow()
+
+    fun setFullFileCacheEnabled(enabled: Boolean) {
+        _fullFileCacheEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_FULL_FILE_CACHE, enabled).commit()
+        repo.setFullFileCacheEnabled(enabled)
+    }
+
     private val _albumTitleMode = MutableStateFlow(prefs.getBoolean(KEY_ALBUM_TITLE_MODE, false))
     val albumTitleMode: StateFlow<Boolean> = _albumTitleMode.asStateFlow()
 
@@ -529,9 +540,12 @@ class PlayerViewModel @JvmOverloads constructor(
         private const val KEY_ALBUM_TITLE_MODE = "album_title_mode"
         private const val KEY_REPEAT_MODE = "repeat_mode"
         private const val KEY_GLOBAL_SLEEP_MINUTES = "global_sleep_minutes"
+        private const val KEY_FULL_FILE_CACHE = "full_file_cache"
     }
 
     init {
+        // 启动同步缓存开关到数据源解析器（设置页改开关后由 setFullFileCacheEnabled 实时联动）
+        repo.setFullFileCacheEnabled(_fullFileCacheEnabled.value)
         refreshDirectory()
         refreshWebDavAccounts()
         // 存量修正：早期 folderDisplayName 把路径当文件夹名，启动归一为纯文件夹名（写回 db）

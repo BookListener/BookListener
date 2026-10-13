@@ -95,4 +95,22 @@ object AppIcons {
                 "M12,20c-3.87,0 -7,-3.13 -7,-7s3.13,-7 7,-7 7,3.13 7,7 -3.13,7 -7,7z"
         )
     }
+
+    /** 缓存管理：Material 官方 "storage" 24x24 path */
+    val Storage: ImageVector by lazy {
+        build(
+            "Storage",
+            "M2,20h20v-4H2V20zM4,17h2v2H4V17zM2,4v4h20V4H2zM4,6h2V4H4V6z" +
+                "M2,12h20v-2H2V12zM4,9h2v2H4V9z"
+        )
+    }
+
+    /** 关于：Material 官方 "info" 24x24 path */
+    val Info: ImageVector by lazy {
+        build(
+            "Info",
+            "M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z" +
+                "M13,17h-2v-6h2v6zM13,9h-2V7h2v2z"
+        )
+    }
 }

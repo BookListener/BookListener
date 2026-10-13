@@ -92,23 +92,66 @@ fun FolderManageScreen(
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
             title = { Text("添加内容") },
-            text = { Text("选择添加方式") },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = {
-                        showAddDialog = false
-                        openFolderLauncher.launch(null)
-                    }) {
-                        Text("添加文件夹")
+            text = {
+                Column {
+                    Text(
+                        text = "选择要添加的内容来源，添加后即可在曲目中浏览播放",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.padding(top = 8.dp))
+                    // 添加本地文件夹：整行图标 + 标题 + 说明，竖向排列
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showAddDialog = false
+                                openFolderLauncher.launch(null)
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Folder,
+                            contentDescription = null
+                        )
+                        Column(modifier = Modifier.padding(start = 12.dp)) {
+                            Text("添加本地文件夹", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = "从手机存储中选择音频所在目录",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    TextButton(onClick = {
-                        showAddDialog = false
-                        showCloudDialog = true
-                    }) {
-                        Text("添加网盘")
+                    HorizontalDivider()
+                    // 添加网盘：整行图标 + 标题 + 说明，竖向排列
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showAddDialog = false
+                                showCloudDialog = true
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Cloud,
+                            contentDescription = null
+                        )
+                        Column(modifier = Modifier.padding(start = 12.dp)) {
+                            Text("添加网盘目录", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = "连接 WebDAV 网盘，浏览并添加音频目录",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
                     Text("取消")

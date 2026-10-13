@@ -76,6 +76,11 @@ class MediaRepository(
         DefaultSourceResolver(sources, cache)
     }
 
+    /** 联动设置页缓存开关：关闭后网络源在线直播、不再命中/写入完整文件缓存 */
+    fun setFullFileCacheEnabled(enabled: Boolean) {
+        resolver.fullFileCacheEnabled = enabled
+    }
+
     // ---- 目录浏览 ----
 
     suspend fun listDirectory(type: SourceType, path: String): Result<List<AudioItem>> {
