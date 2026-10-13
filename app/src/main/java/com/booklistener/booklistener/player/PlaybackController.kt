@@ -3,6 +3,7 @@ package com.booklistener.player
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import android.net.Uri
@@ -66,6 +67,17 @@ object PlaybackController {
         player?.repeatMode = mode
     }
 
+    // v2.0.1 播放速度：0.5x-2.0x 档位，实时作用于播放器（pitch 恒 1 不变调）
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    /** 设置播放速度并立即作用于已创建的播放器（attach 后同样生效） */
+    fun setPlaybackSpeed(speed: Float) {
+        val v = speed.coerceIn(0.25f, 3f)
+        _playbackSpeed.value = v
+        player?.playbackParameters = PlaybackParameters(v, 1f)
+    }
+
     /** Service 尚未创建播放器时暂存队列（含起点与是否自动播放），attach 后立即应用 */
     private data class PendingQueue(
         val items: List<PlayableItem>,
@@ -81,6 +93,7 @@ object PlaybackController {
     fun attach(exoPlayer: ExoPlayer) {
         player = exoPlayer
         exoPlayer.repeatMode = _repeatMode.value
+        exoPlayer.playbackParameters = PlaybackParameters(_playbackSpeed.value, 1f)
         exoPlayer.addListener(playerListener)
         startPositionTicker()
         pendingQueue?.let { q ->

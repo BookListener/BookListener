@@ -23,6 +23,7 @@ import com.booklistener.core.IndexedFile
 import com.booklistener.core.LastSessionLogic
 import com.booklistener.core.MessageCatalog
 import com.booklistener.core.OpenFileItemFactory
+import com.booklistener.core.PlaybackSpeedTiers
 import com.booklistener.core.SavedEntry
 import com.booklistener.core.sortIndexedFiles
 import com.booklistener.core.TagResolver
@@ -165,6 +166,22 @@ class PlayerViewModel @JvmOverloads constructor(
             else -> androidx.media3.common.Player.REPEAT_MODE_OFF
         }
         setRepeatMode(next)
+    }
+
+    // ---- v2.0.1 播放速度：0.5 / 0.75 / 1.0 / 1.25 / 1.5 / 2.0 档位，持久化 ----
+    private val _playbackSpeed = MutableStateFlow(prefs.getFloat(KEY_PLAYBACK_SPEED, 1.0f))
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    fun setPlaybackSpeed(speed: Float) {
+        val v = speed.coerceIn(PlaybackSpeedTiers.MIN, PlaybackSpeedTiers.MAX)
+        _playbackSpeed.value = v
+        prefs.edit().putFloat(KEY_PLAYBACK_SPEED, v).commit()
+        PlaybackController.setPlaybackSpeed(v)
+    }
+
+    /** 档位循环：0.5 → 0.75 → 1.0 → 1.25 → 1.5 → 2.0 → 0.5 */
+    fun cyclePlaybackSpeed() {
+        setPlaybackSpeed(PlaybackSpeedTiers.next(_playbackSpeed.value))
     }
 
     // ---- v1.6.7 定时关闭：一次性（设置时刻起倒计时，到点暂停）----
@@ -541,6 +558,7 @@ class PlayerViewModel @JvmOverloads constructor(
         private const val KEY_REPEAT_MODE = "repeat_mode"
         private const val KEY_GLOBAL_SLEEP_MINUTES = "global_sleep_minutes"
         private const val KEY_FULL_FILE_CACHE = "full_file_cache"
+        private const val KEY_PLAYBACK_SPEED = "playback_speed"
     }
 
     init {

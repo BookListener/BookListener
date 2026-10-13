@@ -2,8 +2,11 @@ package com.booklistener.ui
 import com.booklistener.ui.icons.AppIcons
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.booklistener.core.AudioMetaDefaults
 import com.booklistener.core.MessageCatalog
+import com.booklistener.core.PlaybackSpeedTiers
 import com.booklistener.core.formatDuration
 import com.booklistener.player.PlaybackState
 
@@ -104,19 +108,20 @@ fun PlayerDetailSheet(
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSleepOptions by remember { mutableStateOf(false) }
+    var showSpeedOptions by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         PlayerDetailSheetContent(
             state = state,
             entry = entry,
             albumCoverUri = albumCoverUri,
-            repeatMode = viewModel.repeatMode.collectAsStateWithLifecycle().value,
-            onCycleRepeatMode = viewModel::cycleRepeatMode,
             sleepRemainingMs = viewModel.sleepOnceRemaining.collectAsStateWithLifecycle().value,
             onOpenSleepTimer = { showSleepOptions = true },
             abA = viewModel.abA.collectAsStateWithLifecycle().value,
             abB = viewModel.abB.collectAsStateWithLifecycle().value,
             onToggleAbPoint = viewModel::toggleAbPoint,
             onClearAb = viewModel::clearAb,
+            speed = viewModel.playbackSpeed.collectAsStateWithLifecycle().value,
+            onOpenSpeedSheet = { showSpeedOptions = true },
             onToggle = viewModel::togglePlayPause,
             onPrevious = viewModel::previous,
             onNext = viewModel::next,
@@ -143,6 +148,13 @@ fun PlayerDetailSheet(
             onClose = { showSleepOptions = false }
         )
     }
+    if (showSpeedOptions) {
+        SpeedSheet(
+            speed = viewModel.playbackSpeed.collectAsStateWithLifecycle().value,
+            onSelect = viewModel::setPlaybackSpeed,
+            onClose = { showSpeedOptions = false }
+        )
+    }
 }
 
 /** 详情页内容（独立可测，不含弹层容器） */
@@ -159,6 +171,8 @@ fun PlayerDetailSheetContent(
     abB: Long? = null,
     onToggleAbPoint: () -> Unit = {},
     onClearAb: () -> Unit = {},
+    speed: Float = 1.0f,
+    onOpenSpeedSheet: () -> Unit = {},
     onToggle: () -> Unit = {},
     onPrevious: () -> Unit = {},
     onNext: () -> Unit = {},
@@ -177,75 +191,17 @@ fun PlayerDetailSheetContent(
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center
         )
-        // v1.6.9：作者 | 专辑 单行，连接符恒居行中心（作者右对齐贴左、专辑左对齐贴右，
-        // 与下方时间文字中心对齐）；缺失段省略，双缺失兜底 Unknown；不滚动（超长省略）
-        val artist = current.artist ?: entry?.artist
+        // v2.0.1：取消作者显示，仅保留专辑名（居中单行，缺失兜底 Unknown）
         val albumName = current.album ?: entry?.displayName
-        when {
-            artist.isNullOrBlank() && albumName.isNullOrBlank() -> {
-                Text(
-                    text = AudioMetaDefaults.UNKNOWN_ARTIST,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            artist.isNullOrBlank() -> {
-                Text(
-                    text = albumName!!,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            albumName.isNullOrBlank() -> {
-                Text(
-                    text = artist!!,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            else -> {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = artist!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = " | ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = albumName!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
+        Text(
+            text = albumName?.takeIf { it.isNotBlank() } ?: AudioMetaDefaults.UNKNOWN_ARTIST,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp)
+        )
         Text(
             text = if (state.queue.size > 0) {
                 "第 ${state.queueIndex + 1} 首 / 共 ${state.queue.size} 首"
@@ -305,33 +261,40 @@ fun PlayerDetailSheetContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // v1.6.8：AB 段重复——清除（左）| 状态文字 | 小旗设点（右，未设 A→设 A，已设 A→设 B，A+B→重置 A）
+        // v2.0.1：AB 复读未开始（未设任何点）时不显示"未设置 AB 点"与取消 X，
+        // 仅保留右对齐小旗；设点后恢复完整行（取消 | 状态文字 | 小旗）
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = onClearAb,
-                enabled = abA != null || abB != null
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = "清除 AB 点",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
+            if (abA != null || abB != null) {
+                IconButton(
+                    onClick = onClearAb,
+                    enabled = true
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "清除 AB 点",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = when {
+                        abA != null && abB != null ->
+                            "${formatDuration(abA)} ~ ${formatDuration(abB)}"
+                        abA != null -> "A ${formatDuration(abA)}（再点设 B）"
+                        abB != null -> "B ${formatDuration(abB)}（再点设 A）"
+                        else -> ""
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
                 )
+            } else {
+                // 未开始：占位撑开，小旗保持右对齐原位
+                Spacer(modifier = Modifier.weight(1f))
             }
-            Text(
-                text = when {
-                    abA != null && abB != null ->
-                        "${formatDuration(abA)} ~ ${formatDuration(abB)}"
-                    abA != null -> "A ${formatDuration(abA)}（再点设 B）"
-                    else -> "未设置 AB 点"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
             IconButton(onClick = onToggleAbPoint) {
                 Icon(
                     imageVector = AppIcons.Flag,
@@ -354,28 +317,19 @@ fun PlayerDetailSheetContent(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // v1.6.7：循环模式三档图标（顺序=Repeat 灰 / 单曲=RepeatOne / 列表=Repeat 高亮），点击轮换
-            IconButton(onClick = onCycleRepeatMode, modifier = Modifier.size(48.dp)) {
-                when (repeatMode) {
-                    androidx.media3.common.Player.REPEAT_MODE_ONE -> Icon(
-                        imageVector = AppIcons.RepeatOne,
-                        contentDescription = "单曲循环",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    androidx.media3.common.Player.REPEAT_MODE_ALL -> Icon(
-                        imageVector = AppIcons.Repeat,
-                        contentDescription = "列表循环",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(26.dp)
-                    )
-                    else -> Icon(
-                        imageVector = AppIcons.Repeat,
-                        contentDescription = "顺序播放",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
+            // v2.0.1：循环模式 UI 入口暂时取消（repeatMode 业务逻辑保留于 ViewModel/PlaybackController，
+            // 未删除），相同位置改为播放速度入口：显示当前档位文字，点击弹出速度调节动作条
+            IconButton(onClick = onOpenSpeedSheet, modifier = Modifier.size(48.dp)) {
+                Text(
+                    text = PlaybackSpeedTiers.label(speed),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (speed != 1.0f) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
             }
             Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onPrevious, modifier = Modifier.size(56.dp)) {
@@ -537,6 +491,89 @@ private fun SleepOption(label: String, selected: Boolean, onClick: () -> Unit) {
                 imageVector = Icons.Outlined.Check,
                 contentDescription = "已选择",
                 tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+/**
+ * v2.0.1 播放速度调节动作条：Slider 拖动（0.5x-2.0x 连续，步进 0.125，松手应用）
+ * + 常用档位快捷点选。拖动/点选均即时应用并持久化，弹层保持打开可连续调节，关闭/下滑手势退出。
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun SpeedSheet(
+    speed: Float,
+    onSelect: (Float) -> Unit,
+    onClose: () -> Unit
+) {
+    var dragValue by remember { mutableStateOf(speed) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheetState) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+            Text(
+                text = "播放速度",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "当前 ${PlaybackSpeedTiers.label(dragValue)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                textAlign = TextAlign.Center
+            )
+            Slider(
+                value = dragValue,
+                onValueChange = { dragValue = it },
+                onValueChangeFinished = { onSelect(dragValue) },
+                valueRange = 0.5f..2.0f,
+                steps = 11, // 区间 1.5 / 12 = 0.125 步进，覆盖全部快捷档位
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
+            ) {
+                PlaybackSpeedTiers.TIERS.forEach { tier ->
+                    SpeedOption(
+                        label = PlaybackSpeedTiers.label(tier),
+                        selected = kotlin.math.abs(tier - dragValue) < 0.01f
+                    ) { onSelect(tier) }
+                }
+            }
+            TextButton(
+                onClick = onClose,
+                modifier = Modifier.align(Alignment.End).padding(end = 24.dp, top = 4.dp)
+            ) { Text("关闭") }
+        }
+    }
+}
+
+/** 速度档位快捷项：文案 + 选中态高亮 + 对勾（与 SleepOption 视觉一致） */
+@Composable
+private fun SpeedOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(end = 4.dp)
+        )
+        if (selected) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = "已选择",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
             )
         }
     }

@@ -7,11 +7,16 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.swipeRight
 import com.booklistener.core.AudioItem
+import com.booklistener.core.AudioMetaDefaults
 import com.booklistener.core.SourceType
 import com.booklistener.player.PlaybackState
 import org.junit.Assert.assertEquals
@@ -30,7 +35,7 @@ import org.robolectric.annotation.Config
  * （曾缺 valueRange 导致进度条永远满格、seek 只到 0/1ms）。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w400dp-h900dp-xhdpi")
 class PlayerDetailSheetContentTest {
 
     @get:Rule
@@ -126,6 +131,132 @@ class PlayerDetailSheetContentTest {
         render(state())
         composeRule.onNodeWithContentDescription("Previous").assertExists()
         composeRule.onNodeWithContentDescription("Next").assertExists()
+    }
+
+    // ---- v2.0.1：AB 未开始时隐藏"未设置 AB 点"与取消 X，仅留小旗；设点后恢复完整行 ----
+
+    @Test
+    fun abNotStarted_hidesTextAndClearButton_showsFlagOnly() {
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state(),
+                abA = null,
+                abB = null,
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText("未设置 AB 点").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("清除 AB 点").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("设置复读区间").assertExists()
+    }
+
+    @Test
+    fun abStarted_showsStatusAndClearButton() {
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state(position = 120_000L),
+                abA = 60_000L,
+                abB = null,
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText("A 01:00（再点设 B）").assertExists()
+        composeRule.onNodeWithContentDescription("清除 AB 点").assertExists()
+        composeRule.onNodeWithContentDescription("设置复读区间").assertExists()
+    }
+
+    @Test
+    fun abBothSet_showsRange() {
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state(),
+                abA = 60_000L,
+                abB = 300_000L,
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText("01:00 ~ 05:00").assertExists()
+    }
+
+    // ---- v2.0.1：循环入口暂时取消（业务逻辑保留），同位置为播放速度入口（点击弹动作条） ----
+
+    @Test
+    fun speedButton_showsCurrentTierText() {
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state(),
+                speed = 1.0f,
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText("1.0x").assertExists()
+        composeRule.onNodeWithContentDescription("顺序播放").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("单曲循环").assertDoesNotExist()
+    }
+
+    @Test
+    fun speedButton_showsNonDefaultTier_andClickOpensSpeedSheet() {
+        var opened = 0
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state(),
+                speed = 1.5f,
+                onOpenSpeedSheet = { opened++ },
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText("1.5x").assertExists()
+        composeRule.onNodeWithText("1.5x").performTouchInput { click() }
+        composeRule.waitForIdle()
+        assertEquals(1, opened)
+    }
+
+    // ---- v2.0.1：详情页取消作者显示，仅保留专辑名 ----
+
+    @Test
+    fun artistHidden_albumOnlyShown() {
+        val itemWithMeta = item.copy(artist = "J.K. Rowling", album = "哈利·波特与魔法石")
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state().copy(currentItem = itemWithMeta),
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText("J.K. Rowling").assertDoesNotExist()
+        composeRule.onNodeWithText("哈利·波特与魔法石").assertExists()
+        composeRule.onNodeWithText("J.K. Rowling | 哈利·波特与魔法石").assertDoesNotExist()
+    }
+
+    /** 专辑名链路：current.album ?: entry.displayName —— 条目存在时专辑名恒有（文件夹名兜底） */
+    @Test
+    fun artistMissing_albumFallsBackToEntryDisplayName() {
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state(), // item 无 album/artist
+                entry = com.booklistener.core.SavedEntry(
+                    id = "content://tree/primary%3ADownload",
+                    displayName = "哈利·波特",
+                    uri = "content://tree/primary%3ADownload",
+                    sourceType = SourceType.LOCAL,
+                    fileCount = 3
+                ),
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText("哈利·波特").assertExists()
+        composeRule.onNodeWithText(AudioMetaDefaults.UNKNOWN_ARTIST).assertDoesNotExist()
+    }
+
+    /** 仅直接打开单文件且无任何专辑来源的边缘场景才兜底 Unknown（防御，正常路径不可达） */
+    @Test
+    fun noEntryAndNoAlbum_showsUnknownFallback() {
+        composeRule.setContent {
+            PlayerDetailSheetContent(
+                state = state(),
+                onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
+            )
+        }
+        composeRule.onNodeWithText(AudioMetaDefaults.UNKNOWN_ARTIST).assertExists()
     }
 
     @Test
