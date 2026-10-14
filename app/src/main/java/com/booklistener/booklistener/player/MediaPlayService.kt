@@ -97,10 +97,24 @@ class MediaPlayService : MediaSessionService() {
      * 绝不返回 null——Android 通知更新时不设置 largeIcon 会沿用上一次的图
      * （播放无封面文件夹时显示上一个文件夹的封面）。
      * 注意：本函数只做位图解码/绘制，不访问 ExoPlayer（必须在 IO 线程调用）。
+     *
+     * v2.0.1 修复"播放时通知栏封面闪烁"：此前每个播放状态（播放中 position 每秒多次变化）
+     * 都重新 decode 封面并 setLargeIcon，通知每次重建 → 封面闪动；
+     * 暂停后 position 静止、通知不重建，故不闪。现按 artworkUri 缓存位图，
+     * 同曲目进度刷新复用同一 Bitmap 实例，换曲（artworkUri 变化）才重新解码。
      */
+    private var cachedArtUri: Uri? = null
+    private var cachedLargeIcon: Bitmap? = null
+
     private fun loadLargeIcon(artUri: Uri?): Bitmap {
+        if (artUri == cachedArtUri) {
+            return cachedLargeIcon ?: placeholderCover()
+        }
         val loaded = artUri?.let { loadBitmap(it) }
-        return loaded ?: placeholderCover()
+        val icon = loaded ?: placeholderCover()
+        cachedArtUri = artUri
+        cachedLargeIcon = icon
+        return icon
     }
 
     private fun loadBitmap(uri: Uri): Bitmap? = runCatching {

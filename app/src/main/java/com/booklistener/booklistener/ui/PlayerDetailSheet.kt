@@ -620,10 +620,12 @@ private fun SpeedSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
             )
-            // 六档标签按 Slider 线性刻度对齐（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）：
-            // 用 Spacer weight 表达档位间距比例，滑块位置与下方标识一一对应
+            // 六档标签与 Slider 严格对齐：Slider 的 thumb 可调行程两端 = 组件 padding(24dp) + thumb 半径(10dp，
+            // M3 默认 thumb 半径，工程未定制 Slider)，标签行两端同样缩进 24dp+10dp，
+            // 数字与滑块可到达的两端一一对应；中间档位用 Spacer weight 表达线性间距比例
+            //（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp, vertical = 8.dp)
             ) {
                 PlaybackSpeedTiers.TIERS.forEachIndexed { i, tier ->
                     if (i > 0) {
@@ -647,13 +649,14 @@ private fun SpeedSheet(
     }
 }
 
-/** 速度档位快捷项：文案 + 选中态高亮 + 对勾（与 SleepOption 视觉一致，六档单行紧凑布局） */
+/** 速度档位快捷项：文案 + 选中态高亮 + 对勾（与 SleepOption 视觉一致，六档单行紧凑布局）
+ *  v2.0.1：去掉横向 padding，档位文字左缘精确落在与 Slider thumb 端点对齐的刻度线上 */
 @Composable
 private fun SpeedOption(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 8.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
