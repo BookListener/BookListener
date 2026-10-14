@@ -214,13 +214,13 @@ private fun PlayerSheetGlassPanel(
                             shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                             effects = {
                                 vibrancy()
-                                // v2.0.1：参照用户提供的毛玻璃效果——背景强模糊（blur 32dp），
-                                // 背景内容模糊成光斑不可读，与表面遮盖共同形成玻璃实体感
-                                blur(32f.dp.toPx())
+                                // v2.0.1：参照用户提供的毛玻璃效果——背景强模糊成光斑不可读
+                                // blur 32→48dp（浅色主题下 32 仍可读出背景文字，加强至 48 更接近参考图）
+                                blur(48f.dp.toPx())
                                 lens(24f.dp.toPx(), 48f.dp.toPx())
                             },
-                            // v2.0.1：表面遮盖 25%→40%，面板内背景文字明显弱化，玻璃实体感一致
-                            onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.4f)) }
+                            // v2.0.1：表面遮盖 40%→55%（半透明白表面更实，参考图特征：白雾表面+背景不可读）
+                            onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.55f)) }
                         )
                 ) {
                     SheetDragHandle()
