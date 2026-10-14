@@ -174,6 +174,11 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                                 )
                             }
                         )
+                        // v2.0.1：专辑视图行间分隔线（用户反馈重新进入专辑列表格线缺失，
+                        // 与主页文件夹列表分隔线样式统一——所有列表格线一致）
+                        if (index < albumSongs.size - 1) {
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 10.dp))
+                        }
                     }
                     if (!albumSongsEnded) {
                         item(key = "album_songs_loading") {

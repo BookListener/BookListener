@@ -1,10 +1,7 @@
 package com.booklistener.ui
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -14,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -107,15 +105,24 @@ fun MarqueeText(
 
     // 每轮平移距离 = 文本宽 + 间隔空白；Restart 时画面已等同"下一份文本的开头"，视觉无缝
     val cycleDist = textWidth + gap
-    val transition = rememberInfiniteTransition()
-    val offsetX by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = -cycleDist.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = (cycleDist * 30).coerceAtLeast(1), easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
-    )
+
+    // v2.0.1：改为 Animatable + LaunchedEffect(cycleDist) 手动循环。
+    // rememberInfiniteTransition.animateFloat 的 target/duration 在参数变化后不保证重算，
+    // 一旦 gap（随 containerWidth 测得值）变化，循环周期与拼接长度错位，
+    // 会在滚动中产生"第二份文本提前滑入"的头尾叠加。手动循环使周期与 cycleDist 严格同步。
+    val offsetX = remember { Animatable(0f) }
+    LaunchedEffect(cycleDist) {
+        while (true) {
+            offsetX.animateTo(
+                targetValue = -cycleDist.toFloat(),
+                animationSpec = tween(
+                    durationMillis = (cycleDist * 30).coerceAtLeast(1),
+                    easing = LinearEasing
+                )
+            )
+            offsetX.snapTo(0f)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -127,7 +134,7 @@ fun MarqueeText(
         Row(
             modifier = Modifier
                 .wrapContentWidth(Alignment.Start)
-                .graphicsLayer { translationX = offsetX }
+                .graphicsLayer { translationX = offsetX.value }
         ) {
             MarqueeTextPiece(text, style, color)
             Spacer(modifier = Modifier.width(gap.dp))
