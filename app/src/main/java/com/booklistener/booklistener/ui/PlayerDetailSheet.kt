@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +51,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -206,9 +214,9 @@ private fun PlayerSheetGlassPanel(
                             shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                             effects = {
                                 vibrancy()
-                                // v2.0.1：与主页动作条统一增强——blur 12→20dp，
-                                // 浅色主题下 12dp 几乎看不出模糊，面板内背景文字全透出（用户"太透"）
-                                blur(20f.dp.toPx())
+                                // v2.0.1：参照用户提供的毛玻璃效果——背景强模糊（blur 32dp），
+                                // 背景内容模糊成光斑不可读，与表面遮盖共同形成玻璃实体感
+                                blur(32f.dp.toPx())
                                 lens(24f.dp.toPx(), 48f.dp.toPx())
                             },
                             // v2.0.1：表面遮盖 25%→40%，面板内背景文字明显弱化，玻璃实体感一致
@@ -623,57 +631,51 @@ private fun SpeedSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
             )
-            // 六档标签与 Slider 对齐：数字两端对齐 Slider 轨道两端（组件 padding 24dp 处，
-            // 即用户视觉上的滑块左右端点）；中间档位用 Spacer weight 表达线性间距比例
-            //（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
+            // 六档标签：文字中心与 Slider 刻度点严格居中（用户要求"文字和进度条刻度点居中对齐"）。
+            // 每个档位按线性比例（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）
+            // 绝对定位，并用 onSizeChanged 测量文字宽使文字中心恰好落在刻度点上。
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
             ) {
-                PlaybackSpeedTiers.TIERS.forEachIndexed { i, tier ->
-                    if (i > 0) {
-                        Spacer(
-                            modifier = Modifier.weight(
-                                (tier - PlaybackSpeedTiers.TIERS[i - 1]) / 1.5f
+                val usablePx = with(LocalDensity.current) { (maxWidth - 48.dp).toPx() }
+                PlaybackSpeedTiers.TIERS.forEach { tier ->
+                    val fraction =
+                        (tier - PlaybackSpeedTiers.MIN) / (PlaybackSpeedTiers.MAX - PlaybackSpeedTiers.MIN)
+                    val selected = abs(tier - dragValue) < 0.01f
+                    var textWidth by remember(tier) { mutableIntStateOf(0) }
+                    Row(
+                        modifier = Modifier.offset {
+                            IntOffset(
+                                x = (usablePx * fraction - textWidth / 2f).roundToInt(),
+                                y = 0
                             )
+                        },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = PlaybackSpeedTiers.label(tier),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.onSizeChanged { textWidth = it.width }
                         )
+                        if (selected) {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = "已选择",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 4.dp).size(16.dp)
+                            )
+                        }
                     }
-                    SpeedOption(
-                        label = PlaybackSpeedTiers.label(tier),
-                        selected = kotlin.math.abs(tier - dragValue) < 0.01f
-                    ) { onSelect(tier) }
                 }
             }
             TextButton(
                 onClick = onClose,
                 modifier = Modifier.align(Alignment.End).padding(end = 24.dp, top = 4.dp)
             ) { Text("关闭") }
-        }
-    }
-}
-
-/** 速度档位快捷项：文案 + 选中态高亮 + 对勾（与 SleepOption 视觉一致，六档单行紧凑布局）
- *  v2.0.1：字号 bodyLarge→bodyMedium（选择条更小巧），去掉横向 padding 让数字精确落在刻度线上 */
-@Composable
-private fun SpeedOption(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(end = 4.dp)
-        )
-        if (selected) {
-            Icon(
-                imageVector = Icons.Outlined.Check,
-                contentDescription = "已选择",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp)
-            )
         }
     }
 }
