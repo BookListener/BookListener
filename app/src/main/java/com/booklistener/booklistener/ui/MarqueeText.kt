@@ -72,8 +72,10 @@ fun MarqueeText(
 
     val scroll = shouldMarquee(textWidth, containerWidth)
 
-    if (!scroll) {
+    if (!scroll || containerWidth == 0) {
         // 短文本：单份静态显示（textAlign 生效）
+        // v2.0.1：containerWidth==0（首帧视口未测得）也走静态分支——若以两字符间隔
+        // 先行启动滚动，之后 gap 重算为视口宽但动画周期不同步，会造成"头尾叠加"残留。
         Box(
             modifier = modifier
                 .fillMaxWidth()

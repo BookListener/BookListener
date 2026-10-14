@@ -356,7 +356,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         LazyColumn(state = listState) {
             if (recentAlbums.isNotEmpty()) {
                 item(key = "header_recent") { SectionHeader("最近播放") }
-                recentAlbums.forEach { album ->
+                recentAlbums.forEachIndexed { i, album ->
                     item(key = "album_${album.entryId}_${album.album}") {
                         val entry = savedEntries.firstOrNull { it.id == album.entryId }
                         if (entry != null && isCurrentEntry(entry, currentFolderUri, playbackState)) {
@@ -378,7 +378,9 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                                         secondary = album.artist,
                                         meta = "${album.songCount} 首 · 总时长 ${formatDuration(album.totalDurationMs)}"
                                     )
-                                }
+                                },
+                                // v2.0.1：最近播放最后一个不要行间细线（其后紧接分区线+「尚未播放」标题）
+                                showDivider = i < recentAlbums.size - 1
                             )
                         }
                     }
@@ -573,7 +575,8 @@ private fun AlbumRow(
     album: AlbumSummary,
     entry: SavedEntry?,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    showDivider: Boolean = true
 ) {
     Row(
         modifier = Modifier
@@ -626,11 +629,14 @@ private fun AlbumRow(
         }
     }
     // v1.6.8：专辑行细行线——明显弱于「最近播放/尚未播放」分区之间的分隔（更淡更细、仅从封面右侧起，缩进不越界）
-    HorizontalDivider(
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-        thickness = 0.5.dp,
-        modifier = Modifier.padding(start = 68.dp, top = 6.dp)
-    )
+    // v2.0.1：最近播放最后一个不显示（showDivider=false），其后紧接分区线+「尚未播放」标题，避免细线粗线叠加
+    if (showDivider) {
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+            thickness = 0.5.dp,
+            modifier = Modifier.padding(start = 68.dp, top = 6.dp)
+        )
+    }
 }
 
 /** 当前播放专辑大卡（v1.7.0）：封面 + 专辑名 + 当前曲目 + 进度 + 播放/暂停 */
