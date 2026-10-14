@@ -26,6 +26,17 @@ class PlaybackSpeedTiersTest {
     }
 
     @Test
+    fun nearest_snapsToClosestTier() {
+        // Slider 拖动吸附：非档位值归位到最近档，保证滑块位置与下方档位标志一致
+        assertEquals(1.0f, PlaybackSpeedTiers.nearest(1.0f), 0.001f)
+        assertEquals(1.5f, PlaybackSpeedTiers.nearest(1.4f), 0.001f)
+        assertEquals(1.25f, PlaybackSpeedTiers.nearest(1.2f), 0.001f)
+        assertEquals(1.5f, PlaybackSpeedTiers.nearest(1.6f), 0.001f)
+        assertEquals(2.0f, PlaybackSpeedTiers.nearest(2.0f), 0.001f)
+        assertEquals(0.5f, PlaybackSpeedTiers.nearest(0.4f), 0.001f)
+    }
+
+    @Test
     fun label_formatsTierText() {
         assertEquals("1.0x", PlaybackSpeedTiers.label(1.0f))
         assertEquals("2.0x", PlaybackSpeedTiers.label(2.0f))

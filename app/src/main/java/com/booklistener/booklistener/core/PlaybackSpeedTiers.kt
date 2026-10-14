@@ -15,6 +15,10 @@ object PlaybackSpeedTiers {
     fun next(current: Float): Float =
         TIERS.firstOrNull { it > current + 0.001f } ?: TIERS.first()
 
+    /** 离 speed 最近的档位（Slider 拖动吸附用，保证滑块位置与下方档位标志一致） */
+    fun nearest(speed: Float): Float =
+        TIERS.minByOrNull { kotlin.math.abs(it - speed) } ?: 1.0f
+
     /** 档位文字：1.0 → "1.0x"、1.25 → "1.25x"、0.75 → "0.75x" */
     fun label(speed: Float): String =
         if (speed == speed.toInt().toFloat()) "${speed.toInt()}.0x" else "${speed}x"

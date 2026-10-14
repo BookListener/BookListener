@@ -11,8 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -183,11 +182,11 @@ private fun PlayerSheetGlassPanel(
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
     Box(modifier = Modifier.fillMaxSize()) {
-        // 半透明遮罩：点击关闭
+        // 半透明遮罩：点击关闭（v2.0.1 调至 0.55，减弱主页内容穿透保证可读性）
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.4f))
+                .background(Color.Black.copy(alpha = 0.55f))
                 .clickable(onClick = onDismiss)
         )
         // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
@@ -213,6 +212,7 @@ private fun PlayerSheetGlassPanel(
                             onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.25f)) }
                         )
                 ) {
+                    SheetDragHandle()
                     content()
                 }
             } else {
@@ -221,11 +221,25 @@ private fun PlayerSheetGlassPanel(
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 ) {
+                    SheetDragHandle()
                     content()
                 }
             }
         }
     }
+}
+
+/** 面板顶部下滑指示条：提示可下滑关闭，避免内容"顶天"（v2.0.1） */
+@Composable
+private fun ColumnScope.SheetDragHandle() {
+    Box(
+        modifier = Modifier
+            .padding(top = 12.dp, bottom = 4.dp)
+            .size(width = 40.dp, height = 4.dp)
+            .align(Alignment.CenterHorizontally)
+            .clip(RoundedCornerShape(2.dp))
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+    )
 }
 
 /** 详情页内容（独立可测，不含弹层容器） */
@@ -571,7 +585,7 @@ private fun SleepOption(label: String, selected: Boolean, onClick: () -> Unit) {
  * v2.0.1 播放速度调节动作条：Slider 拖动（0.5x-2.0x 连续，步进 0.125，松手应用）
  * + 常用档位快捷点选。拖动/点选均即时应用并持久化，弹层保持打开可连续调节，关闭/下滑手势退出。
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SpeedSheet(
     speed: Float,
@@ -597,17 +611,18 @@ private fun SpeedSheet(
             )
             Slider(
                 value = dragValue,
-                onValueChange = { dragValue = it },
+                // v2.0.1：拖动即吸附最近档位（非档位值立即归位），保证滑块位置与下方档位标志一致
+                onValueChange = { v -> dragValue = PlaybackSpeedTiers.nearest(v) },
                 onValueChangeFinished = { onSelect(dragValue) },
                 valueRange = 0.5f..2.0f,
-                steps = 11, // 区间 1.5 / 12 = 0.125 步进，覆盖全部快捷档位
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
+            // 六档单行排列（避免 2.0x 换行），选中高亮与滑块位置实时一致
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
                 PlaybackSpeedTiers.TIERS.forEach { tier ->
                     SpeedOption(
@@ -624,13 +639,13 @@ private fun SpeedSheet(
     }
 }
 
-/** 速度档位快捷项：文案 + 选中态高亮 + 对勾（与 SleepOption 视觉一致） */
+/** 速度档位快捷项：文案 + 选中态高亮 + 对勾（与 SleepOption 视觉一致，六档单行紧凑布局） */
 @Composable
 private fun SpeedOption(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 2.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
