@@ -110,8 +110,8 @@ fun MainScreen(
         // 玻璃底栏：高度 96dp 容纳增大的 84dp 中间播放封面
         // v1.6.19：增强特效可见度——blur 4→12dp、lens 16/32→24/48dp、
         // 表面遮盖 45%→25%（深色主题下原参数几乎看不出模糊/折射，已按头条毛玻璃风格校准）
-        // v2.0.1：参考图特效 = 半透明表面 + 背后字体强模糊。blur 48dp（API 31+ 生效）、遮盖 55%，
-        // 与详情弹窗两处特效视觉一致。API<31 设备 blur 静默跳过（kyant backdrop 库硬限制）。
+        // v2.0.1：均匀毛玻璃（参考图白条质感）——仅强模糊 blur 48dp，不叠加 lens（圆角边缘折射
+        // 导致模糊不均匀）与 vibrancy（脏色斑），与详情弹窗两处特效视觉一致。
         // v2.0.1：移除 safeContentPadding——液态玻璃特效延伸至屏幕最底（含导航条区域），
         // 列表底端滚动到底时在原留白处也呈现玻璃特效
         Row(
@@ -120,9 +120,7 @@ fun MainScreen(
                     backdrop = backdrop,
                     shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                     effects = {
-                        vibrancy()
                         blur(48f.dp.toPx())
-                        lens(24f.dp.toPx(), 48f.dp.toPx())
                     },
                     onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.55f)) }
                 )

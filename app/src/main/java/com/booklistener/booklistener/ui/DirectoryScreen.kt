@@ -269,6 +269,10 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                                 )
                             }
                         )
+                        // v2.0.1：主页文件列表行间分隔线（用户反馈表格线缺失）
+                        if (index < folderItems.size - 1) {
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 10.dp))
+                        }
                     }
                 }
             }

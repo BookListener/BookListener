@@ -213,12 +213,10 @@ private fun PlayerSheetGlassPanel(
                             backdrop = backdrop,
                             shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                             effects = {
-                                vibrancy()
-                                // v2.0.1：参考图特效 = 半透明表面 + 背后字体强模糊（透出的是模糊背景而非清晰文字）。
-                                // blur 48dp：Android 12+（API 31+）RenderEffect 生效，背景字体糊成光斑。
-                                // 注意：API<31 设备 blur 静默跳过（kyant backdrop 库硬限制），仅剩遮盖。
+                                // v2.0.1：均匀毛玻璃（参考图白条质感）——仅强模糊，不叠加 lens 折射
+                                //（lens 在圆角边缘做放大镜式折射，导致模糊不均匀）与 vibrancy（模糊后产生脏色斑）。
+                                // blur 48dp：Android 12+（API 31+）RenderEffect 生效，背景字体糊成均匀光斑。
                                 blur(48f.dp.toPx())
-                                lens(24f.dp.toPx(), 48f.dp.toPx())
                             },
                             // v2.0.1：表面遮盖 55%——半透明白表面，透出模糊背景（参考图白条质感）
                             onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.55f)) }
