@@ -95,9 +95,13 @@ fun MarqueeText(
         return
     }
 
-    // 间隔空白：两个字符宽（用户要求的"适当空格"），让尾端离开后短暂留白再滑入开头
-    val gap = (style.fontSize.value * fontScale * density.density * 2).roundToInt()
+    // v2.0.1 无缝回绕间隔：必须 ≥ 视口宽——"文本+间隔+文本"循环中，
+    // 只有间隔覆盖整个视口，第一份文本的尾部才会在第二份头部滑入前完全离开，
+    // 杜绝两者同时在视口内造成的"头尾叠加"（此前间隔仅两字符宽，滚动中首尾重叠显示）。
+    // 首帧 containerWidth 尚未测得（0）时退化为两字符宽，布局完成后按实际视口重算。
+    val twoCharGap = (style.fontSize.value * fontScale * density.density * 2).roundToInt()
         .coerceAtLeast(24)
+    val gap = remember(containerWidth, twoCharGap) { marqueeGap(twoCharGap, containerWidth) }
 
     // 每轮平移距离 = 文本宽 + 间隔空白；Restart 时画面已等同"下一份文本的开头"，视觉无缝
     val cycleDist = textWidth + gap
@@ -147,3 +151,11 @@ private fun MarqueeTextPiece(text: String, style: TextStyle, color: Color) {
 /** 文本实际宽度超过可视宽度时启动滚动；恰好相等或更短则静止 */
 internal fun shouldMarquee(textWidth: Int, containerWidth: Int): Boolean =
     textWidth > containerWidth
+
+/**
+ * 无缝回绕间隔：至少覆盖整个视口宽（containerWidth），
+ * 保证滚动循环中视口内同时最多一份文本，避免首尾叠加。
+ * 视口未测得（0）时退化为两字符宽下限。
+ */
+internal fun marqueeGap(twoCharWidth: Int, containerWidth: Int): Int =
+    maxOf(twoCharWidth, containerWidth)

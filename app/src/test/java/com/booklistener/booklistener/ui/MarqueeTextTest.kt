@@ -1,5 +1,6 @@
 package com.booklistener.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,5 +28,20 @@ class MarqueeTextTest {
     @Test
     fun shouldMarquee_zeroContainer_stillScrolls() {
         assertTrue("可视宽度为 0 时也应滚动", shouldMarquee(textWidth = 10, containerWidth = 0))
+    }
+
+    // v2.0.1：无缝回绕间隔必须 ≥ 视口宽，否则滚动中首尾叠加
+    @Test
+    fun marqueeGap_coversViewport_preventsHeadTailOverlap() {
+        // 间隔 ≥ 视口宽：第一份文本完全离开后第二份才进入，视口内同时最多一份
+        assertEquals(300, marqueeGap(twoCharWidth = 24, containerWidth = 300))
+        assertEquals(320, marqueeGap(twoCharWidth = 320, containerWidth = 300))
+        assertEquals(200, marqueeGap(twoCharWidth = 24, containerWidth = 200))
+    }
+
+    @Test
+    fun marqueeGap_zeroViewport_fallsBackToTwoCharWidth() {
+        // 首帧视口未测得（0）：退化为两字符宽下限
+        assertEquals(24, marqueeGap(twoCharWidth = 24, containerWidth = 0))
     }
 }

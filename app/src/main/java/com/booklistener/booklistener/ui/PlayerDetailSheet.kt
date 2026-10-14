@@ -182,11 +182,11 @@ private fun PlayerSheetGlassPanel(
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
     Box(modifier = Modifier.fillMaxSize()) {
-        // 半透明遮罩：点击关闭（v2.0.1 按用户要求调至 0.7，进一步减弱穿透）
+        // 半透明遮罩：点击关闭（v2.0.1 按用户要求调至 0.3，通透液态玻璃质感）
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.7f))
+                .background(Color.Black.copy(alpha = 0.3f))
                 .clickable(onClick = onDismiss)
         )
         // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
@@ -269,7 +269,8 @@ fun PlayerDetailSheetContent(
             .fillMaxWidth()
             .padding(horizontal = 28.dp)
             .padding(top = 8.dp) // v2.0.1：顶部留白参照速度弹窗标题布局，避免内容顶天
-            .padding(bottom = 40.dp),
+            // v2.0.1：底部不留白，内容底端延伸到屏幕底部
+        ,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         MarqueeText(
