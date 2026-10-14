@@ -182,11 +182,11 @@ private fun PlayerSheetGlassPanel(
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
     Box(modifier = Modifier.fillMaxSize()) {
-        // 半透明遮罩：点击关闭（v2.0.1 调至 0.55，减弱主页内容穿透保证可读性）
+        // 半透明遮罩：点击关闭（v2.0.1 按用户要求调至 0.7，进一步减弱穿透）
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
+                .background(Color.Black.copy(alpha = 0.7f))
                 .clickable(onClick = onDismiss)
         )
         // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
@@ -229,13 +229,13 @@ private fun PlayerSheetGlassPanel(
     }
 }
 
-/** 面板顶部下滑指示条：提示可下滑关闭，避免内容"顶天"（v2.0.1） */
+/** 面板顶部下滑指示条：参照 ModalBottomSheet 默认 dragHandle（32x4dp），提示可下滑关闭 */
 @Composable
 private fun ColumnScope.SheetDragHandle() {
     Box(
         modifier = Modifier
-            .padding(top = 12.dp, bottom = 4.dp)
-            .size(width = 40.dp, height = 4.dp)
+            .padding(top = 12.dp, bottom = 8.dp)
+            .size(width = 32.dp, height = 4.dp)
             .align(Alignment.CenterHorizontally)
             .clip(RoundedCornerShape(2.dp))
             .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
@@ -268,6 +268,7 @@ fun PlayerDetailSheetContent(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 28.dp)
+            .padding(top = 8.dp) // v2.0.1：顶部留白参照速度弹窗标题布局，避免内容顶天
             .padding(bottom = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -619,12 +620,19 @@ private fun SpeedSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
             )
-            // 六档单行排列（避免 2.0x 换行），选中高亮与滑块位置实时一致
+            // 六档标签按 Slider 线性刻度对齐（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）：
+            // 用 Spacer weight 表达档位间距比例，滑块位置与下方标识一一对应
             Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
             ) {
-                PlaybackSpeedTiers.TIERS.forEach { tier ->
+                PlaybackSpeedTiers.TIERS.forEachIndexed { i, tier ->
+                    if (i > 0) {
+                        Spacer(
+                            modifier = Modifier.weight(
+                                (tier - PlaybackSpeedTiers.TIERS[i - 1]) / 1.5f
+                            )
+                        )
+                    }
                     SpeedOption(
                         label = PlaybackSpeedTiers.label(tier),
                         selected = kotlin.math.abs(tier - dragValue) < 0.01f
