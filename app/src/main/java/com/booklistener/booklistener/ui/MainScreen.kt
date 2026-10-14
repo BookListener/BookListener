@@ -93,12 +93,12 @@ fun MainScreen(
         }
 
         Scaffold(modifier = Modifier.layerBackdrop(backdrop)) { innerPadding ->
-            // 底部预留玻璃条高度（96dp），避免列表末项被玻璃条遮挡
+            // v2.0.1：去掉列表底部 96dp 预留——列表底端延伸至屏幕底部，滚动到底时
+            // 最后一项透过底部液态玻璃条可见（玻璃条 25% 遮盖 + blur，不影响遮挡）
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(bottom = 96.dp)
             ) {
                 when (tabIndex) {
                     0 -> DirectoryScreen(playerViewModel)
