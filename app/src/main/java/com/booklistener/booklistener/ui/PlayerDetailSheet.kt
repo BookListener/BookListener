@@ -631,24 +631,33 @@ private fun SpeedSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
             )
-            // 六档标签：文字中心与 Slider 刻度点严格居中（用户要求"文字和进度条刻度点居中对齐"）。
-            // 每个档位按线性比例（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）
-            // 绝对定位，并用 onSizeChanged 测量文字宽使文字中心恰好落在刻度点上。
+            // 六档标签：文字中心与 Slider 刻度点严格居中，且自适应不同屏宽。
+            // 坐标基准 = Slider 的 thumb 实际行程（非轨道端点）：
+            //   Slider 组件 = fillMaxWidth + padding(horizontal=24dp)，thumb 行程 = [24dp+10dp, 屏宽-24dp-10dp]
+            //   （10dp = M3 Slider 默认 thumb 半径，即 thumb 中心可停范围的两端）
+            // 每档按线性比例（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）
+            // 绝对定位 + onSizeChanged 测量文字宽，文字中心恰好落在 thumb 行程刻度上。
+            // BoxWithConstraints 不带水平 padding（避免 maxWidth 双重缩减），maxWidth = 屏宽，
+            // 不同宽度设备下 trackStart/trackLen 实时由 maxWidth 换算。
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .padding(vertical = 8.dp)
             ) {
-                val usablePx = with(LocalDensity.current) { (maxWidth - 48.dp).toPx() }
+                val density = LocalDensity.current
+                // Slider 轨道起点 = 24dp 组件 padding + 10dp thumb 半径
+                val trackStartPx = with(density) { 34.dp.toPx() }
+                // thumb 行程长度 = 屏宽 - 2×34dp
+                val trackLenPx = with(density) { (maxWidth - 68.dp).toPx() }
                 PlaybackSpeedTiers.TIERS.forEach { tier ->
                     val fraction =
-                        (tier - PlaybackSpeedTiers.MIN) / (PlaybackSpeedTiers.MAX - PlaybackSpeedTiers.MIN)
+                        PlaybackSpeedTiers.fraction(tier)
                     val selected = abs(tier - dragValue) < 0.01f
                     var textWidth by remember(tier) { mutableIntStateOf(0) }
                     Row(
                         modifier = Modifier.offset {
                             IntOffset(
-                                x = (usablePx * fraction - textWidth / 2f).roundToInt(),
+                                x = (trackStartPx + trackLenPx * fraction - textWidth / 2f).roundToInt(),
                                 y = 0
                             )
                         },

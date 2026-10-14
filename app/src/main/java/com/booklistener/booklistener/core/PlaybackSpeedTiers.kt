@@ -22,4 +22,8 @@ object PlaybackSpeedTiers {
     /** 档位文字：1.0 → "1.0x"、1.25 → "1.25x"、0.75 → "0.75x" */
     fun label(speed: Float): String =
         if (speed == speed.toInt().toFloat()) "${speed.toInt()}.0x" else "${speed}x"
+
+    /** 档位在 Slider 行程上的线性比例：0.5→0%、1.25→50%、2.0→100%（纯逻辑，可 JVM 单测） */
+    fun fraction(tier: Float): Float =
+        (tier - MIN) / (MAX - MIN)
 }

@@ -52,4 +52,32 @@ class PlaybackSpeedTiersTest {
         assertTrue(PlaybackSpeedTiers.MAX >= 2.0f)
         PlaybackSpeedTiers.TIERS.forEach { assertTrue("档位 $it 应在 0.5-2.0 内", it in 0.5f..2.0f) }
     }
+
+    @Test
+    fun fraction_linearAcrossTiers() {
+        // 档位在 Slider 行程上的线性比例：0.5→0%、1.25→50%、2.0→100%
+        assertEquals("0.5x 应在行程 0%", 0f, PlaybackSpeedTiers.fraction(0.5f), 0.001f)
+        assertEquals("0.75x 应在行程 16.7%", 1f / 6f, PlaybackSpeedTiers.fraction(0.75f), 0.001f)
+        assertEquals("1.0x 应在行程 33.3%", 2f / 6f, PlaybackSpeedTiers.fraction(1.0f), 0.001f)
+        assertEquals("1.25x 应在行程 50%", 3f / 6f, PlaybackSpeedTiers.fraction(1.25f), 0.001f)
+        assertEquals("1.5x 应在行程 66.7%", 4f / 6f, PlaybackSpeedTiers.fraction(1.5f), 0.001f)
+        assertEquals("2.0x 应在行程 100%", 1f, PlaybackSpeedTiers.fraction(2.0f), 0.001f)
+    }
+
+    @Test
+    fun labelCenters_alignWithThumbTrack_atAnyWidth() {
+        // 不同屏宽（360dp/480dp 等）下，档位文字中心 = trackStart + trackLen * fraction - textWidth/2。
+        // 验证"文字中心恰好落在 thumb 行程刻度上"在不同 trackLen 下均成立：
+        // 文字中心 + 文字宽/2 == 刻度；刻度 = trackStart + trackLen * fraction。
+        val textWidth = 60f
+        for (trackLen in listOf(292f, 412f, 500f)) { // 对应屏宽 360/480/568dp 的 thumb 行程
+            val trackStart = 34f
+            PlaybackSpeedTiers.TIERS.forEach { tier ->
+                val expectedTick = trackStart + trackLen * PlaybackSpeedTiers.fraction(tier)
+                val labelLeft = trackStart + trackLen * PlaybackSpeedTiers.fraction(tier) - textWidth / 2f
+                val labelCenter = labelLeft + textWidth / 2f
+                assertEquals("档位 $tier 文字中心应落在刻度 $expectedTick", expectedTick, labelCenter, 0.001f)
+            }
+        }
+    }
 }
