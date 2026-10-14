@@ -110,9 +110,10 @@ fun MainScreen(
         // 玻璃底栏：高度 96dp 容纳增大的 84dp 中间播放封面
         // v1.6.19：增强特效可见度——blur 4→12dp、lens 16/32→24/48dp、
         // 表面遮盖 45%→25%（深色主题下原参数几乎看不出模糊/折射，已按头条毛玻璃风格校准）
+        // v2.0.1：移除 safeContentPadding——液态玻璃特效延伸至屏幕最底（含导航条区域），
+        // 列表底端滚动到底时在原留白处也呈现玻璃特效
         Row(
             modifier = Modifier
-                .safeContentPadding()
                 .drawBackdrop(
                     backdrop = backdrop,
                     shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
