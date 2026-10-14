@@ -206,10 +206,13 @@ private fun PlayerSheetGlassPanel(
                             shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                             effects = {
                                 vibrancy()
-                                blur(12f.dp.toPx())
+                                // v2.0.1：与主页动作条统一增强——blur 12→20dp，
+                                // 浅色主题下 12dp 几乎看不出模糊，面板内背景文字全透出（用户"太透"）
+                                blur(20f.dp.toPx())
                                 lens(24f.dp.toPx(), 48f.dp.toPx())
                             },
-                            onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.25f)) }
+                            // v2.0.1：表面遮盖 25%→40%，面板内背景文字明显弱化，玻璃实体感一致
+                            onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.4f)) }
                         )
                 ) {
                     SheetDragHandle()
@@ -620,12 +623,11 @@ private fun SpeedSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
             )
-            // 六档标签与 Slider 严格对齐：Slider 的 thumb 可调行程两端 = 组件 padding(24dp) + thumb 半径(10dp，
-            // M3 默认 thumb 半径，工程未定制 Slider)，标签行两端同样缩进 24dp+10dp，
-            // 数字与滑块可到达的两端一一对应；中间档位用 Spacer weight 表达线性间距比例
+            // 六档标签与 Slider 对齐：数字两端对齐 Slider 轨道两端（组件 padding 24dp 处，
+            // 即用户视觉上的滑块左右端点）；中间档位用 Spacer weight 表达线性间距比例
             //（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp, vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
             ) {
                 PlaybackSpeedTiers.TIERS.forEachIndexed { i, tier ->
                     if (i > 0) {
@@ -650,7 +652,7 @@ private fun SpeedSheet(
 }
 
 /** 速度档位快捷项：文案 + 选中态高亮 + 对勾（与 SleepOption 视觉一致，六档单行紧凑布局）
- *  v2.0.1：去掉横向 padding，档位文字左缘精确落在与 Slider thumb 端点对齐的刻度线上 */
+ *  v2.0.1：字号 bodyLarge→bodyMedium（选择条更小巧），去掉横向 padding 让数字精确落在刻度线上 */
 @Composable
 private fun SpeedOption(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
@@ -661,7 +663,7 @@ private fun SpeedOption(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(end = 4.dp)
         )
