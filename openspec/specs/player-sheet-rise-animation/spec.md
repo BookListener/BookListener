@@ -7,48 +7,17 @@ TBD - created by archiving change player-sheet-rise-animation. Update Purpose af
 
 ### Requirement: 点击封面按钮触发双组件上移动画
 
-点击主页底部玻璃动作条中间的圆形封面按钮弹出播放详情时，MUST 同时触发玻璃动作条上移与详情面板滑入动画（v2.0.7 触发路径 `showPlayerSheet = true` 处同步置 `sheetOpen = true`）。
+点击主页底部圆形封面按钮、专辑路径（requestPlayerSheet）或动作条整体上滑（48dp 阈值）弹出播放详情时，MUST 触发两段式展开动画：动作条三个组件（曲目/封面/设置）上移消失（200ms）→ 面板滑入（400ms），无空档；动作条玻璃条本身留在底部不动。v2.0.7 触发路径（showPlayerSheet=true）同步置 sheetOpen=true。
+
+#### Scenario: 打开动画
+
+- **WHEN** 点击封面按钮 / 点击专辑 / 动作条上滑（任一入口）
+- **THEN** 三组件上移消失（200ms）→ 面板滑入（400ms），无空档，动作条玻璃条不动
 
 #### Scenario: 点击封面按钮弹出详情
 
 - **WHEN** 用户点击底部圆形封面按钮（正在播放图标）
-- **THEN** 详情面板从底部滑入，同时玻璃动作条向上移动让位，两个毛玻璃组件呈现连续上移
-
-### Requirement: 动作条让位到面板顶边上方
-
-动作条 SHALL 从底部向上移动，位移 = 详情面板当前高度 + 动作条自身高度（96dp）；动画结束时动作条底边 MUST 位于面板顶边正上方（不重叠、不悬空）。
-
-#### Scenario: 动画结束位置
-
-- **WHEN** 入场动画完成（sheetProgress = 1）
-- **THEN** 动作条底边 = 面板顶边上方 0 间隙（translationY = -(H + 96dp)），两玻璃组件上下紧贴排列
-
-### Requirement: 面板滑入与动作条同一时间轴
-
-详情面板 SHALL 从屏幕外底部（自身高度位移）滑入到底部最终位置，与动作条位移处于同一 400ms 动画时间轴；动画中后段动作条追上并停在面板上方（视觉"面板顶起动作条"）。
-
-#### Scenario: 同步滑入
-
-- **WHEN** 入场动画进行中
-- **THEN** 面板以 slideInVertically（自身高度）上滑，动作条以略快速率上移，动画结束两者相对位置固定
-
-### Requirement: 400ms 快节奏与对称退出
-
-入场动画 MUST 为 400ms（FastOutSlowInEasing）；退出动画 MUST 与入场对称——面板下滑淡出、动作条同步回位到底部。
-
-#### Scenario: 关闭详情
-
-- **WHEN** 用户点击遮罩或按返回键关闭详情
-- **THEN** 面板下滑淡出（400ms），动作条从面板顶边上方回到底部（400ms）
-
-### Requirement: 面板高度实时联动
-
-动作条位移 MUST 由面板实时高度（onSizeChanged 回调）驱动——面板高度变化（如 AB/倍速选项展开）时仍保持"面板顶边上方"相对位置。
-
-#### Scenario: 面板高度变化
-
-- **WHEN** 详情面板内选项展开导致面板高度增加
-- **THEN** 动作条位移随新高度联动，仍停在面板顶边上方
+- **THEN** 详情面板从底部滑入，同时动作条三组件（曲目/封面/设置）上移消失，两段式接力展开
 
 ### Requirement: 回归不破坏既有行为
 
@@ -61,9 +30,36 @@ v2.0.7 既有行为 MUST 保持：点击专辑必弹详情、弹窗返回键关�
 
 ### Requirement: 验收
 
-`testDebugUnitTest` 全绿后构建 APK；真机验收：点击封面按钮可见动作条上移让位、面板从底部滑入、两毛玻璃组件连续上移、动画结束动作条停在面板顶边上方；关闭时对称回位。
+`testDebugUnitTest` 全绿后构建 APK；真机验收 MUST 覆盖：①打开可见三组件上移消失→面板滑入（无空档）；②关闭可见面板下滑（全程可见）→组件归位（尾部连贯）；③专辑列表页内返回键先关面板；④动作条上滑展开；⑤点击/专辑/上滑三种入口动画一致。
 
 #### Scenario: 真机验收
 
-- **WHEN** 安装 v2.0.8 APK 真机操作
-- **THEN** 动画效果符合上述全部场景，测试全绿
+- **WHEN** 安装 v2.0.8 APK 真机操作上述场景
+- **THEN** 动画效果符合本 spec 全部场景，测试全绿
+
+### Requirement: 关闭动画（连贯收回）
+
+关闭 MUST 为：面板下滑（400ms，slideOutVertically + fadeOut 同步 400ms——下滑全程可见）→ 面板滑到组件位置（delay 250ms）→ 三组件下移归位（200ms），与面板尾部重叠衔接（视觉"面板收回到组件处→组件接着收回"）。
+
+#### Scenario: 关闭时序
+
+- **WHEN** `sheetOpen=false`（LaunchedEffect 关闭分支）
+- **THEN** 面板 0→400ms 下滑；组件 250→450ms 下移归位；与面板尾部重叠连贯
+
+### Requirement: 返回键优先级
+
+面板显示（visible=true）时系统返回键 MUST 先关闭面板：`DisposableEffect + OnBackPressedCallback` 在 visible 变化时 remove 再 add 重新注册到 LIFO 栈顶，优先于专辑列表页/文件夹页的 BackHandler；面板关闭后返回键行为回到背后页面。
+
+#### Scenario: 专辑列表页内返回
+
+- **WHEN** 用户在专辑列表页上面板已显示，按系统返回键
+- **THEN** 面板关闭（onDismiss），专辑列表不退出；再按返回键才退出专辑列表
+
+### Requirement: 动作条上滑展开
+
+底部玻璃动作条（曲目/封面/设置三组件所在区域整体）MUST 支持向上拖拽累计超 48dp 展开面板，动画与点击封面按钮同一套；上滑只展开面板，不切文件夹、不恢复播放、不切换页面。
+
+#### Scenario: 动作条上滑
+
+- **WHEN** 用户在动作条任意位置向上拖拽超过 48dp
+- **THEN** 展开播放详情面板（同套动画），页面与播放状态不变
