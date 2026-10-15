@@ -72,11 +72,12 @@ fun MainScreen(
     var showPlayerSheet by rememberSaveable { mutableStateOf(false) }
 
     // v2.0.8d：弹窗"接力"动画（用户澄清：三大件 = 动作条上的三个组件，非整条玻璃）
-    // 打开：动作条三个组件（曲目/封面/设置）快速上移消失(200ms) → 面板接着出现并继续上移(400ms)；
-    // 关闭（相反）：面板下滑到动作条位置(400ms，中途) → 三个组件下移归位(200ms)。
+    // 打开：动作条三个组件（曲目/封面/设置）快速上移消失(200ms) 与 面板滑入(400ms) 同时启动——
+    // 组件路程短先消失、面板路程长继续上移（视觉"先消失→面板接着上移"）；
+    // 关闭（相反）：面板下滑(400ms) → 三组件下移归位(200ms)。
     // 动作条玻璃条本身留在底部不动，面板滑入盖住它。
     var sheetOpen by remember { mutableStateOf(false) }
-    var sheetPanelVisible by remember { mutableStateOf(false) } // 面板+遮罩实际滑入状态（延迟出现）
+    var sheetPanelVisible by remember { mutableStateOf(false) } // 面板+遮罩实际滑入状态
     var barItemsHidden by remember { mutableStateOf(false) }    // 动作条三组件隐藏状态
     // 三组件动画进度：0=原位，1=上移消失（下移归位为反向）
     val barItemsProgress by animateFloatAsState(
@@ -84,16 +85,18 @@ fun MainScreen(
         animationSpec = tween(200, easing = FastOutSlowInEasing),
         label = "bar_items_rise"
     )
-    // 编排：打开 = 组件先上移消失 → 面板出现；关闭 = 面板下滑 → 组件归位
+    // 编排（v2.0.8f：严格串行，两个动作的时间都算上，两端对称 600ms=600ms）：
+    // 打开 = 动作1 组件上移消失(200ms) → 等其完全消失 → 动作2 面板滑入(400ms) = 总 600ms；
+    // 关闭 = 动作1 面板下滑(400ms) → 等其完全下移（面板下移到动作条位置后）→ 动作2 组件下移归位(200ms) = 总 600ms
     LaunchedEffect(sheetOpen) {
         if (sheetOpen) {
-            barItemsHidden = true            // 三组件上移消失（200ms，路程短、速度快）
-            delay(180)                        // 等组件基本消失
-            sheetPanelVisible = true          // 面板接着出现并继续上移（400ms，路程长）
+            barItemsHidden = true            // 动作1：三组件上移消失（200ms）
+            delay(200)                        // 等动作1完全结束（消失后）
+            sheetPanelVisible = true          // 动作2：面板接着出现并继续上移（400ms）
         } else {
-            sheetPanelVisible = false         // 面板下滑（400ms）
-            delay(200)                        // 面板下移到动作条位置附近
-            barItemsHidden = false            // 三组件下移归位（200ms），与面板退出同步收尾
+            sheetPanelVisible = false         // 动作1：面板下滑（400ms）
+            delay(400)                        // 等动作1完全下移（面板下移到动作条位置后）
+            barItemsHidden = false            // 动作2：三组件下移归位（200ms）
         }
     }
 
