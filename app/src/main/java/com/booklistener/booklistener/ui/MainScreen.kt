@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.booklistener.player.PlaybackController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 // Liquid Glass（AndroidLiquidGlass / backdrop）：主页底部动作条液态玻璃特效
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -70,16 +71,31 @@ fun MainScreen(
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showPlayerSheet by rememberSaveable { mutableStateOf(false) }
 
-    // v2.0.8：弹窗"连续上移"动画状态——点击封面按钮时玻璃动作条上移让位、详情面板同步滑入。
-    // sheetProgress 0↔1（400ms FastOutSlowIn）：动作条位移 = -(面板高度 + 动作条高度) × progress，
-    // 动画结束时动作条恰好停在面板顶边正上方（两毛玻璃组件上下紧贴）；关闭时对称回位。
-    var sheetOpen by rememberSaveable { mutableStateOf(false) }
-    var sheetHeightPx by remember { mutableIntStateOf(0) }
-    val sheetProgress by animateFloatAsState(
-        targetValue = if (sheetOpen) 1f else 0f,
-        animationSpec = tween(400, easing = FastOutSlowInEasing),
-        label = "sheet_rise"
+    // v2.0.8d：弹窗"接力"动画（用户澄清：三大件 = 动作条上的三个组件，非整条玻璃）
+    // 打开：动作条三个组件（曲目/封面/设置）快速上移消失(200ms) → 面板接着出现并继续上移(400ms)；
+    // 关闭（相反）：面板下滑到动作条位置(400ms，中途) → 三个组件下移归位(200ms)。
+    // 动作条玻璃条本身留在底部不动，面板滑入盖住它。
+    var sheetOpen by remember { mutableStateOf(false) }
+    var sheetPanelVisible by remember { mutableStateOf(false) } // 面板+遮罩实际滑入状态（延迟出现）
+    var barItemsHidden by remember { mutableStateOf(false) }    // 动作条三组件隐藏状态
+    // 三组件动画进度：0=原位，1=上移消失（下移归位为反向）
+    val barItemsProgress by animateFloatAsState(
+        targetValue = if (barItemsHidden) 1f else 0f,
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+        label = "bar_items_rise"
     )
+    // 编排：打开 = 组件先上移消失 → 面板出现；关闭 = 面板下滑 → 组件归位
+    LaunchedEffect(sheetOpen) {
+        if (sheetOpen) {
+            barItemsHidden = true            // 三组件上移消失（200ms，路程短、速度快）
+            delay(180)                        // 等组件基本消失
+            sheetPanelVisible = true          // 面板接着出现并继续上移（400ms，路程长）
+        } else {
+            sheetPanelVisible = false         // 面板下滑（400ms）
+            delay(200)                        // 面板下移到动作条位置附近
+            barItemsHidden = false            // 三组件下移归位（200ms），与面板退出同步收尾
+        }
+    }
 
     // 必须用 collect 订阅 StateFlow：直接读 .value 不会触发 Compose 重组，
     // 会导致"能播放但界面不显示"（本 bug 由 UT 覆盖回归）
@@ -90,6 +106,9 @@ fun MainScreen(
     LaunchedEffect(requestPlayerSheet) {
         if (requestPlayerSheet) {
             showPlayerSheet = true
+            // v2.0.8c：专辑路径（点击专辑/openAlbum）同步置 sheetOpen——驱动动作条上移动画。
+            // 此前只置 showPlayerSheet，动作条不动，弹出只剩面板/遮罩（且二者 enter 未生效）→ 弹出几乎无动画
+            sheetOpen = true
             playerViewModel.consumePlayerSheetRequest()
         }
     }
@@ -158,11 +177,8 @@ fun MainScreen(
                     },
                     onDrawSurface = { drawRect(glassSurface.copy(alpha = 0.30f)) }
                 )
-                // v2.0.8：弹窗弹出时动作条上移让位——位移 = 面板高度 + 动作条高度(96dp)，
-                // 动画结束恰好停在面板顶边正上方（两毛玻璃组件连续上移后上下紧贴）；关闭时回位。
-                .graphicsLayer {
-                    translationY = -(sheetHeightPx + 96.dp.toPx()) * sheetProgress
-                }
+                // v2.0.8d：动作条玻璃条本身留在底部不动（不再整体上移）；
+                // 上移让位的是内部三个组件（各自 graphicsLayer 上移消失/下移归位）
                 .height(96.dp)
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter),
@@ -180,13 +196,24 @@ fun MainScreen(
                     }
                 },
                 icon = { Icon(AppIcons.MusicNote, contentDescription = "曲目", modifier = Modifier.size(30.dp)) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    // v2.0.8d：三组件上移消失（barItemsProgress 0→1）/下移归位（反向）
+                    .graphicsLayer {
+                        translationY = -96.dp.toPx() * barItemsProgress
+                        alpha = 1f - barItemsProgress
+                    }
+                    .weight(1f)
             )
             // 中间：当前播放封面按钮（v1.6.8：84dp 圆形，播放中缓慢旋转；暂停显示半透明播放按钮），
             // 点击弹出播放详情并后台切到所属文件夹；若处于暂停则同时恢复播放
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
+                    // v2.0.8d：与曲目/设置组件同步上移消失/下移归位
+                    .graphicsLayer {
+                        translationY = -96.dp.toPx() * barItemsProgress
+                        alpha = 1f - barItemsProgress
+                    }
                     .clip(CircleShape)
                     .clickable {
                         // 播放框弹出的同时，后台切换到当前播放队列所属文件夹的条目视图
@@ -205,7 +232,7 @@ fun MainScreen(
                             playerViewModel.togglePlayPause()
                         }
                         showPlayerSheet = true
-                        // v2.0.8：同步置 sheetOpen，驱动动作条上移 + 面板滑入的连续上移动画
+                        // v2.0.8d：置 sheetOpen → LaunchedEffect 编排"组件上移消失→面板出现"
                         sheetOpen = true
                     }
                     .padding(vertical = 8.dp)
@@ -275,27 +302,34 @@ fun MainScreen(
                 selected = tabIndex == 2,
                 onClick = { tabIndex = 2 },
                 icon = { Icon(Icons.Outlined.Settings, contentDescription = "设置", modifier = Modifier.size(30.dp)) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    // v2.0.8d：三组件同步上移消失/下移归位
+                    .graphicsLayer {
+                        translationY = -96.dp.toPx() * barItemsProgress
+                        alpha = 1f - barItemsProgress
+                    }
+                    .weight(1f)
             )
         }
 
         // v2.0.1：播放详情液态玻璃浮层——挂在主页 backdrop Box 内（同合成树），
-        // 直接复用动作条同一 backdrop，实现完全一致的液态玻璃材质
-        if (showPlayerSheet) {
-            PlayerDetailSheet(
-                viewModel = playerViewModel,
-                state = playbackState,
-                entry = PlaybackController.currentQueueOwnerId?.let { playerViewModel.savedEntryById(it) },
-                albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
-                backdrop = backdrop,
-                // v2.0.8：面板实时高度上报——动作条位移按此联动（停在面板顶边上方）
-                onPanelHeightChange = { sheetHeightPx = it },
-                onDismiss = {
-                    showPlayerSheet = false
-                    // v2.0.8：关闭时动作条回位动画（sheetProgress → 0）
-                    sheetOpen = false
-                }
-            )
-        }
+        // 直接复用动作条同一 backdrop，实现完全一致的液态玻璃材质。
+        // v2.0.8c：恒组合 + visible 状态驱动——此前 if(showPlayerSheet) 移除组合导致
+        // AnimatedVisibility exit 不播（关闭瞬间消失）、visible 恒 true 时 enter 不播（打开无滑入）；
+        // 改为常驻组合、内部 visible 由状态控制，打开/关闭动画才真正播放。
+        // v2.0.8d：visible 改为 sheetPanelVisible——面板在组件消失后"接着出现"（LaunchedEffect 编排）
+        PlayerDetailSheet(
+            viewModel = playerViewModel,
+            state = playbackState,
+            entry = PlaybackController.currentQueueOwnerId?.let { playerViewModel.savedEntryById(it) },
+            albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
+            backdrop = backdrop,
+            visible = sheetPanelVisible,
+            onDismiss = {
+                showPlayerSheet = false
+                // v2.0.8d：置 sheetOpen=false → LaunchedEffect 编排"面板下滑→组件下移归位"
+                sheetOpen = false
+            }
+        )
     }
 }

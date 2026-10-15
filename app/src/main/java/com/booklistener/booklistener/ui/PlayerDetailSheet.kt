@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -95,14 +96,18 @@ fun PlayerDetailSheet(
     backdrop: Backdrop? = null,
     onDismiss: () -> Unit,
     // v2.0.8：面板实时高度回调（px）——主页动作条按此联动上移让位（停在面板顶边上方）
-    onPanelHeightChange: (Int) -> Unit = {}
+    onPanelHeightChange: (Int) -> Unit = {},
+    // v2.0.8c：浮层可见性由外部状态驱动——常驻组合，enter/exit 动画真正播放
+    // （此前 visible 恒 true：首次组合直接显示不播 enter；父 if 移除组合时 exit 也不播）
+    visible: Boolean = true
 ) {
     if (!state.hasItem) {
         // 空态引导：无播放队列时点击播放不应"毫无反应"，给出明确指引（v2.0.1 同款液态玻璃浮层）
         PlayerSheetGlassPanel(
             backdrop = backdrop,
             onDismiss = onDismiss,
-            onPanelHeightChange = onPanelHeightChange
+            onPanelHeightChange = onPanelHeightChange,
+            visible = visible
         ) {
             Column(
                 modifier = Modifier
@@ -135,10 +140,19 @@ fun PlayerDetailSheet(
     }
     var showSleepOptions by remember { mutableStateOf(false) }
     var showSpeedOptions by remember { mutableStateOf(false) }
+    // v2.0.8c：常驻组合（不再随 if 销毁）——关闭时重置内部选项状态，
+    // 避免再次打开时仍停留在睡眠/倍速选项页
+    LaunchedEffect(visible) {
+        if (!visible) {
+            showSleepOptions = false
+            showSpeedOptions = false
+        }
+    }
     PlayerSheetGlassPanel(
         backdrop = backdrop,
         onDismiss = onDismiss,
-        onPanelHeightChange = onPanelHeightChange
+        onPanelHeightChange = onPanelHeightChange,
+        visible = visible
     ) {
         PlayerDetailSheetContent(
             state = state,
@@ -199,6 +213,8 @@ private fun PlayerSheetGlassPanel(
     onDismiss: () -> Unit,
     // v2.0.8：面板实际高度上报（px，onSizeChanged）——供动作条联动位移
     onPanelHeightChange: (Int) -> Unit,
+    // v2.0.8c：浮层可见性由外部状态驱动——遮罩 fadeIn/fadeOut、面板 slideIn/slideOut 真正播放
+    visible: Boolean,
     content: @Composable () -> Unit
 ) {
     // v2.0.6：玻璃表面改用 surfaceVariant（浅灰）——与模糊背景拉开色差，alpha 变化才可见（浅色背景下
@@ -207,21 +223,30 @@ private fun PlayerSheetGlassPanel(
     Box(modifier = Modifier.fillMaxSize()) {
         // v2.0.7 bugfix：浮层可见时拦截系统返回键 → 关闭弹窗。
         // 原实现无 BackHandler，返回键穿透到背后专辑列表的 BackHandler，直接退出列表（弹窗关不掉）。
-        BackHandler { onDismiss() }
+        BackHandler(enabled = visible) { onDismiss() }
         // 半透明遮罩：点击关闭（v2.0.1 用户要求"透明度10%"＝遮罩 90% 不透明，遮住背景列表）
         // v2.0.6：遮罩 90%→50%——0.9 挡 90% 光，弹窗总透光率仅 ~7%，是"弹窗不透"的独立元凶；
         // 降至 0.5 后弹窗下背景半隐可见、玻璃透感成立，仍保点击关闭语义
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(onClick = onDismiss)
-        )
-        // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
+        // v2.0.8c：遮罩改为 AnimatedVisibility 状态驱动——打开淡入、关闭淡出（400ms，与面板/动作条同步）
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(400)),
+            exit = fadeOut(tween(400))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(onClick = onDismiss)
+            )
+        }
+        // 液态玻璃面板（同款 backdrop 特效）
         // backdrop 为 null（测试/无 backdrop 上下文）时回退普通表面底
         // v2.0.8：动画时长统一 400ms，与主页动作条上移同步（连续上移接力，用户要求更慢一档）
+        // v2.0.8c：visible 由外部状态驱动（常驻组合）——此前恒 true 时首次组合直接显示、enter 从不播放，
+        // 且父 if 移除组合时 exit 不播；这是"弹出几乎看不到动画"的根因，本次修正
         AnimatedVisibility(
-            visible = true,
+            visible = visible,
             modifier = Modifier.align(Alignment.BottomCenter),
             enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(400)) + fadeIn(tween(400)),
             exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400)) + fadeOut(tween(160))
