@@ -249,7 +249,9 @@ private fun PlayerSheetGlassPanel(
             visible = visible,
             modifier = Modifier.align(Alignment.BottomCenter),
             enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(400)) + fadeIn(tween(400)),
-            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400)) + fadeOut(tween(160))
+            // v2.0.8g：exit 的 fadeOut 160→400ms——此前 160ms 内面板淡成透明，
+            // 400ms 的下滑位移在透明状态下不可见，表现为"下滑动作没有播放"
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400)) + fadeOut(tween(400))
         ) {
             if (backdrop != null) {
                 Column(

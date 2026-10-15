@@ -85,18 +85,19 @@ fun MainScreen(
         animationSpec = tween(200, easing = FastOutSlowInEasing),
         label = "bar_items_rise"
     )
-    // 编排（v2.0.8f：严格串行，两个动作的时间都算上，两端对称 600ms=600ms）：
-    // 打开 = 动作1 组件上移消失(200ms) → 等其完全消失 → 动作2 面板滑入(400ms) = 总 600ms；
-    // 关闭 = 动作1 面板下滑(400ms) → 等其完全下移（面板下移到动作条位置后）→ 动作2 组件下移归位(200ms) = 总 600ms
+    // 编排（v2.0.8g：两个动作时间、空间连贯）：
+    // 打开 = 动作1 组件上移消失(200ms) → 消失瞬间动作2 面板滑入(400ms)，无空档 = 总 600ms；
+    // 关闭 = 动作1 面板下滑(400ms) → 面板下滑到组件位置（delay 250ms，非等面板消失）→
+    //         动作2 组件下移归位(200ms)，与面板尾部重叠衔接（"面板收回到组件处→组件接着收回"），总 ~450ms
     LaunchedEffect(sheetOpen) {
         if (sheetOpen) {
             barItemsHidden = true            // 动作1：三组件上移消失（200ms）
-            delay(200)                        // 等动作1完全结束（消失后）
+            delay(200)                        // 等动作1完全结束（消失后，无空档）
             sheetPanelVisible = true          // 动作2：面板接着出现并继续上移（400ms）
         } else {
-            sheetPanelVisible = false         // 动作1：面板下滑（400ms）
-            delay(400)                        // 等动作1完全下移（面板下移到动作条位置后）
-            barItemsHidden = false            // 动作2：三组件下移归位（200ms）
+            sheetPanelVisible = false         // 动作1：面板下滑（400ms，下滑全程可见）
+            delay(250)                        // 面板下滑到组件位置（组件藏身处=动作条上方）时开始组件下滑，非等面板消失
+            barItemsHidden = false            // 动作2：三组件下移归位（200ms），与面板尾部重叠连贯
         }
     }
 
