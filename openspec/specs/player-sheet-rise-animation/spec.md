@@ -25,21 +25,21 @@ TBD - created by archiving change player-sheet-rise-animation. Update Purpose af
 
 ### Requirement: 面板滑入与动作条同一时间轴
 
-详情面板 SHALL 从屏幕外底部（自身高度位移）滑入到底部最终位置，与动作条位移处于同一 250ms 动画时间轴；动画中后段动作条追上并停在面板上方（视觉"面板顶起动作条"）。
+详情面板 SHALL 从屏幕外底部（自身高度位移）滑入到底部最终位置，与动作条位移处于同一 400ms 动画时间轴；动画中后段动作条追上并停在面板上方（视觉"面板顶起动作条"）。
 
 #### Scenario: 同步滑入
 
 - **WHEN** 入场动画进行中
 - **THEN** 面板以 slideInVertically（自身高度）上滑，动作条以略快速率上移，动画结束两者相对位置固定
 
-### Requirement: 250ms 快节奏与对称退出
+### Requirement: 400ms 快节奏与对称退出
 
-入场动画 MUST 为 250ms（FastOutSlowInEasing）；退出动画 MUST 与入场对称——面板下滑淡出、动作条同步回位到底部。
+入场动画 MUST 为 400ms（FastOutSlowInEasing）；退出动画 MUST 与入场对称——面板下滑淡出、动作条同步回位到底部。
 
 #### Scenario: 关闭详情
 
 - **WHEN** 用户点击遮罩或按返回键关闭详情
-- **THEN** 面板下滑淡出（250ms），动作条从面板顶边上方回到底部（250ms）
+- **THEN** 面板下滑淡出（400ms），动作条从面板顶边上方回到底部（400ms）
 
 ### Requirement: 面板高度实时联动
 

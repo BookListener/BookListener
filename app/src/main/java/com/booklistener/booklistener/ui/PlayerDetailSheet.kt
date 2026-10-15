@@ -219,12 +219,12 @@ private fun PlayerSheetGlassPanel(
         )
         // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
         // backdrop 为 null（测试/无 backdrop 上下文）时回退普通表面底
-        // v2.0.8：动画时长统一 250ms，与主页动作条上移同步（连续上移接力）
+        // v2.0.8：动画时长统一 400ms，与主页动作条上移同步（连续上移接力，用户要求更慢一档）
         AnimatedVisibility(
             visible = true,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(250)) + fadeIn(tween(250)),
-            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)) + fadeOut(tween(160))
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(400)) + fadeIn(tween(400)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400)) + fadeOut(tween(160))
         ) {
             if (backdrop != null) {
                 Column(

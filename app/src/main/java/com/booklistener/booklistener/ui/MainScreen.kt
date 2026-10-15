@@ -71,13 +71,13 @@ fun MainScreen(
     var showPlayerSheet by rememberSaveable { mutableStateOf(false) }
 
     // v2.0.8：弹窗"连续上移"动画状态——点击封面按钮时玻璃动作条上移让位、详情面板同步滑入。
-    // sheetProgress 0↔1（250ms FastOutSlowIn）：动作条位移 = -(面板高度 + 动作条高度) × progress，
+    // sheetProgress 0↔1（400ms FastOutSlowIn）：动作条位移 = -(面板高度 + 动作条高度) × progress，
     // 动画结束时动作条恰好停在面板顶边正上方（两毛玻璃组件上下紧贴）；关闭时对称回位。
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
     var sheetHeightPx by remember { mutableIntStateOf(0) }
     val sheetProgress by animateFloatAsState(
         targetValue = if (sheetOpen) 1f else 0f,
-        animationSpec = tween(250, easing = FastOutSlowInEasing),
+        animationSpec = tween(400, easing = FastOutSlowInEasing),
         label = "sheet_rise"
     )
 
