@@ -44,8 +44,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.booklistener.player.PlaybackController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -185,7 +187,34 @@ fun MainScreen(
                 // 上移让位的是内部三个组件（各自 graphicsLayer 上移消失/下移归位）
                 .height(96.dp)
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter),
+                .align(Alignment.BottomCenter)
+                // v2.0.8h：动作条整体上滑展开播放详情面板——向上拖拽累计超过 48dp 触发，
+                // 动画与点击封面按钮同一套（组件上移消失→面板滑入；关闭反向）
+                .pointerInput(Unit) {
+                    var accumulatedUp = 0f
+                    var triggered = false
+                    detectVerticalDragGestures(
+                        onDragStart = {
+                            accumulatedUp = 0f
+                            triggered = false
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            if (!triggered) {
+                                if (dragAmount < 0) {
+                                    accumulatedUp += -dragAmount
+                                    if (accumulatedUp > 48.dp.toPx()) {
+                                        triggered = true
+                                        showPlayerSheet = true
+                                        sheetOpen = true
+                                    }
+                                } else {
+                                    accumulatedUp = 0f
+                                }
+                            }
+                        }
+                    )
+                },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

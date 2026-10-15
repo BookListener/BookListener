@@ -1,7 +1,8 @@
 package com.booklistener.ui
 import com.booklistener.ui.icons.AppIcons
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -223,7 +225,24 @@ private fun PlayerSheetGlassPanel(
     Box(modifier = Modifier.fillMaxSize()) {
         // v2.0.7 bugfix：浮层可见时拦截系统返回键 → 关闭弹窗。
         // 原实现无 BackHandler，返回键穿透到背后专辑列表的 BackHandler，直接退出列表（弹窗关不掉）。
-        BackHandler(enabled = visible) { onDismiss() }
+        // v2.0.8h：改用 DisposableEffect + OnBackPressedCallback，并在 visible 变化时重新注册——
+        // Compose 返回键按 LIFO（后注册优先）；专辑列表页的 BackHandler 在点击专辑后才组合注册、
+        // 晚于本面板，会压过面板。本方案在面板打开时把 callback 重新注册到 LIFO 栈顶，确保优先拦截返回键。
+        val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+        DisposableEffect(dispatcher, visible) {
+            if (dispatcher == null) {
+                return@DisposableEffect onDispose {}
+            }
+            val callback = object : OnBackPressedCallback(visible) {
+                override fun handleOnBackPressed() {
+                    onDismiss()
+                }
+            }
+            // addCallback 追加到 LIFO 栈顶；DisposableEffect 在 visible 变化时先 remove 再 add，
+            // 保证面板打开（visible=true）时本 callback 位于栈顶，优先于背后的专辑列表/文件夹返回键
+            dispatcher.addCallback(callback)
+            onDispose { callback.remove() }
+        }
         // 半透明遮罩：点击关闭（v2.0.1 用户要求"透明度10%"＝遮罩 90% 不透明，遮住背景列表）
         // v2.0.6：遮罩 90%→50%——0.9 挡 90% 光，弹窗总透光率仅 ~7%，是"弹窗不透"的独立元凶；
         // 降至 0.5 后弹窗下背景半隐可见、玻璃透感成立，仍保点击关闭语义
