@@ -447,6 +447,11 @@ class PlayerViewModel @JvmOverloads constructor(
         loadAlbumSongsMore()
         resolveCurrentAlbumCover(album)
         enterAlbumWithRecord(album)
+        // v2.0.7 bugfix：弹窗请求独立于队列重载——点击专辑必弹"正在播放页"。
+        // 原实现把 _requestPlayerSheet 放在 enterAlbumWithRecord 的"重载队列"分支尾部，
+        // 点击正在播放的专辑时 shouldRestartOnEnter=false 提前 return，弹窗永不触发。
+        // 语义：正在播放专辑不变→保持播放并弹详情；非正在播放→暂停并读取该专辑进度后弹详情。
+        _requestPlayerSheet.value = true
     }
 
     /** 懒解析当前专辑封面（单专辑用文件夹图/多专辑用专辑内首曲内嵌封面，无则 null 占位） */
@@ -481,8 +486,7 @@ class PlayerViewModel @JvmOverloads constructor(
             val cover = entry?.let { coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri) }
             MediaPlayService.start(getApplication())
             PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, entryId)
-            // 切换专辑后自动弹出播放详情（展示就绪状态），但不直接开始播放
-            _requestPlayerSheet.value = true
+            // v2.0.7：弹窗请求已上移 openAlbum（点击专辑必弹），此处不再重复触发
         }
     }
 

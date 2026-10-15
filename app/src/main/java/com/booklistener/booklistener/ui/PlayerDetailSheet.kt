@@ -1,6 +1,7 @@
 package com.booklistener.ui
 import com.booklistener.ui.icons.AppIcons
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -92,11 +93,17 @@ fun PlayerDetailSheet(
     entry: com.booklistener.core.SavedEntry? = null,
     albumCoverUri: String? = null,
     backdrop: Backdrop? = null,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    // v2.0.8：面板实时高度回调（px）——主页动作条按此联动上移让位（停在面板顶边上方）
+    onPanelHeightChange: (Int) -> Unit = {}
 ) {
     if (!state.hasItem) {
         // 空态引导：无播放队列时点击播放不应"毫无反应"，给出明确指引（v2.0.1 同款液态玻璃浮层）
-        PlayerSheetGlassPanel(backdrop = backdrop, onDismiss = onDismiss) {
+        PlayerSheetGlassPanel(
+            backdrop = backdrop,
+            onDismiss = onDismiss,
+            onPanelHeightChange = onPanelHeightChange
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -128,7 +135,11 @@ fun PlayerDetailSheet(
     }
     var showSleepOptions by remember { mutableStateOf(false) }
     var showSpeedOptions by remember { mutableStateOf(false) }
-    PlayerSheetGlassPanel(backdrop = backdrop, onDismiss = onDismiss) {
+    PlayerSheetGlassPanel(
+        backdrop = backdrop,
+        onDismiss = onDismiss,
+        onPanelHeightChange = onPanelHeightChange
+    ) {
         PlayerDetailSheetContent(
             state = state,
             entry = entry,
@@ -186,12 +197,17 @@ fun PlayerDetailSheet(
 private fun PlayerSheetGlassPanel(
     backdrop: Backdrop?,
     onDismiss: () -> Unit,
+    // v2.0.8：面板实际高度上报（px，onSizeChanged）——供动作条联动位移
+    onPanelHeightChange: (Int) -> Unit,
     content: @Composable () -> Unit
 ) {
     // v2.0.6：玻璃表面改用 surfaceVariant（浅灰）——与模糊背景拉开色差，alpha 变化才可见（浅色背景下
     // background 与模糊背景同色系，alpha 0.55→0.30 肉眼无区别，此为排查实证的无效变量）
     val glassSurface = MaterialTheme.colorScheme.surfaceVariant
     Box(modifier = Modifier.fillMaxSize()) {
+        // v2.0.7 bugfix：浮层可见时拦截系统返回键 → 关闭弹窗。
+        // 原实现无 BackHandler，返回键穿透到背后专辑列表的 BackHandler，直接退出列表（弹窗关不掉）。
+        BackHandler { onDismiss() }
         // 半透明遮罩：点击关闭（v2.0.1 用户要求"透明度10%"＝遮罩 90% 不透明，遮住背景列表）
         // v2.0.6：遮罩 90%→50%——0.9 挡 90% 光，弹窗总透光率仅 ~7%，是"弹窗不透"的独立元凶；
         // 降至 0.5 后弹窗下背景半隐可见、玻璃透感成立，仍保点击关闭语义
@@ -203,16 +219,18 @@ private fun PlayerSheetGlassPanel(
         )
         // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
         // backdrop 为 null（测试/无 backdrop 上下文）时回退普通表面底
+        // v2.0.8：动画时长统一 250ms，与主页动作条上移同步（连续上移接力）
         AnimatedVisibility(
             visible = true,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(320)) + fadeIn(tween(220)),
-            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(200)) + fadeOut(tween(160))
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(250)) + fadeIn(tween(250)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(250)) + fadeOut(tween(160))
         ) {
             if (backdrop != null) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onSizeChanged { onPanelHeightChange(it.height) }
                         .drawBackdrop(
                             backdrop = backdrop,
                             shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
@@ -243,6 +261,7 @@ private fun PlayerSheetGlassPanel(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onSizeChanged { onPanelHeightChange(it.height) }
                         .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 ) {
                     SheetDragHandle()

@@ -2,9 +2,11 @@ package com.booklistener.ui
 import com.booklistener.ui.icons.AppIcons
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -35,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.booklistener.player.PlaybackController
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,6 +69,17 @@ fun MainScreen(
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showPlayerSheet by rememberSaveable { mutableStateOf(false) }
+
+    // v2.0.8：弹窗"连续上移"动画状态——点击封面按钮时玻璃动作条上移让位、详情面板同步滑入。
+    // sheetProgress 0↔1（250ms FastOutSlowIn）：动作条位移 = -(面板高度 + 动作条高度) × progress，
+    // 动画结束时动作条恰好停在面板顶边正上方（两毛玻璃组件上下紧贴）；关闭时对称回位。
+    var sheetOpen by rememberSaveable { mutableStateOf(false) }
+    var sheetHeightPx by remember { mutableIntStateOf(0) }
+    val sheetProgress by animateFloatAsState(
+        targetValue = if (sheetOpen) 1f else 0f,
+        animationSpec = tween(250, easing = FastOutSlowInEasing),
+        label = "sheet_rise"
+    )
 
     // 必须用 collect 订阅 StateFlow：直接读 .value 不会触发 Compose 重组，
     // 会导致"能播放但界面不显示"（本 bug 由 UT 覆盖回归）
@@ -143,6 +158,11 @@ fun MainScreen(
                     },
                     onDrawSurface = { drawRect(glassSurface.copy(alpha = 0.30f)) }
                 )
+                // v2.0.8：弹窗弹出时动作条上移让位——位移 = 面板高度 + 动作条高度(96dp)，
+                // 动画结束恰好停在面板顶边正上方（两毛玻璃组件连续上移后上下紧贴）；关闭时回位。
+                .graphicsLayer {
+                    translationY = -(sheetHeightPx + 96.dp.toPx()) * sheetProgress
+                }
                 .height(96.dp)
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter),
@@ -185,6 +205,8 @@ fun MainScreen(
                             playerViewModel.togglePlayPause()
                         }
                         showPlayerSheet = true
+                        // v2.0.8：同步置 sheetOpen，驱动动作条上移 + 面板滑入的连续上移动画
+                        sheetOpen = true
                     }
                     .padding(vertical = 8.dp)
             ) {
@@ -266,7 +288,13 @@ fun MainScreen(
                 entry = PlaybackController.currentQueueOwnerId?.let { playerViewModel.savedEntryById(it) },
                 albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
                 backdrop = backdrop,
-                onDismiss = { showPlayerSheet = false }
+                // v2.0.8：面板实时高度上报——动作条位移按此联动（停在面板顶边上方）
+                onPanelHeightChange = { sheetHeightPx = it },
+                onDismiss = {
+                    showPlayerSheet = false
+                    // v2.0.8：关闭时动作条回位动画（sheetProgress → 0）
+                    sheetOpen = false
+                }
             )
         }
     }

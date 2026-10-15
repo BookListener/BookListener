@@ -123,7 +123,7 @@ class AlbumInteractionTest {
         assertEquals(treeA, vm.currentFolderUri.value)
     }
 
-    /** 点击正在播放的同一专辑：不重建队列、不弹详情、保持播放不打断 */
+    /** v2.0.7：点击正在播放的同一专辑——不重建队列（保持播放不打断），但必须弹"正在播放页" */
     @Test
     fun openSamePlayingAlbum_doesNotInterrupt() {
         seedAlbumA()
@@ -135,7 +135,7 @@ class AlbumInteractionTest {
         )
         vm.openAlbum(recentAlbum())
 
-        assertEquals(treeA.toString(), PlaybackController.currentQueueOwnerId)
-        assertFalse("正在播放同一专辑不应弹详情", vm.requestPlayerSheet.value)
+        assertEquals("正在播放同一专辑不应重建队列（保持播放）", treeA.toString(), PlaybackController.currentQueueOwnerId)
+        assertTrue("点击专辑必弹正在播放页（v2.0.7 bugfix），正在播放同一专辑也弹", vm.requestPlayerSheet.value)
     }
 }
