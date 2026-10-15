@@ -288,6 +288,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         // v1.6.20：半透明圆角毛玻璃风格（头条式）。不接入 backdrop——
         // 搜索框位于主页 backdrop 捕捉层内部（layerBackdrop 挂 Scaffold），drawBackdrop 采样自身所在层
         // 形成渲染自引用，真机闪退（v1.6.17 挂 TextField / v1.6.19 挂外层 Box 两次踩坑，此为根治）。
+        // v2.0.5b：聚焦态 0.40→0.30（透出 70%，与主玻璃统一）；未聚焦 0.28 保持（更透）。
         OutlinedTextField(
             value = searchQuery,
             onValueChange = viewModel::onSearchQueryChange,
@@ -303,7 +304,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             singleLine = true,
             shape = RoundedCornerShape(20.dp),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
                 focusedIndicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
@@ -313,7 +314,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         )
 
         if (searchQuery.isNotBlank()) {
-            // 搜索态：文件夹命中 + 文件命中（混合，带来源标识）
+            // v2.0.1：搜索态 = 专辑命中 + 歌曲命中（面向数据库，不再命中文件夹）
             if (searchResults.isEmpty()) {
                 Text(
                     text = MessageCatalog.EMPTY_SEARCH,
@@ -325,9 +326,18 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                 LazyColumn {
                     items(searchResults, key = { hit -> hitKey(hit) }) { hit ->
                         when (hit) {
-                            is SearchHit.Folder -> SavedEntryRow(
-                                entry = hit.entry,
-                                onClick = { viewModel.openSavedEntry(hit.entry) }
+                            is SearchHit.Album -> AlbumRow(
+                                album = hit.album,
+                                entry = savedEntries.firstOrNull { it.id == hit.album.entryId },
+                                onClick = { viewModel.openAlbum(hit.album) },
+                                onLongClick = {
+                                    pendingNameDetail = NameDetail(
+                                        primary = hit.album.album,
+                                        secondary = hit.album.artist,
+                                        meta = "${hit.album.songCount} 首 · 总时长 ${formatDuration(hit.album.totalDurationMs)}"
+                                    )
+                                },
+                                showDivider = false
                             )
                             is SearchHit.File -> FileResultRow(
                                 displayName = hit.file.displayName,
@@ -440,7 +450,7 @@ private fun isCurrentEntry(entry: SavedEntry, currentUri: android.net.Uri?, stat
     state.currentItem != null && currentUri?.toString() == entry.id
 
 private fun hitKey(hit: SearchHit): String = when (hit) {
-    is SearchHit.Folder -> "folder_${hit.entry.id}"
+    is SearchHit.Album -> "album_${hit.album.entryId}_${hit.album.album}"
     is SearchHit.File -> "file_${hit.entry.id}_${hit.file.uri}"
 }
 
@@ -459,34 +469,6 @@ private fun SectionHeader(title: String) {
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
     )
-}
-
-/** 已添加条目行：封面 + 作者 + 目录名 + 曲目数 + 来源小标识（行尾，删除入口移至设置-文件夹管理） */
-@Composable
-private fun SavedEntryRow(
-    entry: SavedEntry,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        EntrySummaryRow(
-            entry = entry,
-            titleStyle = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-            subtitle = {
-                Text(
-                    text = if (entry.fileCount > 0) "${entry.fileCount} 首音频" else if (entry.isLocal) "本地文件夹" else "网盘内容",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        )
-    }
 }
 
 /** 当前播放条目卡片：封面 + 目录名 + 当前曲目 + 进度条 + 播放/暂停 */

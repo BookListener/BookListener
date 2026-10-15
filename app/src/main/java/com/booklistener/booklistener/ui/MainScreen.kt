@@ -87,6 +87,8 @@ fun MainScreen(
     // 列表滚动经过玻璃条时呈现 折射(lens)+模糊(blur)+饱和增强(vibrancy) 的液态玻璃质感。
     Box(modifier = Modifier.fillMaxSize()) {
         val backgroundColor = MaterialTheme.colorScheme.background
+        // v2.0.6：玻璃表面色改用 surfaceVariant（浅灰）——与模糊背景拉开色差，alpha 变化才可见
+        val glassSurface = MaterialTheme.colorScheme.surfaceVariant
         val backdrop = rememberLayerBackdrop {
             drawRect(backgroundColor)
             drawContent()
@@ -112,6 +114,10 @@ fun MainScreen(
         // 表面遮盖 45%→25%（深色主题下原参数几乎看不出模糊/折射，已按头条毛玻璃风格校准）
         // v2.0.1：均匀毛玻璃（参考图白条质感）——仅强模糊 blur 24dp（48dp 过糊），不叠加 lens（圆角边缘折射
         // 导致模糊不均匀）与 vibrancy（脏色斑），与详情弹窗两处特效视觉一致。
+        // v2.0.5：表面遮盖 55%→40%（透出率 45%→60%）——用户反馈"不够透"，三处玻璃统一调透。
+        // v2.0.5b：40%→30%（透出率 60%→70%）——用户实测仍"不够透"。
+        // v2.0.6（源组件排查实证）：blur 24dp→10dp（24dp≈72px 把背景糊成光斑，是"看不出透"的核心）；
+        // 表面 background→surfaceVariant（浅色背景下与模糊背景同色系，alpha 变化不可见）。
         // v2.0.1：移除 safeContentPadding——液态玻璃特效延伸至屏幕最底（含导航条区域），
         // 列表底端滚动到底时在原留白处也呈现玻璃特效
         Row(
@@ -120,9 +126,22 @@ fun MainScreen(
                     backdrop = backdrop,
                     shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                     effects = {
-                        blur(24f.dp.toPx())
+                        blur(10f.dp.toPx())
+                        // v2.0.6b：透镜折射（源组件 lens：圆角边缘向内 refractionHeight 像素产生折射，
+                        // 强度 refractionAmount 像素采样偏移；depthEffect/chromaticAberration 默认关）。
+                        // 调大折射更明显：refractionHeight↑ 折射带更宽 / refractionAmount↑ 扭曲更强。
+                        // v2.0.6c：四项全加强——refractionHeight 16→24dp、refractionAmount 28→48、
+                        // 开启 depthEffect（边缘深度扭曲）与 chromaticAberration（彩色色散）。
+                        // v2.0.6d：边缘/中心对比仍不足——折射带再拉宽 24→40dp（shader 中 -sd>=refractionHeight
+                        // 区域直接原样采样，带窄则中间大片区域无折射）、强度 48→72。
+                        lens(
+                            refractionHeight = 40f.dp.toPx(),
+                            refractionAmount = 72f,
+                            depthEffect = true,
+                            chromaticAberration = true
+                        )
                     },
-                    onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.55f)) }
+                    onDrawSurface = { drawRect(glassSurface.copy(alpha = 0.30f)) }
                 )
                 .height(96.dp)
                 .fillMaxWidth()

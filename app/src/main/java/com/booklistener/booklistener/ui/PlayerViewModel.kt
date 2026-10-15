@@ -725,27 +725,24 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    /** 扫描 SAF 文件夹并固化条目（含封面/文件数/内容索引），进入文件夹视图就绪不播 */
+    /** 扫描 SAF 文件夹并固化条目（含封面/文件数/内容索引）。
+     *  v2.0.1：添加目录后不再弹出条目视图/专辑视图，停留原地，仅提示"已添加"。 */
     fun scanFolder(treeUri: Uri, showSheet: Boolean = true) {
         // 同步固化基础条目（保证 UI 与兼容 API 立即可见），异步加载后原位补充封面/文件数
         saveFolder(treeUri)
-        openEntryView(
-            entryId = treeUri.toString(),
-            entryUri = treeUri,
-            emptyMessage = MessageCatalog.EMPTY_DIR_AUDIO,
-            showSheet = showSheet,
-            loadItems = {
+        viewModelScope.launch {
+            val items = withContext(Dispatchers.IO) {
                 loadFromIndex(treeUri.toString(), SourceType.LOCAL) ?: run {
-                    val items = folderScanner.scan(treeUri.toString())
-                    indexStore.save(treeUri.toString(), items.map { it.toIndexedFile() })
-                    items
+                    val scanned = folderScanner.scan(treeUri.toString())
+                    indexStore.save(treeUri.toString(), scanned.map { it.toIndexedFile() })
+                    scanned
                 }
-            },
-            afterLoad = { items ->
-                val entry = buildLocalEntry(treeUri, items, _savedEntries.value.firstOrNull { it.id == treeUri.toString() })
-                setEntries(entryStore.replace(_savedEntries.value, entry))
             }
-        )
+            val entry = buildLocalEntry(treeUri, items, _savedEntries.value.firstOrNull { it.id == treeUri.toString() })
+            setEntries(entryStore.replace(_savedEntries.value, entry))
+            _eventMsg.value = MessageCatalog.MSG_ADDED.format(entry.displayName)
+            refreshAlbums()
+        }
     }
 
     /** v1.6.14：从数据库索引读取条目文件清单（按展示序排序后转 AudioItem）；无数据返回 null 由调用方兜底 */
@@ -1081,12 +1078,41 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     /**
-     * 杀后台重启恢复：定位最近播放条目并回到其条目视图（就绪、暂停、不弹详情）。
+     * 杀后台重启恢复（v2.0.1）：定位最近播放条目，仅恢复其播放上下文
+     * （上次专辑队列 + 播放进度），停留在主页专辑列表——不再进入条目/专辑视图、不弹详情。
      * 扫描在 IO 线程异步执行；未播放过任何条目则不做任何事。
      */
     private fun restoreLastSession() {
         val recent = LastSessionLogic.pickRecent(_savedEntries.value) ?: return
-        openSavedEntry(recent, showSheet = false)
+        resumePlaybackOfEntry(recent)
+    }
+
+    /**
+     * v2.0.1：仅恢复条目的播放上下文（上次专辑队列 + 进度），不进入任何视图。
+     * 与 enterAlbumWithRecord 的播放恢复逻辑一致，但不写 _currentAlbum/_inFolderView，
+     * 也不弹播放详情；恢复后刷新主页专辑分区（最近播放/尚未播放）。
+     */
+    private fun resumePlaybackOfEntry(entry: SavedEntry) {
+        val entryId = entry.id
+        val files = indexStore.load()[entryId] ?: emptyList()
+        if (files.isEmpty()) return
+        if (!shouldRestartOnEnter(entryId, PlaybackController.state.value.isPlaying)) return
+        saveCurrentPlaybackProgress()
+        val album = files.firstNotNullOfOrNull { it.album } ?: entry.displayName
+        viewModelScope.launch {
+            val all = withContext(Dispatchers.IO) { albumStore.allSongs(entryId, album) }
+            if (all.isEmpty()) return@launch
+            val items = all.map { it.toAudioItem(entry.sourceType) }
+            val record = progressStore.load(entryId)
+            val (startIndex, startPos) = FolderProgressLogic.resolveStart(items.size, record)
+            lastSavedIndex = startIndex
+            lastSavedUri = entryId
+            val albumCount = files.map { it.album ?: entry.displayName }.distinct().size
+            val cover = coverManager.resolveAlbumCover(entry.coverUri, albumCount, all.firstOrNull()?.uri)
+            MediaPlayService.start(getApplication())
+            PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, entryId)
+            refreshAlbums()
+        }
     }
 
     /** 删除已添加条目（含进度记录、内容索引、本地封面缓存） */

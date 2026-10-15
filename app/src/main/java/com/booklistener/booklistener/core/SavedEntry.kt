@@ -258,24 +258,47 @@ class EntryIndexStore(private val dao: AppDao) {
     }
 }
 
-/** 搜索结果：文件夹命中或文件命中 */
+/**
+ * 搜索结果（v2.0.1：面向数据库的专辑+歌曲搜索，不再命中文件夹）：
+ * - Album：已添加条目内聚合出的专辑（专辑名匹配，点击进入专辑视图）
+ * - File：专辑内歌曲（文件名匹配，点击直接播放）
+ */
 sealed class SearchHit {
-    data class Folder(val entry: SavedEntry) : SearchHit()
+    data class Album(val album: AlbumSummary) : SearchHit()
     data class File(val entry: SavedEntry, val file: IndexedFile) : SearchHit() {
         val sourceType: SourceType get() = entry.sourceType
     }
 }
 
-/** 搜索逻辑：文件夹名 + 文件名（忽略大小写包含匹配，文件夹优先） */
+/**
+ * 搜索逻辑：专辑名 + 文件名（忽略大小写包含匹配），数据全部来自 db 内容索引。
+ * 专辑聚合口径与 AlbumStore 一致：album 缺失按条目 displayName 兜底。
+ */
 fun searchEntries(query: String, entries: List<SavedEntry>, index: Map<String, List<IndexedFile>>): List<SearchHit> {
     val q = query.trim()
     if (q.isEmpty()) return emptyList()
     val hits = mutableListOf<SearchHit>()
     entries.forEach { entry ->
-        if (entry.displayName.contains(q, ignoreCase = true)) hits += SearchHit.Folder(entry)
-    }
-    entries.forEach { entry ->
-        index[entry.id].orEmpty().forEach { file ->
+        val files = index[entry.id].orEmpty()
+        if (files.isEmpty()) return@forEach
+        val albums = files.map { it.album ?: entry.displayName }.distinct()
+        albums.forEach { album ->
+            if (album.contains(q, ignoreCase = true)) {
+                val albumFiles = files.filter { (it.album ?: entry.displayName) == album }
+                hits += SearchHit.Album(
+                    AlbumSummary(
+                        album = album,
+                        entryId = entry.id,
+                        artist = albumFiles.firstNotNullOfOrNull { it.artist } ?: entry.artist,
+                        songCount = albumFiles.size,
+                        totalDurationMs = albumFiles.mapNotNull { it.durationMs }.sum(),
+                        albumCountInEntry = albums.size,
+                        coverUri = null
+                    )
+                )
+            }
+        }
+        files.forEach { file ->
             if (file.displayName.contains(q, ignoreCase = true)) {
                 hits += SearchHit.File(entry, file)
             }

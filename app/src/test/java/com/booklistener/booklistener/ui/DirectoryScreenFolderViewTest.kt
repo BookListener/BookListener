@@ -10,6 +10,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.booklistener.core.SavedEntry
+import com.booklistener.core.SourceType
 import com.booklistener.db.AppDatabase
 import org.robolectric.Shadows.shadowOf
 import com.booklistener.db.EntryIndexEntity
@@ -54,12 +56,27 @@ class DirectoryScreenFolderViewTest {
     private fun newViewModel(): PlayerViewModel =
         PlayerViewModel(ApplicationProvider.getApplicationContext(), database = db, credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false))
 
+    private fun webDavEntry(name: String = "网盘") = SavedEntry(
+        id = "webdav://dav/${name}/",
+        displayName = name,
+        uri = "webdav://dav/${name}/",
+        sourceType = SourceType.WEBDAV
+    )
+
+    /** v2.0.1：添加目录不再进入条目视图（图3 已取消），停留原地仅提示"已添加" */
     @Test
-    fun scanFolder_entersFolderView() {
+    fun scanFolder_doesNotEnterView_showsAdded() {
         val vm = newViewModel()
         vm.scanFolder(treeA)
-        assertTrue("scanFolder 应同步进入文件夹视图", vm.inFolderView.value)
-        assertEquals(treeA, vm.currentFolderUri.value)
+        assertFalse("v2.0.1 添加目录不再进入条目视图", vm.inFolderView.value)
+        // 异步扫描完成后提示已添加（Robolectric 主 looper 需 idle 推进 Main 调度）
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (vm.eventMsg.value?.contains("已添加") == true) break
+            Thread.sleep(50)
+        }
+        assertTrue("添加后应提示已添加", vm.eventMsg.value?.contains("已添加") == true)
     }
 
     /** 回归：扫描重建条目不得清零 lastPlayedAt（否则"正在播放"清后台后漂移成"尚未播放"） */
@@ -157,48 +174,51 @@ class DirectoryScreenFolderViewTest {
         assertEquals(null, vm.currentFolderUri.value)
     }
 
-    /** 回归：点击底部"正在播放"按钮静默切回所属文件夹（showSheet=false 进入且不触发播放详情） */
+    /** v2.0.1：网盘条目（第4条保留目录导航）showSheet=false 静默进入图3 且不触发播放详情 */
     @Test
-    fun openSavedEntry_showSheetFalse_entersFolderViewWithoutSheet() {
+    fun openSavedEntry_webDav_showSheetFalse_entersFolderViewWithoutSheet() {
         val vm = newViewModel()
-        vm.scanFolder(treeA)
-        vm.exitFolderView()
-
-        val entry = vm.savedEntryById(treeA.toString())
-        org.junit.Assert.assertNotNull("已固化条目应可通过 id 找到", entry)
-        vm.openSavedEntry(entry!!, showSheet = false)
+        vm.openSavedEntry(webDavEntry(), showSheet = false)
 
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
             if (vm.inFolderView.value) break
             Thread.sleep(50)
         }
-        assertTrue("静默进入应切到条目视图", vm.inFolderView.value)
-        assertEquals(treeA, vm.currentFolderUri.value)
+        assertTrue("网盘静默进入应切到条目视图", vm.inFolderView.value)
         assertFalse("showSheet=false 不应触发播放详情弹出", vm.requestPlayerSheet.value)
     }
 
-    /** UI 回归：点击"← 返回"必须退出条目视图 */
+    /** UI 回归：网盘条目视图点击"← 返回"必须退出条目视图（v2.0.1 本地不再进入条目视图，本用例改网盘） */
     @Test
     fun backButtonClick_exitsFolderView() {
         val vm = newViewModel()
-        vm.scanFolder(treeA)
+        vm.openSavedEntry(webDavEntry(), showSheet = false)
         composeRule.setContent { DirectoryScreen(vm) }
+        composeRule.waitUntil(timeoutMillis = 30_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            vm.inFolderView.value
+        }
         composeRule.onNodeWithContentDescription("返回").assertExists()
         composeRule.onNodeWithText("目录内未发现可播放音频").assertExists()
 
         composeRule.onNodeWithContentDescription("返回").performClick()
+        composeRule.waitForIdle()
 
         composeRule.onNodeWithText("目录内未发现可播放音频").assertDoesNotExist()
         assertFalse(vm.inFolderView.value)
     }
 
-    /** UI 回归：系统返回键（安卓返回）应关闭条目视图而非直接退出 App */
+    /** UI 回归：系统返回键（安卓返回）应关闭条目视图而非直接退出 App（v2.0.1 改网盘场景） */
     @Test
     fun systemBack_closesFolderView() {
         val vm = newViewModel()
-        vm.scanFolder(treeA)
+        vm.openSavedEntry(webDavEntry(), showSheet = false)
         composeRule.setContent { DirectoryScreen(vm) }
+        composeRule.waitUntil(timeoutMillis = 30_000) {
+            shadowOf(Looper.getMainLooper()).idle()
+            vm.inFolderView.value
+        }
         composeRule.onNodeWithText("目录内未发现可播放音频").assertExists()
 
         composeRule.activity.onBackPressedDispatcher.onBackPressed()

@@ -188,13 +188,17 @@ private fun PlayerSheetGlassPanel(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    val backgroundColor = MaterialTheme.colorScheme.background
+    // v2.0.6：玻璃表面改用 surfaceVariant（浅灰）——与模糊背景拉开色差，alpha 变化才可见（浅色背景下
+    // background 与模糊背景同色系，alpha 0.55→0.30 肉眼无区别，此为排查实证的无效变量）
+    val glassSurface = MaterialTheme.colorScheme.surfaceVariant
     Box(modifier = Modifier.fillMaxSize()) {
         // 半透明遮罩：点击关闭（v2.0.1 用户要求"透明度10%"＝遮罩 90% 不透明，遮住背景列表）
+        // v2.0.6：遮罩 90%→50%——0.9 挡 90% 光，弹窗总透光率仅 ~7%，是"弹窗不透"的独立元凶；
+        // 降至 0.5 后弹窗下背景半隐可见、玻璃透感成立，仍保点击关闭语义
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.9f))
+                .background(Color.Black.copy(alpha = 0.5f))
                 .clickable(onClick = onDismiss)
         )
         // 液态玻璃面板（同款 backdrop 特效）；visible 恒真：组合即滑入，移除即消失
@@ -213,13 +217,23 @@ private fun PlayerSheetGlassPanel(
                             backdrop = backdrop,
                             shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
                             effects = {
-                                // v2.0.1：均匀毛玻璃（参考图白条质感）——仅强模糊，不叠加 lens 折射
-                                //（lens 在圆角边缘做放大镜式折射，导致模糊不均匀）与 vibrancy（模糊后产生脏色斑）。
-                                // blur 24dp：保留"背后字体模糊成光斑、可辨轮廓"的参考图效果（48dp 过糊）。
-                                blur(24f.dp.toPx())
+                                // v2.0.6：blur 24dp→10dp（≈72px→28px）——24dp 把背景糊成光斑、轮廓全无，
+                                // 是"看不出透"的核心原因；10dp 后背景文字/封面轮廓可辨（参考图效果）。
+                                blur(10f.dp.toPx())
+                                // v2.0.6b：透镜折射（与主页动作条一致），圆角边缘 refractionHeight 像素折射带、
+                                // refractionAmount 像素偏移强度；调大折射更明显。
+                                // v2.0.6c：四项全加强（refractionHeight 16→24dp、refractionAmount 28→48、
+                                // depthEffect + chromaticAberration 开启）。
+                                // v2.0.6d：折射带拉宽 24→40dp、强度 48→72（与主页动作条一致，增强边缘/中心对比）。
+                                lens(
+                                    refractionHeight = 40f.dp.toPx(),
+                                    refractionAmount = 72f,
+                                    depthEffect = true,
+                                    chromaticAberration = true
+                                )
                             },
-                            // v2.0.1：表面遮盖 55%——半透明白表面，透出模糊背景（参考图白条质感）
-                            onDrawSurface = { drawRect(backgroundColor.copy(alpha = 0.55f)) }
+                            // v2.0.6：表面=surfaceVariant（浅灰）×alpha 0.30——色差拉开后透感成立
+                            onDrawSurface = { drawRect(glassSurface.copy(alpha = 0.30f)) }
                         )
                 ) {
                     SheetDragHandle()

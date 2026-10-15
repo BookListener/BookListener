@@ -17,6 +17,7 @@ object MessageCatalog {
 
     // 事件消息模板
     const val MSG_FOUND = "找到 %d 个可播放音频"
+    const val MSG_ADDED = "已添加 %s"
     const val MSG_REFRESHED = "已刷新 %d 个音频"
     const val MSG_REFRESH_CONFIRM_TITLE = "刷新数据库"
     const val MSG_REFRESH_CONFIRM_TEXT = "将重新读取该目录全部音频（标签/时长/封面），保留播放进度。确定刷新？"

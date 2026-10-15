@@ -5,10 +5,13 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.booklistener.core.AlbumSummary
+import com.booklistener.core.AudioItemFactory
+import com.booklistener.core.SourceType
 import com.booklistener.db.AppDatabase
 import com.booklistener.db.EntryIndexEntity
 import com.booklistener.db.FolderProgressEntity
 import com.booklistener.db.SavedEntryEntity
+import com.booklistener.player.PlayableItem
 import com.booklistener.player.PlaybackController
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -125,8 +128,11 @@ class AlbumInteractionTest {
     fun openSamePlayingAlbum_doesNotInterrupt() {
         seedAlbumA()
         val vm = newViewModel()
-        // 模拟：目标专辑正在播放
-        PlaybackController.prepareFolder(emptyList(), 0, 0L, treeA.toString())
+        // 模拟：目标专辑正在播放（非空队列 → queueReady=true，正在播放同一专辑）
+        val item = AudioItemFactory.fromSearch(SourceType.LOCAL, "第1章", "uri://a1")
+        PlaybackController.prepareFolder(
+            listOf(PlayableItem(item, item.path)), 0, 0L, treeA.toString()
+        )
         vm.openAlbum(recentAlbum())
 
         assertEquals(treeA.toString(), PlaybackController.currentQueueOwnerId)
