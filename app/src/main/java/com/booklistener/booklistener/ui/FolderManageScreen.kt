@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -244,7 +245,7 @@ fun FolderManageScreen(
                     text = pickerUrl?.let {
                         android.net.Uri.decode(it.trimEnd('/').substringAfterLast('/'))
                     } ?: picker.host,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -265,10 +266,11 @@ fun FolderManageScreen(
                     modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)
                 )
                 pickerDirs.isEmpty() && pickerItems.isEmpty() -> Text(
-                    text = "该目录为空",
-                    modifier = Modifier.padding(top = 48.dp),
+                    text = "该目录为空\n请返回上级目录或另选目录",
+                    modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
                 )
                 else -> LazyColumn {
                     items(pickerDirs, key = { it.href }) { dir ->
@@ -394,7 +396,7 @@ fun FolderManageScreen(
                 }
                 Text(
                     text = opened.displayName,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -423,15 +425,18 @@ fun FolderManageScreen(
                 )
             } else if (files.isEmpty()) {
                 Text(
-                    text = "目录内未发现可播放音频",
-                    modifier = Modifier.padding(top = 48.dp),
+                    text = MessageCatalog.EMPTY_DIR_AUDIO,
+                    modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
                 )
             } else {
                 LazyColumn {
                     items(files, key = { it.uri }) { file ->
                         ManageFileRow(file)
+                        // v2.0.12：文件列表行间格线（同设置页/账号列表风格）
+                        HorizontalDivider()
                     }
                 }
             }
@@ -454,7 +459,7 @@ fun FolderManageScreen(
             }
             Text(
                 text = "文件夹管理",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { showAddDialog = true }) {
@@ -464,9 +469,10 @@ fun FolderManageScreen(
         if (savedEntries.isEmpty()) {
             Text(
                 text = MessageCatalog.EMPTY_MANAGE,
-                modifier = Modifier.padding(top = 48.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
         } else {
             LazyColumn {
@@ -476,6 +482,8 @@ fun FolderManageScreen(
                         onOpen = { selectedEntry = entry },
                         onDelete = { pendingDelete = entry }
                     )
+                    // v2.0.12：管理列表行间格线（同设置页/账号列表风格）
+                    HorizontalDivider()
                 }
             }
         }

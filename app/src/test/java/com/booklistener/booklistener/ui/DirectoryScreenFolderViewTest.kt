@@ -200,12 +200,12 @@ class DirectoryScreenFolderViewTest {
             vm.inFolderView.value
         }
         composeRule.onNodeWithContentDescription("返回").assertExists()
-        composeRule.onNodeWithText("目录内未发现可播放音频").assertExists()
+        composeRule.onNodeWithText("目录内未发现可播放的音频文件").assertExists()
 
         composeRule.onNodeWithContentDescription("返回").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("目录内未发现可播放音频").assertDoesNotExist()
+        composeRule.onNodeWithText("目录内未发现可播放的音频文件").assertDoesNotExist()
         assertFalse(vm.inFolderView.value)
     }
 
@@ -219,7 +219,7 @@ class DirectoryScreenFolderViewTest {
             shadowOf(Looper.getMainLooper()).idle()
             vm.inFolderView.value
         }
-        composeRule.onNodeWithText("目录内未发现可播放音频").assertExists()
+        composeRule.onNodeWithText("目录内未发现可播放的音频文件").assertExists()
 
         composeRule.activity.onBackPressedDispatcher.onBackPressed()
         composeRule.waitForIdle()

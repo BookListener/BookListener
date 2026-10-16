@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.booklistener.source.WebDavCredential
@@ -82,7 +83,7 @@ fun CloudConfigScreen(
                 }
                 Text(
                     text = "WebDAV 账号",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = {
@@ -98,11 +99,13 @@ fun CloudConfigScreen(
             }
 
             if (accounts.isEmpty()) {
+                // v2.0.12：空态提示统一设计规格——bodyLarge + onSurfaceVariant + 顶部48dp + 水平居中
                 Text(
-                    text = "尚未配置 WebDAV 账号\n点击右上角 + 添加",
+                    text = "尚未添加 WebDAV 账号\n点击右上角「+」添加",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 48.dp)
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp)
                 )
             } else {
                 LazyColumn {
@@ -164,7 +167,7 @@ fun CloudConfigScreen(
                 }
                 Text(
                     text = editingHost,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     modifier = Modifier.weight(1f)
                 )

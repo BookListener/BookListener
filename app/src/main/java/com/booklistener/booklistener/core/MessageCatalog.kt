@@ -5,10 +5,10 @@ package com.booklistener.core
  * 所有空态与事件消息单点维护，禁止在 UI/ViewModel 中散落重复字符串。
  */
 object MessageCatalog {
-    // 目录/条目视图空态
-    const val EMPTY_DIR_AUDIO = "目录内未发现可播放音频"
-    const val EMPTY_HOME = "尚未添加内容\n请在设置中添加播放文件夹或网盘内容"
-    const val EMPTY_MANAGE = "尚未添加任何内容\n点击右上角 + 添加播放文件夹或网盘内容"
+    // 目录/条目视图空态（v2.0.12：文案与样式统一为「主句 + 操作引导」两行）
+    const val EMPTY_DIR_AUDIO = "目录内未发现可播放的音频文件"
+    const val EMPTY_HOME = "尚未添加任何播放内容\n请到设置中添加播放文件夹或网盘内容"
+    const val EMPTY_MANAGE = "尚未添加任何播放内容\n点击右上角「+」添加文件夹或网盘"
     const val EMPTY_SEARCH = "未找到匹配内容"
 
     // 播放详情空态
