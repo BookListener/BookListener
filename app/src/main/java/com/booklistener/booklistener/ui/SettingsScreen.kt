@@ -42,6 +42,7 @@ fun SettingsScreen(
     var showFolderManage by remember { mutableStateOf(false) }
     var showGlobalSleep by remember { mutableStateOf(false) }
     var showCache by remember { mutableStateOf(false) }
+    var showGlass by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -230,6 +231,76 @@ fun SettingsScreen(
         return
     }
 
+    if (showGlass) {
+        // v2.0.11：毛玻璃特效子页（设计统一：开关收进内部菜单，主页仅列举配置项，结构与缓存子页同构）
+        // 系统返回键：毛玻璃特效 → 设置主页
+        BackHandler(onBack = { showGlass = false })
+        val glassActionBar by viewModel.glassActionBar.collectAsStateWithLifecycle()
+        val glassPlayerPanel by viewModel.glassPlayerPanel.collectAsStateWithLifecycle()
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { showGlass = false }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "返回",
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Text(
+                    text = "毛玻璃特效",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            Text(
+                text = "主页底部动作条与播放详情面板的液态玻璃效果（模糊+折射）。关闭后对应区域使用纯色背景，更省电。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("主页动作条玻璃", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "主页底部动作条的液态玻璃效果（模糊+折射）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = glassActionBar,
+                        onCheckedChange = { viewModel.setGlassActionBar(it) }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("播放详情面板玻璃", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "播放详情面板的液态玻璃效果（模糊+折射）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = glassPlayerPanel,
+                        onCheckedChange = { viewModel.setGlassPlayerPanel(it) }
+                    )
+                }
+            }
+        }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -348,13 +419,12 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
-        // v2.0.10：毛玻璃特效组件级开关（L2 粒度）——主页动作条 / 播放详情面板各自独立，关闭降级纯色
-        val glassActionBar by viewModel.glassActionBar.collectAsStateWithLifecycle()
-        val glassPlayerPanel by viewModel.glassPlayerPanel.collectAsStateWithLifecycle()
+        // v2.0.11：毛玻璃特效入口（设计统一：主页仅列举配置项，开关收进子页，同缓存模式）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
+                .clickable { showGlass = true }
+                .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -364,42 +434,14 @@ fun SettingsScreen(
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text("毛玻璃特效", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "关闭后对应区域使用纯色背景（更省电）",
+                    text = "主页动作条与播放详情面板的液态玻璃效果",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "主页动作条玻璃",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
-            Switch(
-                checked = glassActionBar,
-                onCheckedChange = { viewModel.setGlassActionBar(it) }
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, top = 4.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "播放详情面板玻璃",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
-            Switch(
-                checked = glassPlayerPanel,
-                onCheckedChange = { viewModel.setGlassPlayerPanel(it) }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = "进入毛玻璃特效设置"
             )
         }
         HorizontalDivider()

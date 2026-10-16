@@ -318,17 +318,20 @@ private fun PlayerSheetGlassPanel(
     }
 }
 
-/** 面板顶部下滑指示条：参照 ModalBottomSheet 默认 dragHandle（32x4dp），提示可下滑关闭 */
+/** 面板顶部下滑指示条：与 Material3 ModalBottomSheet 默认 DragHandle 完全一致（v2.0.11 解包 1.4.0 源码对齐）
+ *  参数来源：BottomSheetDefaults.DragHandle（SheetDefaults.kt）——
+ *  Surface(onSurfaceVariant, shape=extraLarge=圆角28dp) 内 Box(32×4dp)，垂直 padding 上下各 22dp */
 @Composable
 private fun ColumnScope.SheetDragHandle() {
-    Box(
+    Surface(
         modifier = Modifier
-            .padding(top = 12.dp, bottom = 8.dp)
-            .size(width = 32.dp, height = 4.dp)
-            .align(Alignment.CenterHorizontally)
-            .clip(RoundedCornerShape(2.dp))
-            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-    )
+            .padding(vertical = 22.dp)
+            .align(Alignment.CenterHorizontally),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Box(Modifier.size(width = 32.dp, height = 4.dp))
+    }
 }
 
 /** 详情页内容（独立可测，不含弹层容器） */

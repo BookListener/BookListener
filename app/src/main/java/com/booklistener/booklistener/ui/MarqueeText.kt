@@ -37,6 +37,8 @@ import kotlin.math.roundToInt
  *   衔接由官方保证，无叠字、无空屏停顿。
  *
  * 短文本分支保持原行为：静态显示、textAlign 生效（如详情页标题居中）。
+ * v2.0.11：Text 补 fillMaxWidth——此前 Text 为 wrap-content 宽度，textAlign 只对占满容器
+ * 宽度的 Text 生效，导致短名/静止时"居中"实际失效（偏左）；补宽后静止居中、滚动左锚不变。
  */
 @Composable
 fun MarqueeText(
@@ -89,6 +91,9 @@ fun MarqueeText(
                 overflow = TextOverflow.Clip,
                 textAlign = if (scroll) TextAlign.Start else (textAlign ?: TextAlign.Start),
                 modifier = Modifier
+                    // v2.0.11：fillMaxWidth 使 textAlign 真正生效——静止/短名时 Center 居中；
+                    // 滚动时仍 Start 左锚（跑马灯平移锚点），行为不变
+                    .fillMaxWidth()
                     .testTag(if (scroll) "marquee-scroll" else "marquee-static")
                     .basicMarquee(
                         iterations = Int.MAX_VALUE, // 无限循环（官方：0 会禁用动画）
