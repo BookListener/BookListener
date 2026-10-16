@@ -308,7 +308,12 @@ private fun PlayerSheetGlassPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onSizeChanged { onPanelHeightChange(it.height) }
-                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        // v2.0.13：关闭毛玻璃后的纯色回退同样保留顶部 28dp 圆角（此前 background 无 shape
+                        // 为直角，与玻璃开启时不一致；对齐 glass-effect-switch REQ-2"保持既有圆角/尺寸/布局"）
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                        )
                 ) {
                     SheetDragHandle()
                     content()
