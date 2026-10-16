@@ -109,6 +109,9 @@ fun MainScreen(
     val inFolderView by playerViewModel.inFolderView.collectAsStateWithLifecycle()
     // 切换文件夹后就绪 → 自动弹出播放详情（但不自动播放）
     val requestPlayerSheet by playerViewModel.requestPlayerSheet.collectAsStateWithLifecycle()
+    // v2.0.10：毛玻璃特效组件级开关（设置页控制，实时生效）
+    val glassActionBar by playerViewModel.glassActionBar.collectAsStateWithLifecycle()
+    val glassPlayerPanel by playerViewModel.glassPlayerPanel.collectAsStateWithLifecycle()
     LaunchedEffect(requestPlayerSheet) {
         if (requestPlayerSheet) {
             showPlayerSheet = true
@@ -160,29 +163,37 @@ fun MainScreen(
         // 表面 background→surfaceVariant（浅色背景下与模糊背景同色系，alpha 变化不可见）。
         // v2.0.1：移除 safeContentPadding——液态玻璃特效延伸至屏幕最底（含导航条区域），
         // 列表底端滚动到底时在原留白处也呈现玻璃特效
+        // v2.0.10：毛玻璃特效组件级开关——关闭时动作条降级为纯色圆角表面（不再采样 backdrop）
+        val actionBarSurface = if (glassActionBar) {
+            Modifier.drawBackdrop(
+                backdrop = backdrop,
+                shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
+                effects = {
+                    blur(10f.dp.toPx())
+                    // v2.0.6b：透镜折射（源组件 lens：圆角边缘向内 refractionHeight 像素产生折射，
+                    // 强度 refractionAmount 像素采样偏移；depthEffect/chromaticAberration 默认关）。
+                    // 调大折射更明显：refractionHeight↑ 折射带更宽 / refractionAmount↑ 扭曲更强。
+                    // v2.0.6c：四项全加强——refractionHeight 16→24dp、refractionAmount 28→48、
+                    // 开启 depthEffect（边缘深度扭曲）与 chromaticAberration（彩色色散）。
+                    // v2.0.6d：边缘/中心对比仍不足——折射带再拉宽 24→40dp（shader 中 -sd>=refractionHeight
+                    // 区域直接原样采样，带窄则中间大片区域无折射）、强度 48→72。
+                    lens(
+                        refractionHeight = 40f.dp.toPx(),
+                        refractionAmount = 72f,
+                        depthEffect = true,
+                        chromaticAberration = true
+                    )
+                },
+                onDrawSurface = { drawRect(glassSurface.copy(alpha = 0.30f)) }
+            )
+        } else {
+            Modifier.background(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            )
+        }
         Row(
-            modifier = Modifier
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) },
-                    effects = {
-                        blur(10f.dp.toPx())
-                        // v2.0.6b：透镜折射（源组件 lens：圆角边缘向内 refractionHeight 像素产生折射，
-                        // 强度 refractionAmount 像素采样偏移；depthEffect/chromaticAberration 默认关）。
-                        // 调大折射更明显：refractionHeight↑ 折射带更宽 / refractionAmount↑ 扭曲更强。
-                        // v2.0.6c：四项全加强——refractionHeight 16→24dp、refractionAmount 28→48、
-                        // 开启 depthEffect（边缘深度扭曲）与 chromaticAberration（彩色色散）。
-                        // v2.0.6d：边缘/中心对比仍不足——折射带再拉宽 24→40dp（shader 中 -sd>=refractionHeight
-                        // 区域直接原样采样，带窄则中间大片区域无折射）、强度 48→72。
-                        lens(
-                            refractionHeight = 40f.dp.toPx(),
-                            refractionAmount = 72f,
-                            depthEffect = true,
-                            chromaticAberration = true
-                        )
-                    },
-                    onDrawSurface = { drawRect(glassSurface.copy(alpha = 0.30f)) }
-                )
+            modifier = actionBarSurface
                 // v2.0.8d：动作条玻璃条本身留在底部不动（不再整体上移）；
                 // 上移让位的是内部三个组件（各自 graphicsLayer 上移消失/下移归位）
                 .height(96.dp)
@@ -356,7 +367,8 @@ fun MainScreen(
             state = playbackState,
             entry = PlaybackController.currentQueueOwnerId?.let { playerViewModel.savedEntryById(it) },
             albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
-            backdrop = backdrop,
+            // v2.0.10：播放详情面板玻璃开关——关闭时传 null，面板走 surfaceContainerLow 纯色回退分支
+            backdrop = if (glassPlayerPanel) backdrop else null,
             visible = sheetPanelVisible,
             onDismiss = {
                 showPlayerSheet = false

@@ -140,6 +140,23 @@ class PlayerViewModel @JvmOverloads constructor(
         repo.setFullFileCacheEnabled(enabled)
     }
 
+    // ---- v2.0.10 毛玻璃特效组件级开关（持久化，默认开启）：主页动作条玻璃 / 播放详情面板玻璃 ----
+    private val _glassActionBar = MutableStateFlow(prefs.getBoolean(KEY_GLASS_ACTION_BAR, true))
+    val glassActionBar: StateFlow<Boolean> = _glassActionBar.asStateFlow()
+
+    fun setGlassActionBar(enabled: Boolean) {
+        _glassActionBar.value = enabled
+        prefs.edit().putBoolean(KEY_GLASS_ACTION_BAR, enabled).commit()
+    }
+
+    private val _glassPlayerPanel = MutableStateFlow(prefs.getBoolean(KEY_GLASS_PLAYER_PANEL, true))
+    val glassPlayerPanel: StateFlow<Boolean> = _glassPlayerPanel.asStateFlow()
+
+    fun setGlassPlayerPanel(enabled: Boolean) {
+        _glassPlayerPanel.value = enabled
+        prefs.edit().putBoolean(KEY_GLASS_PLAYER_PANEL, enabled).commit()
+    }
+
     private val _albumTitleMode = MutableStateFlow(prefs.getBoolean(KEY_ALBUM_TITLE_MODE, false))
     val albumTitleMode: StateFlow<Boolean> = _albumTitleMode.asStateFlow()
 
@@ -563,6 +580,9 @@ class PlayerViewModel @JvmOverloads constructor(
         private const val KEY_GLOBAL_SLEEP_MINUTES = "global_sleep_minutes"
         private const val KEY_FULL_FILE_CACHE = "full_file_cache"
         private const val KEY_PLAYBACK_SPEED = "playback_speed"
+        // v2.0.10：毛玻璃特效组件级开关（默认开启）
+        private const val KEY_GLASS_ACTION_BAR = "glass_action_bar"
+        private const val KEY_GLASS_PLAYER_PANEL = "glass_player_panel"
     }
 
     init {

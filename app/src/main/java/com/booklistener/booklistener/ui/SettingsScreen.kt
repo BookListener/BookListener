@@ -348,6 +348,62 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
+        // v2.0.10：毛玻璃特效组件级开关（L2 粒度）——主页动作条 / 播放详情面板各自独立，关闭降级纯色
+        val glassActionBar by viewModel.glassActionBar.collectAsStateWithLifecycle()
+        val glassPlayerPanel by viewModel.glassPlayerPanel.collectAsStateWithLifecycle()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = AppIcons.Palette,
+                contentDescription = "毛玻璃特效"
+            )
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("毛玻璃特效", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = "关闭后对应区域使用纯色背景（更省电）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "主页动作条玻璃",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = glassActionBar,
+                onCheckedChange = { viewModel.setGlassActionBar(it) }
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, top = 4.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "播放详情面板玻璃",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = glassPlayerPanel,
+                onCheckedChange = { viewModel.setGlassPlayerPanel(it) }
+            )
+        }
+        HorizontalDivider()
+
         // 关于（图标+文字行，点开子页）
         Row(
             modifier = Modifier
