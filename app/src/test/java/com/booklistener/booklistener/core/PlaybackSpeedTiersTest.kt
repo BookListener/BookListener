@@ -4,13 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** v2.0.1 播放速度档位纯逻辑回归：循环顺序 / 末档回卷 / 脏数据防御 / 档位文字 */
+/** v2.0.1 播放速度档位纯逻辑回归（v2.0.9 加 1.75x、fraction 均匀化）：循环顺序 / 末档回卷 / 脏数据防御 / 档位文字 / 均匀分布 */
 class PlaybackSpeedTiersTest {
 
     @Test
     fun cycle_followsAscendingTiers() {
-        // 0.5 → 0.75 → 1.0 → 1.25 → 1.5 → 2.0 → 0.5
-        val seq = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+        // 0.5 → 0.75 → 1.0 → 1.25 → 1.5 → 1.75 → 2.0 → 0.5
+        val seq = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
         seq.zipWithNext().forEach { (cur, nxt) ->
             assertEquals("$cur 的下一档应为 $nxt", nxt, PlaybackSpeedTiers.next(cur), 0.001f)
         }
@@ -32,6 +32,7 @@ class PlaybackSpeedTiersTest {
         assertEquals(1.5f, PlaybackSpeedTiers.nearest(1.4f), 0.001f)
         assertEquals(1.25f, PlaybackSpeedTiers.nearest(1.2f), 0.001f)
         assertEquals(1.5f, PlaybackSpeedTiers.nearest(1.6f), 0.001f)
+        assertEquals(1.75f, PlaybackSpeedTiers.nearest(1.65f), 0.001f)
         assertEquals(2.0f, PlaybackSpeedTiers.nearest(2.0f), 0.001f)
         assertEquals(0.5f, PlaybackSpeedTiers.nearest(0.4f), 0.001f)
     }
@@ -44,6 +45,7 @@ class PlaybackSpeedTiersTest {
         assertEquals("0.75x", PlaybackSpeedTiers.label(0.75f))
         assertEquals("1.25x", PlaybackSpeedTiers.label(1.25f))
         assertEquals("1.5x", PlaybackSpeedTiers.label(1.5f))
+        assertEquals("1.75x", PlaybackSpeedTiers.label(1.75f))
     }
 
     @Test
@@ -54,13 +56,14 @@ class PlaybackSpeedTiersTest {
     }
 
     @Test
-    fun fraction_linearAcrossTiers() {
-        // 档位在 Slider 行程上的线性比例：0.5→0%、1.25→50%、2.0→100%
+    fun fraction_evenlyAcrossTiers() {
+        // v2.0.9：档位在 Slider 行程上按序号均匀分布（0.5→0%、1.25→50%、2.0→100%）
         assertEquals("0.5x 应在行程 0%", 0f, PlaybackSpeedTiers.fraction(0.5f), 0.001f)
-        assertEquals("0.75x 应在行程 16.7%", 1f / 6f, PlaybackSpeedTiers.fraction(0.75f), 0.001f)
-        assertEquals("1.0x 应在行程 33.3%", 2f / 6f, PlaybackSpeedTiers.fraction(1.0f), 0.001f)
-        assertEquals("1.25x 应在行程 50%", 3f / 6f, PlaybackSpeedTiers.fraction(1.25f), 0.001f)
-        assertEquals("1.5x 应在行程 66.7%", 4f / 6f, PlaybackSpeedTiers.fraction(1.5f), 0.001f)
+        assertEquals("0.75x 应在行程 1/6", 1f / 6f, PlaybackSpeedTiers.fraction(0.75f), 0.001f)
+        assertEquals("1.0x 应在行程 2/6", 2f / 6f, PlaybackSpeedTiers.fraction(1.0f), 0.001f)
+        assertEquals("1.25x 应在行程 3/6", 3f / 6f, PlaybackSpeedTiers.fraction(1.25f), 0.001f)
+        assertEquals("1.5x 应在行程 4/6", 4f / 6f, PlaybackSpeedTiers.fraction(1.5f), 0.001f)
+        assertEquals("1.75x 应在行程 5/6", 5f / 6f, PlaybackSpeedTiers.fraction(1.75f), 0.001f)
         assertEquals("2.0x 应在行程 100%", 1f, PlaybackSpeedTiers.fraction(2.0f), 0.001f)
     }
 

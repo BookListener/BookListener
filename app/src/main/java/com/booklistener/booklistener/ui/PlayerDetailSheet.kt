@@ -699,21 +699,31 @@ private fun SpeedSheet(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
                 textAlign = TextAlign.Center
             )
+            // 当前档位索引（0..6），Slider thumb 位置 = index/6 均匀分布
+            var currentIndex = 0
+            for (i in PlaybackSpeedTiers.TIERS.indices) {
+                if (PlaybackSpeedTiers.TIERS[i] == dragValue) { currentIndex = i; break }
+            }
             Slider(
-                value = dragValue,
-                // v2.0.1：拖动即吸附最近档位（非档位值立即归位），保证滑块位置与下方档位标志一致
-                onValueChange = { v -> dragValue = PlaybackSpeedTiers.nearest(v) },
+                // v2.0.9：Slider 喂"档位索引"（0..6，7 档），thumb 位置 = index/6 均匀分布，
+                // 与下方档位标签（fraction 同样按索引均匀）刻度对齐；拖动吸附最近档，松手应用。
+                value = currentIndex.toFloat(),
+                onValueChange = { idx ->
+                    val index = idx.roundToInt().coerceIn(0, PlaybackSpeedTiers.TIERS.size - 1)
+                    dragValue = PlaybackSpeedTiers.TIERS[index]
+                },
                 onValueChangeFinished = { onSelect(dragValue) },
-                valueRange = 0.5f..2.0f,
+                valueRange = 0f..(PlaybackSpeedTiers.TIERS.size - 1).toFloat(),
+                steps = PlaybackSpeedTiers.TIERS.size - 2,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
             )
-            // 六档标签：文字中心与 Slider 刻度点严格居中，且自适应不同屏宽。
+            // 七档标签：文字中心与 Slider 刻度点严格居中，且自适应不同屏宽。
             // 坐标基准 = Slider 的 thumb 实际行程（非轨道端点）：
             //   Slider 组件 = fillMaxWidth + padding(horizontal=24dp)，thumb 行程 = [24dp+10dp, 屏宽-24dp-10dp]
             //   （10dp = M3 Slider 默认 thumb 半径，即 thumb 中心可停范围的两端）
-            // 每档按线性比例（0.5→0%、0.75→16.7%、1.0→33.3%、1.25→50%、1.5→66.7%、2.0→100%）
+            // 每档按档位序号均匀比例（0.5→0%、0.75→1/6、1.0→2/6、1.25→3/6、1.5→4/6、1.75→5/6、2.0→100%）
             // 绝对定位 + onSizeChanged 测量文字宽，文字中心恰好落在 thumb 行程刻度上。
             // BoxWithConstraints 不带水平 padding（避免 maxWidth 双重缩减），maxWidth = 屏宽，
             // 不同宽度设备下 trackStart/trackLen 实时由 maxWidth 换算。
