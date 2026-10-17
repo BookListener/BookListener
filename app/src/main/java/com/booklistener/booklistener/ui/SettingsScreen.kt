@@ -1,4 +1,10 @@
 package com.booklistener.ui
+
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.material3.RadioButton
+import androidx.compose.ui.res.stringResource
+import androidx.core.os.LocaleListCompat
+import com.booklistener.R
 import com.booklistener.ui.icons.AppIcons
 
 import androidx.activity.compose.BackHandler
@@ -43,6 +49,7 @@ fun SettingsScreen(
     var showGlobalSleep by remember { mutableStateOf(false) }
     var showCache by remember { mutableStateOf(false) }
     var showGlass by remember { mutableStateOf(false) }
+    var showLanguage by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -58,18 +65,18 @@ fun SettingsScreen(
                 IconButton(onClick = { showGlobalSleep = false }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
                 Text(
-                    text = "定时关闭（全局）",
+                    text = stringResource(R.string.settings_timer_title),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 4.dp)
                 )
             }
             Text(
-                text = "每次开始播放后开始倒计时，到点自动暂停；一次性定时生效期间不重复触发。",
+                text = stringResource(R.string.settings_timer_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -89,8 +96,8 @@ fun SettingsScreen(
                     ) {
                         Text(
                             text = when (minutes) {
-                                0 -> "关闭"
-                                else -> "$minutes 分钟"
+                                0 -> stringResource(R.string.common_off)
+                                else -> stringResource(R.string.common_minutes, minutes)
                             },
                             style = MaterialTheme.typography.bodyLarge,
                             color = if (selected) {
@@ -102,7 +109,7 @@ fun SettingsScreen(
                         )
                         if (selected) {
                             Text(
-                                text = "当前",
+                                text = stringResource(R.string.settings_timer_current),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -141,12 +148,12 @@ fun SettingsScreen(
                 IconButton(onClick = { showCache = false }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
                 Text(
-                    text = "缓存",
+                    text = stringResource(R.string.settings_cache_title),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 4.dp)
                 )
@@ -158,13 +165,11 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "完整文件缓存",
+                            text = stringResource(R.string.settings_cache_full),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Text(
-                            text = "开启后，网络音频会先整体下载到本地再播放，\n" +
-                                "断网也能继续，适合 ≤200MB 的文件；\n" +
-                                "关闭则直接在线播放，不占用本地空间",
+                            text = stringResource(R.string.settings_cache_full_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -175,7 +180,7 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    text = "缓存上限 5GB，超出后自动按最近使用淘汰",
+                    text = stringResource(R.string.settings_cache_limit),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
@@ -188,7 +193,7 @@ fun SettingsScreen(
                     },
                     modifier = Modifier.padding(top = 12.dp)
                 ) {
-                    Text("清除全部缓存")
+                    Text(stringResource(R.string.settings_cache_clear_all))
                 }
             }
         }
@@ -206,12 +211,12 @@ fun SettingsScreen(
                 IconButton(onClick = { showAbout = false }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
                 Text(
-                    text = "关于",
+                    text = stringResource(R.string.settings_about_title),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 4.dp)
                 )
@@ -222,8 +227,7 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
             Text(
-                text = "数据源：本地 / WebDAV\n" +
-                    "音频格式：mp3 / m4a / flac / wav / ogg / aac",
+                text = stringResource(R.string.settings_about_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
@@ -245,18 +249,18 @@ fun SettingsScreen(
                 IconButton(onClick = { showGlass = false }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
                 Text(
-                    text = "毛玻璃特效",
+                    text = stringResource(R.string.settings_glass_title),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 4.dp)
                 )
             }
             Text(
-                text = "主页底部动作条与播放详情面板的液态玻璃效果（模糊+折射）。关闭后对应区域使用纯色背景，更省电。",
+                text = stringResource(R.string.settings_glass_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -267,9 +271,9 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("主页动作条玻璃", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_glass_action_bar), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = "主页底部动作条的液态玻璃效果（模糊+折射）",
+                            text = stringResource(R.string.settings_glass_action_bar_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -284,9 +288,9 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("播放详情面板玻璃", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.settings_glass_player_panel), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = "播放详情面板的液态玻璃效果（模糊+折射）",
+                            text = stringResource(R.string.settings_glass_player_panel_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -295,6 +299,72 @@ fun SettingsScreen(
                         checked = glassPlayerPanel,
                         onCheckedChange = { viewModel.setGlassPlayerPanel(it) }
                     )
+                }
+            }
+        }
+        return
+    }
+
+    if (showLanguage) {
+        // v2.0.14：语言子页（设计统一：返回箭头 + 标题 + 说明 + 单选行，同全局定时子页结构；
+        // 语言属列举项，开关类配置（毛玻璃组件）仍收在各自子页内，主页不放开关）
+        BackHandler(onBack = { showLanguage = false })
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { showLanguage = false }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = stringResource(R.string.nav_back),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.settings_language_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_language_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            // 当前语言 tag："" 跟随系统 / "zh" 简体中文 / "en" English（AppCompatDelegate 自动持久化）
+            val currentTag = remember { AppCompatDelegate.getApplicationLocales().toLanguageTags() }
+            val options = listOf(
+                "" to stringResource(R.string.language_follow_system),
+                "zh" to stringResource(R.string.language_zh),
+                "en" to stringResource(R.string.language_en)
+            )
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                options.forEach { (tag, label) ->
+                    val selected = currentTag == tag
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                AppCompatDelegate.setApplicationLocales(
+                                    if (tag.isEmpty()) LocaleListCompat.getEmptyLocaleList()
+                                    else LocaleListCompat.forLanguageTags(tag)
+                                )
+                            }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        RadioButton(selected = selected, onClick = null)
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
@@ -316,19 +386,19 @@ fun SettingsScreen(
         ) {
             Icon(
                 imageVector = AppIcons.Folder,
-                contentDescription = "文件夹管理"
+                contentDescription = stringResource(R.string.settings_folders_row)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text("文件夹管理", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_folders_row), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "管理已添加的播放文件夹与网盘内容",
+                    text = stringResource(R.string.settings_folders_row_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "进入文件夹管理"
+                contentDescription = stringResource(R.string.settings_folders_row)
             )
         }
         HorizontalDivider()
@@ -343,19 +413,19 @@ fun SettingsScreen(
         ) {
             Icon(
                 imageVector = AppIcons.Cloud,
-                contentDescription = "网盘配置"
+                contentDescription = stringResource(R.string.settings_cloud_row)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text("网盘配置", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_cloud_row), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "WebDAV",
+                    text = stringResource(R.string.settings_cloud_row_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "进入网盘配置"
+                contentDescription = stringResource(R.string.settings_cloud_row)
             )
         }
         HorizontalDivider()
@@ -371,15 +441,15 @@ fun SettingsScreen(
         ) {
             Icon(
                 imageVector = AppIcons.Timer,
-                contentDescription = "定时关闭"
+                contentDescription = stringResource(R.string.settings_timer_row)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text("定时关闭（全局）", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_timer_title), style = MaterialTheme.typography.bodyLarge)
                 Text(
                     text = if (globalMinutes <= 0) {
-                        "关闭（每次开始播放后倒计时，到点暂停）"
+                        stringResource(R.string.settings_timer_row_off)
                     } else {
-                        "每次开始播放后 $globalMinutes 分钟暂停"
+                        stringResource(R.string.settings_timer_row_on, globalMinutes)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -387,7 +457,7 @@ fun SettingsScreen(
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "设置定时关闭"
+                contentDescription = stringResource(R.string.settings_timer_row)
             )
         }
         HorizontalDivider()
@@ -402,19 +472,46 @@ fun SettingsScreen(
         ) {
             Icon(
                 imageVector = AppIcons.Storage,
-                contentDescription = "缓存管理"
+                contentDescription = stringResource(R.string.settings_cache_row)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text("缓存管理", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_cache_row), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "网络音频本地缓存设置与缓存清理",
+                    text = stringResource(R.string.settings_cache_row_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "进入缓存管理"
+                contentDescription = stringResource(R.string.settings_cache_row)
+            )
+        }
+        HorizontalDivider()
+
+        // v2.0.14：语言入口（设计统一：主页仅列举配置项，同缓存/毛玻璃模式）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showLanguage = true }
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = AppIcons.Language,
+                contentDescription = stringResource(R.string.settings_language_row)
+            )
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(stringResource(R.string.settings_language_row), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text = stringResource(R.string.settings_language_row_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = stringResource(R.string.settings_language_row)
             )
         }
         HorizontalDivider()
@@ -429,19 +526,19 @@ fun SettingsScreen(
         ) {
             Icon(
                 imageVector = AppIcons.Palette,
-                contentDescription = "毛玻璃特效"
+                contentDescription = stringResource(R.string.settings_glass_row)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text("毛玻璃特效", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_glass_row), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "主页动作条与播放详情面板的液态玻璃效果",
+                    text = stringResource(R.string.settings_glass_row_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "进入毛玻璃特效设置"
+                contentDescription = stringResource(R.string.settings_glass_row)
             )
         }
         HorizontalDivider()
@@ -456,19 +553,19 @@ fun SettingsScreen(
         ) {
             Icon(
                 imageVector = AppIcons.Info,
-                contentDescription = "关于"
+                contentDescription = stringResource(R.string.settings_about_row)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text("关于", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_about_row), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "版本、数据源与音频格式",
+                    text = stringResource(R.string.settings_about_row_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "查看关于"
+                contentDescription = stringResource(R.string.settings_about_row)
             )
         }
     }

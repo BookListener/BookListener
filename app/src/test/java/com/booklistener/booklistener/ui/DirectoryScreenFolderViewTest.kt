@@ -73,10 +73,10 @@ class DirectoryScreenFolderViewTest {
         val deadline = System.currentTimeMillis() + 10_000
         while (System.currentTimeMillis() < deadline) {
             shadowOf(Looper.getMainLooper()).idle()
-            if (vm.eventMsg.value?.contains("已添加") == true) break
+            if (vm.eventMsg.value?.contains("Added") == true) break
             Thread.sleep(50)
         }
-        assertTrue("添加后应提示已添加", vm.eventMsg.value?.contains("已添加") == true)
+        assertTrue("添加后应提示已添加", vm.eventMsg.value?.contains("Added") == true)
     }
 
     /** 回归：扫描重建条目不得清零 lastPlayedAt（否则"正在播放"清后台后漂移成"尚未播放"） */
@@ -199,13 +199,13 @@ class DirectoryScreenFolderViewTest {
             shadowOf(Looper.getMainLooper()).idle()
             vm.inFolderView.value
         }
-        composeRule.onNodeWithContentDescription("返回").assertExists()
-        composeRule.onNodeWithText("目录内未发现可播放的音频文件").assertExists()
+        composeRule.onNodeWithContentDescription("Back").assertExists()
+        composeRule.onNodeWithText("No playable audio files found in this folder").assertExists()
 
-        composeRule.onNodeWithContentDescription("返回").performClick()
+        composeRule.onNodeWithContentDescription("Back").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("目录内未发现可播放的音频文件").assertDoesNotExist()
+        composeRule.onNodeWithText("No playable audio files found in this folder").assertDoesNotExist()
         assertFalse(vm.inFolderView.value)
     }
 
@@ -219,7 +219,7 @@ class DirectoryScreenFolderViewTest {
             shadowOf(Looper.getMainLooper()).idle()
             vm.inFolderView.value
         }
-        composeRule.onNodeWithText("目录内未发现可播放的音频文件").assertExists()
+        composeRule.onNodeWithText("No playable audio files found in this folder").assertExists()
 
         composeRule.activity.onBackPressedDispatcher.onBackPressed()
         composeRule.waitForIdle()
@@ -260,14 +260,14 @@ class DirectoryScreenFolderViewTest {
             shadowOf(Looper.getMainLooper()).idle()
             vm.neverAlbums.value.isNotEmpty() || vm.recentAlbums.value.isNotEmpty()
         }
-        composeRule.onNodeWithText("尚未播放").assertExists()
+        composeRule.onNodeWithText("Not played yet").assertExists()
         composeRule.onNodeWithText("Download").assertExists()
 
         composeRule.onNodeWithText("Download").performClick()
 
         assertTrue(vm.inFolderView.value)
         assertTrue("点击专辑应打开专辑视图", vm.currentAlbum.value?.album == "Download")
-        composeRule.onNodeWithContentDescription("返回").assertExists()
+        composeRule.onNodeWithContentDescription("Back").assertExists()
     }
 
     /** UI 回归：文件夹管理页（设置顶层）列举多个条目、删除一个不影响其余 */
@@ -282,14 +282,14 @@ class DirectoryScreenFolderViewTest {
             shadowOf(Looper.getMainLooper()).idle()
             vm.savedEntries.value.size >= 2
         }
-        composeRule.onNodeWithText("文件夹管理").assertExists()
+        composeRule.onNodeWithText("Folder management").assertExists()
         composeRule.onNodeWithText("Download").assertExists()
         composeRule.onNodeWithText("Music").assertExists()
 
-        composeRule.onNodeWithContentDescription("删除 Download").performClick()
+        composeRule.onNodeWithContentDescription("Delete Download").performClick()
         // v1.7.0：删除需二次确认
-        composeRule.onNodeWithText("删除确认").assertExists()
-        composeRule.onNodeWithText("删除").performClick()
+        composeRule.onNodeWithText("Delete confirmation").assertExists()
+        composeRule.onNodeWithText("Delete").performClick()
 
         assertTrue(vm.savedFolders.value.map { it.toString() } == listOf(treeB.toString()))
         composeRule.onNodeWithText("Music").assertExists()

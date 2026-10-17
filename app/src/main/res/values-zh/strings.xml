@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v2.0.14 国际化：values/ = English（默认/兜底语言）
+     三态：跟随系统(zh→中文, en→English, 其他→回退 English)；手动 zh / en 由 AppCompatDelegate 指定 -->
+<resources>
+    <string name="app_name">BookListener</string>
+
+    <!-- 通用 -->
+    <string name="nav_back">返回</string>    <string name="nav_cancel">取消</string>
+    <string name="nav_delete">删除</string>
+    <string name="nav_confirm">确定</string>
+    <string name="nav_close">关闭</string>    <string name="common_loading">加载中…</string>
+    <string name="common_off">关闭</string>
+    <string name="common_minutes_label">分钟数</string>
+    <string name="common_minutes">%1$d 分钟</string>
+    <string name="common_unknown_duration">时长未知</string>
+    <string name="common_refresh">刷新</string>    <string name="common_selected">已选择</string>
+    <string name="cd_play">播放</string>
+    <string name="cd_pause">暂停</string>
+    <string name="cd_local">本地</string>
+    <string name="cd_cloud">网盘</string>
+    <string name="cd_album_cover">专辑封面</string>
+    <string name="cd_clear_search">清除搜索</string>
+    <string name="cd_tracks">曲目</string>
+    <string name="cd_settings">设置</string>
+
+    <!-- 设置主页与子页 -->    <string name="settings_timer_title">定时关闭（全局）</string>
+    <string name="settings_timer_desc">每次开始播放后开始倒计时，到点自动暂停；一次性定时生效期间不重复触发。</string>
+    <string name="settings_timer_current">当前</string>
+    <string name="settings_timer_row_off">关闭（每次开始播放后倒计时，到点暂停）</string>
+    <string name="settings_timer_row_on">每次开始播放后 %1$d 分钟暂停</string>
+    <string name="settings_cache_title">缓存</string>
+    <string name="settings_cache_full">完整文件缓存</string>
+    <string name="settings_cache_full_desc">开启后，网络音频会先整体下载到本地再播放，断网也能继续，适合 ≤200MB 的文件；关闭则直接在线播放，不占用本地空间</string>
+    <string name="settings_cache_limit">缓存上限 5GB，超出后自动按最近使用淘汰</string>
+    <string name="settings_cache_clear_all">清除全部缓存</string>
+    <string name="settings_about_title">关于</string>
+    <string name="settings_about_desc">数据源：本地 / WebDAV\n音频格式：mp3 / m4a / flac / wav / ogg / aac</string>
+    <string name="settings_glass_title">毛玻璃特效</string>
+    <string name="settings_glass_desc">主页底部动作条与播放详情面板的液态玻璃效果（模糊+折射）。关闭后对应区域使用纯色背景，更省电。</string>
+    <string name="settings_glass_action_bar">主页动作条玻璃</string>
+    <string name="settings_glass_action_bar_desc">主页底部动作条的液态玻璃效果（模糊+折射）</string>
+    <string name="settings_glass_player_panel">播放详情面板玻璃</string>
+    <string name="settings_glass_player_panel_desc">播放详情面板的液态玻璃效果（模糊+折射）</string>
+    <string name="settings_folders_row">文件夹管理</string>
+    <string name="settings_folders_row_desc">管理已添加的播放文件夹与网盘内容</string>
+    <string name="settings_cloud_row">网盘配置</string>
+    <string name="settings_cloud_row_desc">WebDAV 网盘账号</string>
+    <string name="settings_timer_row">定时关闭</string>
+    <string name="settings_cache_row">缓存管理</string>
+    <string name="settings_cache_row_desc">网络音频本地缓存设置与缓存清理</string>
+    <string name="settings_glass_row">毛玻璃特效</string>
+    <string name="settings_glass_row_desc">主页动作条与播放详情面板的液态玻璃效果</string>
+    <string name="settings_about_row">关于</string>
+    <string name="settings_about_row_desc">版本、数据源与音频格式</string>
+    <string name="settings_language_row">语言</string>
+    <string name="settings_language_row_desc">App 界面显示语言</string>
+    <string name="settings_language_title">语言</string>
+    <string name="settings_language_desc">切换 App 界面语言，立即生效。系统级 UI（输入法、系统对话框）仍跟随系统语言。</string>
+    <string name="language_follow_system">跟随系统</string>
+    <string name="language_zh">简体中文</string>
+    <string name="language_en">English</string>
+
+    <!-- 文件夹管理 -->
+    <string name="folder_add_title">添加内容</string>
+    <string name="folder_add_desc">选择要添加的内容来源，添加后即可在曲目中浏览播放</string>
+    <string name="folder_add_local">添加本地文件夹</string>
+    <string name="folder_add_local_desc">从手机存储中选择音频所在目录</string>
+    <string name="folder_add_cloud">添加网盘目录</string>
+    <string name="folder_add_cloud_desc">连接 WebDAV 网盘，浏览并添加音频目录</string>
+    <string name="folder_select_account">选择网盘账号</string>
+    <string name="folder_no_account">尚未配置 WebDAV 账号，请先到 设置 → 网盘配置 中添加</string>
+    <string name="folder_save">保存此文件夹</string>
+    <string name="folder_empty">该目录为空\n请返回上级目录或另选目录</string>
+    <string name="folder_delete_title">删除确认</string>
+    <string name="folder_delete_text">确定删除「%1$s」？\n将同时移除播放进度与已缓存文件清单。</string>
+    <string name="folder_title">文件夹管理</string>
+    <string name="folder_mode_file_name">文件名</string>
+    <string name="folder_mode_tag">标签</string>
+
+    <!-- 网盘配置 -->
+    <string name="cloud_title">WebDAV 账号</string>
+    <string name="cloud_add">添加 WebDAV 账号</string>
+    <string name="cloud_empty">尚未添加 WebDAV 账号\n点击右上角「+」添加</string>
+    <string name="cloud_desc">适用于 InfiniCLOUD / 中国科技云 / Nextcloud / 自建 NAS，在网盘后台生成应用密码填入</string>
+    <string name="cloud_url">WebDAV 地址</string>
+    <string name="cloud_user">用户名</string>
+    <string name="cloud_password">应用密码</string>
+    <string name="cloud_testing">测试中…</string>
+    <string name="cloud_save_test">保存并测试连接</string>
+    <string name="cloud_retest">重新测试</string>
+    <string name="cloud_delete">删除账号</string>
+    <string name="cloud_connecting">正在连接服务器验证登录…</string>
+    <string name="cloud_delete_title">删除 WebDAV 账号</string>
+    <string name="cloud_delete_text">将同时移除该账号对应的曲目条目与播放记录，且不可恢复。</string>
+
+    <!-- 曲目/目录 -->
+    <string name="dir_loading_more">加载更多…</string>
+    <string name="dir_folder">文件夹</string>
+    <string name="dir_search_placeholder">搜索已添加内容</string>
+    <string name="dir_recent">最近播放</string>
+    <string name="dir_not_played">尚未播放</string>
+    <string name="dir_song_count">%1$d 首 · 总时长 %2$s</string>
+    <string name="dir_source_local">本地文件</string>
+    <string name="dir_source_cloud">网盘文件</string>
+
+    <!-- 播放详情 -->
+    <string name="player_track_of">第 %1$d 首 / 共 %2$d 首</string>
+    <string name="player_clear_ab">清除 AB 点</string>
+    <string name="player_set_b">A %1$s（再点设 B）</string>
+    <string name="player_set_a">B %1$s（再点设 A）</string>
+    <string name="player_set_ab">设置复读区间</string>
+    <string name="player_sleep_timer">定时关闭</string>
+    <string name="player_sleep_stop">定时停止播放</string>
+    <string name="player_sleep_remaining">剩余 %1$s</string>
+    <string name="player_sleep_end_chapter">听完本章节</string>
+    <string name="player_sleep_custom">自定义</string>
+    <string name="player_speed">播放速度</string>
+    <string name="player_speed_current">当前 %1$s</string>
+
+    <!-- 空态与事件消息（MessageCatalog 引用） -->
+    <string name="empty_dir_audio">目录内未发现可播放的音频文件</string>
+    <string name="empty_home">尚未添加任何播放内容\n请到设置中添加播放文件夹或网盘内容</string>
+    <string name="empty_manage">尚未添加任何播放内容\n点击右上角「+」添加文件夹或网盘</string>
+    <string name="empty_search">未找到匹配内容</string>
+    <string name="empty_player_title">还没有正在播放的内容</string>
+    <string name="empty_player_guide">请先添加播放文件夹并进入，\n或在已添加内容中点击条目开始播放</string>
+    <string name="msg_found">找到 %1$d 个可播放音频</string>
+    <string name="msg_added">已添加 %1$s</string>
+    <string name="msg_refreshed">已刷新 %1$d 个音频</string>
+    <string name="msg_refresh_confirm_title">刷新数据库</string>
+    <string name="msg_refresh_confirm_text">将重新读取该目录全部音频（标签/时长/封面），保留播放进度。确定刷新？</string>
+    <string name="msg_sleep_timer_done">定时关闭：已暂停播放</string>
+    <string name="msg_global_sleep_done">全局定时关闭：已暂停播放</string>
+    <string name="msg_sleep_end_unknown">当前曲目时长未知，无法使用「听完本章节」</string>
+
+    <!-- ViewModel 事件 -->
+    <string name="toast_aliyun_auth_ok">阿里云盘授权成功</string>
+    <string name="toast_auth_failed">授权失败：%1$s</string>
+    <string name="toast_form_required">WebDAV 地址、用户名、密码不能为空</string>
+    <string name="toast_saved_testing">已保存，正在测试连接…</string>
+    <string name="toast_fill_required">请先填写 WebDAV 地址、用户名、密码</string>
+    <string name="toast_login_ok_items">登录成功：可访问 %1$d 个音频文件</string>
+    <string name="toast_login_ok_dirs">登录成功：根目录无音频，发现 %1$d 个子目录（音频在子目录中，进入后可见）</string>
+    <string name="toast_login_ok_empty">登录成功：该目录为空（无音频、无子目录）</string>
+    <string name="toast_login_failed_401">登录失败：账号或应用密码不正确（HTTP 401/403）</string>
+    <string name="toast_conn_failed_429">连接失败：请求过于频繁（HTTP 429），请稍后重试</string>
+    <string name="toast_conn_failed">连接失败：%1$s</string>
+    <string name="toast_account_deleted">WebDAV 账号已删除</string>
+    <string name="toast_need_cloud_config">请先在网盘配置中完成%1$s配置/授权</string>
+    <string name="toast_pick_cloud_folder">请在文件夹管理中选择要添加的网盘文件夹</string>
+    <string name="toast_added">已添加 %1$s</string>
+    <string name="toast_cache_cleared">缓存已清除</string>
+    <string name="toast_cached">已缓存到本地</string>
+    <string name="toast_cache_failed">缓存失败：%1$s</string>
+    <string name="source_aliyun">阿里云盘</string>
+    <string name="source_local">本地</string>
+
+    <!-- 通知 -->
+    <string name="notification_channel_playback">播放控制</string>
+</resources>

@@ -94,7 +94,9 @@ class SleepTimerTest {
         assertTrue("设置后应显示剩余时间", vm.sleepOnceRemaining.value != null)
         idleFor(3000)
         assertNull("到点后应清除剩余时间", vm.sleepOnceRemaining.value)
-        assertEquals("到点应提示已暂停", com.booklistener.core.MessageCatalog.MSG_SLEEP_TIMER_DONE, vm.eventMsg.value)
+        assertEquals("到点应提示已暂停",
+            androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+                .getString(com.booklistener.core.MessageCatalog.MSG_SLEEP_TIMER_DONE), vm.eventMsg.value)
     }
 
     @Test
@@ -114,7 +116,8 @@ class SleepTimerTest {
         idleFor(1000)
         assertEquals(
             "全局 0 分钟应立即到点暂停",
-            com.booklistener.core.MessageCatalog.MSG_GLOBAL_SLEEP_DONE,
+            androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+                .getString(com.booklistener.core.MessageCatalog.MSG_GLOBAL_SLEEP_DONE),
             vm.eventMsg.value
         )
     }

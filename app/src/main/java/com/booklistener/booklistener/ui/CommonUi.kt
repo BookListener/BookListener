@@ -1,4 +1,7 @@
 package com.booklistener.ui
+
+import androidx.compose.ui.res.stringResource
+import com.booklistener.R
 import com.booklistener.ui.icons.AppIcons
 
 import android.graphics.BitmapFactory
@@ -56,7 +59,7 @@ fun CoverImage(coverUri: String?, displayName: String, size: Dp) {
     if (bmp != null) {
         Image(
             bitmap = bmp,
-            contentDescription = "专辑封面",
+            contentDescription = stringResource(R.string.cd_album_cover),
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(size).clip(CircleShape)
         )
@@ -99,7 +102,7 @@ fun EntrySummaryRow(
         }
         Icon(
             imageVector = if (entry.isLocal) AppIcons.Folder else AppIcons.Cloud,
-            contentDescription = if (entry.isLocal) "本地" else "网盘",
+            contentDescription = if (entry.isLocal) stringResource(R.string.cd_local) else stringResource(R.string.cd_cloud),
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(start = 8.dp)
         )

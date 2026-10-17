@@ -39,7 +39,7 @@ class PlayerDetailSheetEmptyStateTest {
                 onDismiss = {}
             )
         }
-        composeRule.onNodeWithText("还没有正在播放的内容").assertExists()
-        composeRule.onNodeWithText("请先添加播放文件夹并进入，\n或在已添加内容中点击条目开始播放").assertExists()
+        composeRule.onNodeWithText("Nothing is playing").assertExists()
+        composeRule.onNodeWithText("Add a playback folder and open it,\nor tap an item in the added content to start playing").assertExists()
     }
 }

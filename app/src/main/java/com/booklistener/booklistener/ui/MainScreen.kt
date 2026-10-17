@@ -1,4 +1,7 @@
 package com.booklistener.ui
+
+import androidx.compose.ui.res.stringResource
+import com.booklistener.R
 import com.booklistener.ui.icons.AppIcons
 
 import androidx.activity.compose.BackHandler
@@ -239,7 +242,7 @@ fun MainScreen(
                         tabIndex = 0
                     }
                 },
-                icon = { Icon(AppIcons.MusicNote, contentDescription = "曲目", modifier = Modifier.size(30.dp)) },
+                icon = { Icon(AppIcons.MusicNote, contentDescription = stringResource(R.string.cd_tracks), modifier = Modifier.size(30.dp)) },
                 modifier = Modifier
                     // v2.0.8d：三组件上移消失（barItemsProgress 0→1）/下移归位（反向）
                     .graphicsLayer {
@@ -334,7 +337,7 @@ fun MainScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.PlayArrow,
-                                contentDescription = "播放",
+                                contentDescription = stringResource(R.string.cd_play),
                                 tint = Color.White,
                                 modifier = Modifier.size(32.dp)
                             )
@@ -345,7 +348,7 @@ fun MainScreen(
             NavigationBarItem(
                 selected = tabIndex == 2,
                 onClick = { tabIndex = 2 },
-                icon = { Icon(Icons.Outlined.Settings, contentDescription = "设置", modifier = Modifier.size(30.dp)) },
+                icon = { Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.cd_settings), modifier = Modifier.size(30.dp)) },
                 modifier = Modifier
                     // v2.0.8d：三组件同步上移消失/下移归位
                     .graphicsLayer {

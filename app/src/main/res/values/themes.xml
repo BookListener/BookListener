@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.BookListener" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- v2.0.14：平台主题 → AppCompat 主题（AppCompatActivity 硬性要求，否则 createSubDecor 抛
+         "You need to use a Theme.AppCompat theme (or descendant)"）。
+         DayNight：随系统深浅色切换，与 AppTheme(darkTheme = isSystemInDarkTheme()) 对齐
+         （原平台 Light 变体强制浅色，深色系统下 windowBackground 露白，本次顺带修正）。 -->
+    <style name="Theme.BookListener" parent="Theme.AppCompat.DayNight.NoActionBar" />
 </resources>

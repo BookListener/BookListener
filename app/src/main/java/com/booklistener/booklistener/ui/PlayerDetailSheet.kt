@@ -1,4 +1,7 @@
 package com.booklistener.ui
+
+import androidx.compose.ui.res.stringResource
+import com.booklistener.R
 import com.booklistener.ui.icons.AppIcons
 
 import androidx.activity.OnBackPressedCallback
@@ -124,12 +127,12 @@ fun PlayerDetailSheet(
                     modifier = Modifier.size(64.dp)
                 )
                 Text(
-                    text = MessageCatalog.EMPTY_PLAYER_TITLE,
+                    text = stringResource(MessageCatalog.EMPTY_PLAYER_TITLE),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 16.dp)
                 )
                 Text(
-                    text = MessageCatalog.EMPTY_PLAYER_GUIDE,
+                    text = stringResource(MessageCatalog.EMPTY_PLAYER_GUIDE),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -387,7 +390,7 @@ fun PlayerDetailSheetContent(
         )
         Text(
             text = if (state.queue.size > 0) {
-                "第 ${state.queueIndex + 1} 首 / 共 ${state.queue.size} 首"
+                stringResource(R.string.player_track_of, state.queueIndex + 1, state.queue.size)
             } else {
                 "BookListener"
             },
@@ -457,7 +460,7 @@ fun PlayerDetailSheetContent(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
-                        contentDescription = "清除 AB 点",
+                        contentDescription = stringResource(R.string.player_clear_ab),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
@@ -466,8 +469,8 @@ fun PlayerDetailSheetContent(
                     text = when {
                         abA != null && abB != null ->
                             "${formatDuration(abA)} ~ ${formatDuration(abB)}"
-                        abA != null -> "A ${formatDuration(abA)}（再点设 B）"
-                        abB != null -> "B ${formatDuration(abB)}（再点设 A）"
+                        abA != null -> stringResource(R.string.player_set_b, formatDuration(abA))
+                        abB != null -> stringResource(R.string.player_set_a, formatDuration(abB))
                         else -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -481,7 +484,7 @@ fun PlayerDetailSheetContent(
             IconButton(onClick = onToggleAbPoint) {
                 Icon(
                     imageVector = AppIcons.Flag,
-                    contentDescription = "设置复读区间",
+                    contentDescription = stringResource(R.string.player_set_ab),
                     tint = if (abA != null || abB != null) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -552,7 +555,7 @@ fun PlayerDetailSheetContent(
                 IconButton(onClick = onOpenSleepTimer, modifier = Modifier.size(48.dp)) {
                     Icon(
                         imageVector = AppIcons.Timer,
-                        contentDescription = "定时关闭",
+                        contentDescription = stringResource(R.string.player_sleep_timer),
                         tint = if (sleepRemainingMs != null) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -591,14 +594,14 @@ private fun SleepTimerSheet(
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheetState) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text(
-                text = "定时停止播放",
+                text = stringResource(R.string.player_sleep_stop),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                 textAlign = TextAlign.Center
             )
             if (remainingMs != null && mode != SleepTimerMode.OFF) {
                 Text(
-                    text = "剩余 ${formatDuration(remainingMs)}",
+                    text = stringResource(R.string.player_sleep_remaining, formatDuration(remainingMs)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -613,7 +616,7 @@ private fun SleepTimerSheet(
                     OutlinedTextField(
                         value = customMinutes,
                         onValueChange = { customMinutes = it.filter { c -> c.isDigit() }.take(3) },
-                        label = { Text("分钟数") },
+                        label = { Text(stringResource(R.string.common_minutes_label)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f)
@@ -623,32 +626,32 @@ private fun SleepTimerSheet(
                             customMinutes.toIntOrNull()?.let(onSelectMinutes)
                         },
                         modifier = Modifier.padding(start = 12.dp)
-                    ) { Text("确定") }
+                    ) { Text(stringResource(R.string.nav_confirm)) }
                 }
             } else {
                 SleepOption(
-                    label = "不开启",
+                    label = stringResource(R.string.common_off),
                     selected = mode == SleepTimerMode.OFF
                 ) { onSelectOff() }
                 SleepOption(
-                    label = "听完本章节",
+                    label = stringResource(R.string.player_sleep_end_chapter),
                     selected = mode == SleepTimerMode.END_OF_TRACK
                 ) { onSelectEndOfTrack() }
                 listOf(15, 30, 60, 90).forEach { m ->
                     SleepOption(
-                        label = "$m 分钟",
+                        label = stringResource(R.string.common_minutes, m),
                         selected = mode == SleepTimerMode.MINUTES && minutes == m
                     ) { onSelectMinutes(m) }
                 }
                 SleepOption(
-                    label = "自定义",
+                    label = stringResource(R.string.player_sleep_custom),
                     selected = mode == SleepTimerMode.MINUTES && minutes !in listOf(15, 30, 60, 90)
                 ) { customInput = true }
             }
             TextButton(
                 onClick = onClose,
                 modifier = Modifier.align(Alignment.End).padding(end = 24.dp, top = 4.dp)
-            ) { Text("关闭") }
+            ) { Text(stringResource(R.string.nav_close)) }
         }
     }
 }
@@ -672,7 +675,7 @@ private fun SleepOption(label: String, selected: Boolean, onClick: () -> Unit) {
         if (selected) {
             Icon(
                 imageVector = Icons.Outlined.Check,
-                contentDescription = "已选择",
+                contentDescription = stringResource(R.string.common_selected),
                 tint = MaterialTheme.colorScheme.primary
             )
         }
@@ -695,13 +698,13 @@ private fun SpeedSheet(
     ModalBottomSheet(onDismissRequest = onClose, sheetState = sheetState) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Text(
-                text = "播放速度",
+                text = stringResource(R.string.player_speed),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "当前 ${PlaybackSpeedTiers.label(dragValue)}",
+                text = stringResource(R.string.player_speed_current, PlaybackSpeedTiers.label(dragValue)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -769,7 +772,7 @@ private fun SpeedSheet(
                         if (selected) {
                             Icon(
                                 imageVector = Icons.Outlined.Check,
-                                contentDescription = "已选择",
+                                contentDescription = stringResource(R.string.common_selected),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(start = 4.dp).size(16.dp)
                             )
@@ -780,7 +783,7 @@ private fun SpeedSheet(
             TextButton(
                 onClick = onClose,
                 modifier = Modifier.align(Alignment.End).padding(end = 24.dp, top = 4.dp)
-            ) { Text("关闭") }
+            ) { Text(stringResource(R.string.nav_close)) }
         }
     }
 }
@@ -810,7 +813,7 @@ fun AlbumCover(displayName: String, size: Dp, modifier: Modifier = Modifier) {
         if (initial.isEmpty()) {
             Icon(
                 imageVector = AppIcons.MusicNote,
-                contentDescription = "专辑封面",
+                contentDescription = stringResource(R.string.cd_album_cover),
                 tint = Color.White,
                 modifier = Modifier.size(size * 0.42f)
             )

@@ -7,6 +7,7 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.booklistener.R
 import com.booklistener.core.AlbumStore
 import com.booklistener.core.AlbumSummary
 import com.booklistener.core.toAudioItem
@@ -224,7 +225,7 @@ class PlayerViewModel @JvmOverloads constructor(
     fun setSleepTimerToEndOfTrack() {
         val st = PlaybackController.state.value
         if (st.durationMs <= 0L) {
-            _eventMsg.value = MessageCatalog.MSG_SLEEP_END_UNKNOWN
+            _eventMsg.value = getString(MessageCatalog.MSG_SLEEP_END_UNKNOWN)
             return
         }
         _sleepOnceMode.value = SleepTimerMode.END_OF_TRACK
@@ -250,7 +251,7 @@ class PlayerViewModel @JvmOverloads constructor(
             _sleepOnceRemaining.value = null
             _sleepOnceMode.value = SleepTimerMode.OFF
             _sleepOnceMinutes.value = 0
-            _eventMsg.value = MessageCatalog.MSG_SLEEP_TIMER_DONE
+            _eventMsg.value = getString(MessageCatalog.MSG_SLEEP_TIMER_DONE)
         }
     }
 
@@ -285,7 +286,7 @@ class PlayerViewModel @JvmOverloads constructor(
             delay(minutes * 60_000L)
             if (_sleepOnceRemaining.value != null) return@launch
             PlaybackController.pause()
-            _eventMsg.value = MessageCatalog.MSG_GLOBAL_SLEEP_DONE
+            _eventMsg.value = getString(MessageCatalog.MSG_GLOBAL_SLEEP_DONE)
         }
     }
 
@@ -669,7 +670,8 @@ class PlayerViewModel @JvmOverloads constructor(
         val code = uri?.getQueryParameter("code") ?: return
         viewModelScope.launch {
             val result = repo.aliyunAuth.exchangeCode(code)
-            _eventMsg.value = if (result.isSuccess) "阿里云盘授权成功" else "授权失败：${result.exceptionOrNull()?.message}"
+            _eventMsg.value = if (result.isSuccess) getString(R.string.toast_aliyun_auth_ok)
+            else getString(R.string.toast_auth_failed, result.exceptionOrNull()?.message)
             if (result.isSuccess) refreshDirectory()
         }
     }
@@ -716,7 +718,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private fun openEntryView(
         entryId: String,
         entryUri: Uri,
-        emptyMessage: String,
+        emptyMessageRes: Int,
         showSheet: Boolean,
         loadItems: suspend () -> List<AudioItem>,
         afterLoad: (List<AudioItem>) -> Unit = {}
@@ -745,7 +747,8 @@ class PlayerViewModel @JvmOverloads constructor(
                     if (showSheet) _requestPlayerSheet.value = true
                 }
             }
-            _eventMsg.value = if (items.isEmpty()) emptyMessage else MessageCatalog.MSG_FOUND.format(items.size)
+            _eventMsg.value = if (items.isEmpty()) getString(emptyMessageRes)
+            else getString(MessageCatalog.MSG_FOUND, items.size)
         }
     }
 
@@ -764,7 +767,7 @@ class PlayerViewModel @JvmOverloads constructor(
             }
             val entry = buildLocalEntry(treeUri, items, _savedEntries.value.firstOrNull { it.id == treeUri.toString() })
             setEntries(entryStore.replace(_savedEntries.value, entry))
-            _eventMsg.value = MessageCatalog.MSG_ADDED.format(entry.displayName)
+            _eventMsg.value = getString(MessageCatalog.MSG_ADDED, entry.displayName)
             refreshAlbums()
         }
     }
@@ -828,7 +831,7 @@ class PlayerViewModel @JvmOverloads constructor(
     fun saveAndTestWebDav() {
         val f = _webDavForm.value
         if (f.url.isBlank() || f.user.isBlank() || f.pass.isBlank()) {
-            _webDavForm.update { it.copy(savedMsg = "WebDAV 地址、用户名、密码不能为空") }
+            _webDavForm.update { it.copy(savedMsg = getString(R.string.toast_form_required)) }
             return
         }
         val cred = WebDavCredential(f.url.trim(), f.user.trim(), f.pass)
@@ -841,7 +844,7 @@ class PlayerViewModel @JvmOverloads constructor(
                 testing = true,
                 testOk = null,
                 testResult = null,
-                savedMsg = "已保存，正在测试连接…"
+                savedMsg = getString(R.string.toast_saved_testing)
             )
         }
         testWebDavWith(cred)
@@ -851,7 +854,7 @@ class PlayerViewModel @JvmOverloads constructor(
     fun testWebDavOnly() {
         val f = _webDavForm.value
         if (f.url.isBlank() || f.user.isBlank() || f.pass.isBlank()) {
-            _webDavForm.update { it.copy(savedMsg = "请先填写 WebDAV 地址、用户名、密码") }
+            _webDavForm.update { it.copy(savedMsg = getString(R.string.toast_fill_required)) }
             return
         }
         val cred = WebDavCredential(f.url.trim(), f.user.trim(), f.pass)
@@ -878,18 +881,18 @@ class PlayerViewModel @JvmOverloads constructor(
         return result.fold(
             onSuccess = { (items, dirs) ->
                 when {
-                    items.isNotEmpty() -> "登录成功：可访问 ${items.size} 个音频文件"
-                    dirs > 0 -> "登录成功：根目录无音频，发现 $dirs 个子目录（音频在子目录中，进入后可见）"
-                    else -> "登录成功：该目录为空（无音频、无子目录）"
+                    items.isNotEmpty() -> getString(R.string.toast_login_ok_items, items.size)
+                    dirs > 0 -> getString(R.string.toast_login_ok_dirs, dirs)
+                    else -> getString(R.string.toast_login_ok_empty)
                 }
             },
             onFailure = { e ->
                 when (e) {
                     is com.booklistener.core.AudioSourceException.AuthFailed ->
-                        "登录失败：账号或应用密码不正确（HTTP 401/403）"
+                        getString(R.string.toast_login_failed_401)
                     is com.booklistener.core.AudioSourceException.NetworkLimit ->
-                        "连接失败：请求过于频繁（HTTP 429），请稍后重试"
-                    else -> "连接失败：${e.message ?: e.javaClass.simpleName}"
+                        getString(R.string.toast_conn_failed_429)
+                    else -> getString(R.string.toast_conn_failed, e.message ?: e.javaClass.simpleName)
                 }
             }
         )
@@ -905,7 +908,7 @@ class PlayerViewModel @JvmOverloads constructor(
         if (_webDavForm.value.editingBaseUrl == normalizeWebDavUrl(baseUrl)) {
             cancelWebDavForm()
         }
-        _eventMsg.value = "WebDAV 账号已删除"
+        _eventMsg.value = getString(R.string.toast_account_deleted)
     }
 
     /**
@@ -968,7 +971,7 @@ class PlayerViewModel @JvmOverloads constructor(
         openEntryView(
             entryId = entry.id,
             entryUri = Uri.parse(entry.id),
-            emptyMessage = MessageCatalog.EMPTY_DIR_AUDIO,
+            emptyMessageRes = MessageCatalog.EMPTY_DIR_AUDIO,
             showSheet = showSheet,
             loadItems = {
                 when (entry.sourceType) {
@@ -1024,9 +1027,9 @@ class PlayerViewModel @JvmOverloads constructor(
             _webDavDirs.value = dirs
             _folderItems.value = items
             _eventMsg.value = if (dirs.isEmpty() && items.isEmpty())
-                MessageCatalog.EMPTY_DIR_AUDIO
+                getString(MessageCatalog.EMPTY_DIR_AUDIO)
             else
-                MessageCatalog.MSG_FOUND.format(items.size)
+                getString(MessageCatalog.MSG_FOUND, items.size)
         }
     }
 
@@ -1160,13 +1163,13 @@ class PlayerViewModel @JvmOverloads constructor(
             else -> false
         }
         if (!ok) {
-            _eventMsg.value = "请先在网盘配置中完成" + cloudDisplayName(type) + "配置/授权"
+            _eventMsg.value = getString(R.string.toast_need_cloud_config, cloudDisplayName(type))
             return
         }
         when (type) {
             SourceType.WEBDAV -> {
                 // v1.6.28：网盘不再自动固化根条目，改由文件夹管理目录树选文件夹
-                _eventMsg.value = "请在文件夹管理中选择要添加的网盘文件夹"
+                _eventMsg.value = getString(R.string.toast_pick_cloud_folder)
             }
             SourceType.ALIYUN -> {
                 val entry = SavedEntry(
@@ -1176,7 +1179,7 @@ class PlayerViewModel @JvmOverloads constructor(
                     sourceType = type
                 )
                 setEntries(entryStore.upsert(_savedEntries.value, entry))
-                _eventMsg.value = "已添加 ${entry.displayName}"
+                _eventMsg.value = getString(R.string.toast_added, entry.displayName)
             }
             else -> return
         }
@@ -1337,7 +1340,7 @@ class PlayerViewModel @JvmOverloads constructor(
             }
             refreshAlbums()
             loadManageFiles(entry.id)
-            _eventMsg.value = MessageCatalog.MSG_REFRESHED.format(items.size)
+            _eventMsg.value = getString(MessageCatalog.MSG_REFRESHED, items.size)
         }
     }
 
@@ -1440,7 +1443,7 @@ class PlayerViewModel @JvmOverloads constructor(
     fun clearCache() {
         viewModelScope.launch {
             repo.clearCache()
-            _eventMsg.value = "缓存已清除"
+            _eventMsg.value = getString(R.string.toast_cache_cleared)
         }
     }
 
@@ -1448,7 +1451,8 @@ class PlayerViewModel @JvmOverloads constructor(
         val item = playbackState.value.currentItem ?: return
         viewModelScope.launch {
             val result = repo.cacheItem(item)
-            _eventMsg.value = if (result.isSuccess) "已缓存到本地" else "缓存失败：${result.exceptionOrNull()?.message}"
+            _eventMsg.value = if (result.isSuccess) getString(R.string.toast_cached)
+            else getString(R.string.toast_cache_failed, result.exceptionOrNull()?.message)
         }
     }
 
@@ -1456,9 +1460,13 @@ class PlayerViewModel @JvmOverloads constructor(
         _eventMsg.update { null }
     }
 
+    /** v2.0.14 国际化：VM 内取本地化文案（遮蔽 Context.getString，统一从 application 取） */
+    private fun getString(resId: Int, vararg args: Any?): String =
+        getApplication<Application>().getString(resId, *args)
+
     private fun cloudDisplayName(type: SourceType): String = when (type) {
         SourceType.WEBDAV -> "WebDAV"
-        SourceType.ALIYUN -> "阿里云盘"
-        SourceType.LOCAL -> "本地"
+        SourceType.ALIYUN -> getString(R.string.source_aliyun)
+        SourceType.LOCAL -> getString(R.string.source_local)
     }
 }

@@ -1,5 +1,7 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.booklistener.ui
+import androidx.compose.ui.res.stringResource
+import com.booklistener.R
 import com.booklistener.ui.icons.AppIcons
 
 
@@ -132,7 +134,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                 IconButton(onClick = { viewModel.exitAlbumView() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -145,7 +147,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             }
             if (albumSongs.isEmpty()) {
                 Text(
-                    text = MessageCatalog.EMPTY_DIR_AUDIO,
+                    text = stringResource(MessageCatalog.EMPTY_DIR_AUDIO),
                     modifier = Modifier.padding(top = 48.dp),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -184,7 +186,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                     if (!albumSongsEnded) {
                         item(key = "album_songs_loading") {
                             Text(
-                                text = "加载更多…",
+                                text = stringResource(R.string.dir_loading_more),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
@@ -218,7 +220,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                 IconButton(onClick = { viewModel.backWebDavDirOrExit() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -228,7 +230,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                         isWebDavSubDir -> android.net.Uri.decode(
                             webDavPathStack.last().trimEnd('/').substringAfterLast('/')
                         )
-                        else -> currentFolderUri?.let { entryDisplayName(it.toString(), savedEntries) } ?: "文件夹"
+                        else -> currentFolderUri?.let { entryDisplayName(it.toString(), savedEntries) } ?: stringResource(R.string.dir_folder)
                     },
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
@@ -238,7 +240,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             }
             if (webDavDirs.isEmpty() && folderItems.isEmpty()) {
                 Text(
-                    text = MessageCatalog.EMPTY_DIR_AUDIO,
+                    text = stringResource(MessageCatalog.EMPTY_DIR_AUDIO),
                     modifier = Modifier.padding(top = 48.dp),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -293,12 +295,12 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         OutlinedTextField(
             value = searchQuery,
             onValueChange = viewModel::onSearchQueryChange,
-            placeholder = { Text("搜索已添加内容") },
+            placeholder = { Text(stringResource(R.string.dir_search_placeholder)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
                     IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
-                        Icon(Icons.Outlined.Close, contentDescription = "清除搜索")
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.cd_clear_search))
                     }
                 }
             },
@@ -318,7 +320,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             // v2.0.1：搜索态 = 专辑命中 + 歌曲命中（面向数据库，不再命中文件夹）
             if (searchResults.isEmpty()) {
                 Text(
-                    text = MessageCatalog.EMPTY_SEARCH,
+                    text = stringResource(MessageCatalog.EMPTY_SEARCH),
                     modifier = Modifier.padding(top = 48.dp),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -327,30 +329,44 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                 LazyColumn {
                     items(searchResults, key = { hit -> hitKey(hit) }) { hit ->
                         when (hit) {
-                            is SearchHit.Album -> AlbumRow(
-                                album = hit.album,
-                                entry = savedEntries.firstOrNull { it.id == hit.album.entryId },
-                                onClick = { viewModel.openAlbum(hit.album) },
-                                onLongClick = {
-                                    pendingNameDetail = NameDetail(
-                                        primary = hit.album.album,
-                                        secondary = hit.album.artist,
-                                        meta = "${hit.album.songCount} 首 · 总时长 ${formatDuration(hit.album.totalDurationMs)}"
-                                    )
-                                },
-                                showDivider = false
-                            )
-                            is SearchHit.File -> FileResultRow(
-                                displayName = hit.file.displayName,
-                                sourceType = hit.sourceType,
-                                onClick = { viewModel.playItems(listOf(fileItem(hit)), 0) },
-                                onLongClick = {
-                                    pendingNameDetail = NameDetail(
-                                        primary = hit.file.displayName,
-                                        secondary = if (hit.sourceType == SourceType.LOCAL) "本地文件" else "网盘文件"
-                                    )
+                            is SearchHit.Album -> {
+                                val albumMeta = stringResource(
+                                    R.string.dir_song_count,
+                                    hit.album.songCount,
+                                    formatDuration(hit.album.totalDurationMs)
+                                )
+                                AlbumRow(
+                                    album = hit.album,
+                                    entry = savedEntries.firstOrNull { it.id == hit.album.entryId },
+                                    onClick = { viewModel.openAlbum(hit.album) },
+                                    onLongClick = {
+                                        pendingNameDetail = NameDetail(
+                                            primary = hit.album.album,
+                                            secondary = hit.album.artist,
+                                            meta = albumMeta
+                                        )
+                                    },
+                                    showDivider = false
+                                )
+                            }
+                            is SearchHit.File -> {
+                                val srcLabel = if (hit.sourceType == SourceType.LOCAL) {
+                                    stringResource(R.string.dir_source_local)
+                                } else {
+                                    stringResource(R.string.dir_source_cloud)
                                 }
-                            )
+                                FileResultRow(
+                                    displayName = hit.file.displayName,
+                                    sourceType = hit.sourceType,
+                                    onClick = { viewModel.playItems(listOf(fileItem(hit)), 0) },
+                                    onLongClick = {
+                                        pendingNameDetail = NameDetail(
+                                            primary = hit.file.displayName,
+                                            secondary = srcLabel
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -361,7 +377,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         // 主界面专辑层两区（v1.7.0：按专辑聚合，db 分页加载；分区沿用条目级 lastPlayedAt）
         if (savedEntries.isEmpty() && recentAlbums.isEmpty() && neverAlbums.isEmpty()) {
             Text(
-                text = MessageCatalog.EMPTY_HOME,
+                text = stringResource(MessageCatalog.EMPTY_HOME),
                 modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -372,9 +388,12 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         val listState = rememberLazyListState()
         LazyColumn(state = listState) {
             if (recentAlbums.isNotEmpty()) {
-                item(key = "header_recent") { SectionHeader("最近播放") }
+                item(key = "header_recent") { SectionHeader(stringResource(R.string.dir_recent)) }
                 recentAlbums.forEachIndexed { i, album ->
                     item(key = "album_${album.entryId}_${album.album}") {
+                        val albumMeta = stringResource(
+                            R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)
+                        )
                         val entry = savedEntries.firstOrNull { it.id == album.entryId }
                         if (entry != null && isCurrentEntry(entry, currentFolderUri, playbackState)) {
                             CurrentAlbumCard(
@@ -393,7 +412,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                                     pendingNameDetail = NameDetail(
                                         primary = album.album,
                                         secondary = album.artist,
-                                        meta = "${album.songCount} 首 · 总时长 ${formatDuration(album.totalDurationMs)}"
+                                        meta = albumMeta
                                     )
                                 },
                                 // v2.0.1：最近播放最后一个不要行间细线（其后紧接分区线+「尚未播放」标题）
@@ -404,9 +423,12 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                 }
                 item(key = "divider") { HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp)) }
             }
-            item(key = "header_not") { SectionHeader("尚未播放") }
+            item(key = "header_not") { SectionHeader(stringResource(R.string.dir_not_played)) }
             neverAlbums.forEach { album ->
                 item(key = "album_${album.entryId}_${album.album}") {
+                    val albumMeta = stringResource(
+                        R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)
+                    )
                     AlbumRow(
                         album = album,
                         entry = savedEntries.firstOrNull { it.id == album.entryId },
@@ -415,7 +437,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                             pendingNameDetail = NameDetail(
                                 primary = album.album,
                                 secondary = album.artist,
-                                meta = "${album.songCount} 首 · 总时长 ${formatDuration(album.totalDurationMs)}"
+                                meta = albumMeta
                             )
                         }
                     )
@@ -424,7 +446,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             if (!albumsEnded) {
                 item(key = "albums_loading") {
                     Text(
-                        text = "加载更多…",
+                        text = stringResource(R.string.dir_loading_more),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
@@ -505,7 +527,7 @@ private fun CurrentEntryCard(
                 IconButton(onClick = onToggle) {
                     Icon(
                         imageVector = if (state.isPlaying) AppIcons.Pause else Icons.Outlined.PlayArrow,
-                        contentDescription = if (state.isPlaying) "暂停" else "播放"
+                        contentDescription = if (state.isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play)
                     )
                 }
             }
@@ -544,7 +566,7 @@ private fun FileResultRow(
         )
         Icon(
             imageVector = if (sourceType == SourceType.LOCAL) AppIcons.Folder else AppIcons.Cloud,
-            contentDescription = if (sourceType == SourceType.LOCAL) "本地" else "网盘",
+            contentDescription = if (sourceType == SourceType.LOCAL) stringResource(R.string.cd_local) else stringResource(R.string.cd_cloud),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp)
         )
@@ -600,7 +622,7 @@ private fun AlbumRow(
             )
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${album.songCount} 首  ·  总时长 ${formatDuration(album.totalDurationMs)}",
+                    text = stringResource(R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -610,7 +632,7 @@ private fun AlbumRow(
                 // v1.6.5：来源图标调小（16dp），与时长同行右对齐
                 Icon(
                     imageVector = if (entry?.isLocal != false) AppIcons.Folder else AppIcons.Cloud,
-                    contentDescription = if (entry?.isLocal != false) "本地" else "网盘",
+                    contentDescription = if (entry?.isLocal != false) stringResource(R.string.cd_local) else stringResource(R.string.cd_cloud),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp).padding(start = 6.dp)
                 )
@@ -676,7 +698,7 @@ private fun CurrentAlbumCard(
             IconButton(onClick = onToggle) {
                 Icon(
                     imageVector = if (state.isPlaying) AppIcons.Pause else Icons.Outlined.PlayArrow,
-                    contentDescription = if (state.isPlaying) "暂停" else "播放"
+                    contentDescription = if (state.isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play)
                 )
             }
         }

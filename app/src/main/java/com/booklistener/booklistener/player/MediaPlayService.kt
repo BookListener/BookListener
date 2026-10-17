@@ -185,7 +185,7 @@ class MediaPlayService : MediaSessionService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Playback",
+                getString(R.string.notification_channel_playback),
                 NotificationManager.IMPORTANCE_LOW
             )
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)

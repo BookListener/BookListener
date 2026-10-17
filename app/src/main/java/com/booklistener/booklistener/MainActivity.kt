@@ -4,8 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,7 +17,10 @@ import com.booklistener.ui.MainScreen
 import com.booklistener.ui.PlayerViewModel
 import com.booklistener.ui.theme.AppTheme
 
-class MainActivity : ComponentActivity() {
+// v2.0.14：ComponentActivity → AppCompatActivity——官方国际化运行时切换
+// AppCompatDelegate.setApplicationLocales 的语言生效机制挂在 AppCompatActivity 上
+// （attachBaseContext 按 app 语言重配资源）；配套主题已换 Theme.AppCompat.DayNight.NoActionBar
+class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

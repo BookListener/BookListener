@@ -1,5 +1,7 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.booklistener.ui
+import androidx.compose.ui.res.stringResource
+import com.booklistener.R
 import com.booklistener.ui.icons.AppIcons
 
 
@@ -92,11 +94,11 @@ fun FolderManageScreen(
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("添加内容") },
+            title = { Text(stringResource(R.string.folder_add_title)) },
             text = {
                 Column {
                     Text(
-                        text = "选择要添加的内容来源，添加后即可在曲目中浏览播放",
+                        text = stringResource(R.string.folder_add_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -117,9 +119,9 @@ fun FolderManageScreen(
                             contentDescription = null
                         )
                         Column(modifier = Modifier.padding(start = 12.dp)) {
-                            Text("添加本地文件夹", style = MaterialTheme.typography.bodyLarge)
+                            Text(stringResource(R.string.folder_add_local), style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = "从手机存储中选择音频所在目录",
+                                text = stringResource(R.string.folder_add_local_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -142,9 +144,9 @@ fun FolderManageScreen(
                             contentDescription = null
                         )
                         Column(modifier = Modifier.padding(start = 12.dp)) {
-                            Text("添加网盘目录", style = MaterialTheme.typography.bodyLarge)
+                            Text(stringResource(R.string.folder_add_cloud), style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = "连接 WebDAV 网盘，浏览并添加音频目录",
+                                text = stringResource(R.string.folder_add_cloud_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -155,7 +157,7 @@ fun FolderManageScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false }) {
-                    Text("取消")
+                    Text(stringResource(R.string.nav_cancel))
                 }
             }
         )
@@ -165,10 +167,10 @@ fun FolderManageScreen(
         val accounts by viewModel.webDavAccounts.collectAsStateWithLifecycle()
         AlertDialog(
             onDismissRequest = { showCloudDialog = false },
-            title = { Text("选择网盘账号") },
+            title = { Text(stringResource(R.string.folder_select_account)) },
             text = {
                 if (accounts.isEmpty()) {
-                    Text("尚未配置 WebDAV 账号，请先到 设置 → 网盘配置 中添加")
+                    Text(stringResource(R.string.folder_no_account))
                 } else {
                     Column {
                         accounts.forEach { cred ->
@@ -204,7 +206,7 @@ fun FolderManageScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showCloudDialog = false }) {
-                    Text("取消")
+                    Text(stringResource(R.string.nav_cancel))
                 }
             }
         )
@@ -237,7 +239,7 @@ fun FolderManageScreen(
                 }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -255,18 +257,18 @@ fun FolderManageScreen(
                     // v1.6.28：保存后立即关闭选择器（否则停留在"该目录为空"的空状态）
                     pickerCred = null
                 }) {
-                    Text("保存此文件夹")
+                    Text(stringResource(R.string.folder_save))
                 }
             }
             when {
                 pickerLoading -> Text(
-                    text = "加载中…",
+                    text = stringResource(R.string.common_loading),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)
                 )
                 pickerDirs.isEmpty() && pickerItems.isEmpty() -> Text(
-                    text = "该目录为空\n请返回上级目录或另选目录",
+                    text = stringResource(R.string.folder_empty),
                     modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -333,20 +335,20 @@ fun FolderManageScreen(
     if (deleting != null) {
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除确认") },
-            text = { Text("确定删除「${deleting.displayName}」？\n将同时移除播放进度与已缓存文件清单。") },
+            title = { Text(stringResource(R.string.folder_delete_title)) },
+            text = { Text(stringResource(R.string.folder_delete_text, deleting.displayName)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearSavedEntry(deleting)
                     pendingDelete = null
                     selectedEntry = null
                 }) {
-                    Text("删除")
+                    Text(stringResource(R.string.nav_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
-                    Text("取消")
+                    Text(stringResource(R.string.nav_cancel))
                 }
             }
         )
@@ -357,19 +359,19 @@ fun FolderManageScreen(
     if (refreshing != null) {
         AlertDialog(
             onDismissRequest = { pendingRefresh = null },
-            title = { Text(MessageCatalog.MSG_REFRESH_CONFIRM_TITLE) },
-            text = { Text(MessageCatalog.MSG_REFRESH_CONFIRM_TEXT) },
+            title = { Text(stringResource(MessageCatalog.MSG_REFRESH_CONFIRM_TITLE)) },
+            text = { Text(stringResource(MessageCatalog.MSG_REFRESH_CONFIRM_TEXT)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.refreshEntry(refreshing)
                     pendingRefresh = null
                 }) {
-                    Text("刷新")
+                    Text(stringResource(R.string.common_refresh))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingRefresh = null }) {
-                    Text("取消")
+                    Text(stringResource(R.string.nav_cancel))
                 }
             }
         )
@@ -390,7 +392,7 @@ fun FolderManageScreen(
                 }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -404,28 +406,29 @@ fun FolderManageScreen(
                 // v1.6.3：切换专辑内标题显示（标签标题 ↔ 原始文件名）+ 刷新数据库（二次确认）
                 TextButton(onClick = { viewModel.setAlbumTitleMode(!useRawName) }) {
                     Text(
-                        text = if (useRawName) "文件名" else "标签",
+                        text = if (useRawName) stringResource(R.string.folder_mode_file_name)
+                        else stringResource(R.string.folder_mode_tag),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
                 IconButton(onClick = { pendingRefresh = opened }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "刷新 ${opened.displayName}")
+                    Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.common_refresh) + " " + opened.displayName)
                 }
                 IconButton(onClick = { pendingDelete = opened }) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "删除 ${opened.displayName}")
+                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.nav_delete) + " " + opened.displayName)
                 }
             }
             val files = manageFiles
             if (files == null) {
                 Text(
-                    text = "加载中…",
+                    text = stringResource(R.string.common_loading),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)
                 )
             } else if (files.isEmpty()) {
                 Text(
-                    text = MessageCatalog.EMPTY_DIR_AUDIO,
+                    text = stringResource(MessageCatalog.EMPTY_DIR_AUDIO),
                     modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -453,22 +456,22 @@ fun FolderManageScreen(
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "返回",
+                    contentDescription = stringResource(R.string.nav_back),
                     modifier = Modifier.size(28.dp)
                 )
             }
             Text(
-                text = "文件夹管理",
+                text = stringResource(R.string.folder_title),
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f)
             )
             IconButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Outlined.Add, contentDescription = "添加内容", modifier = Modifier.size(28.dp))
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.folder_add_title), modifier = Modifier.size(28.dp))
             }
         }
         if (savedEntries.isEmpty()) {
             Text(
-                text = MessageCatalog.EMPTY_MANAGE,
+                text = stringResource(MessageCatalog.EMPTY_MANAGE),
                 modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -529,7 +532,7 @@ private fun FolderManageRow(
             },
             trailing = {
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "删除 ${entry.displayName}")
+                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.nav_delete) + " " + entry.displayName)
                 }
             }
         )
@@ -559,7 +562,7 @@ private fun ManageFileRow(file: com.booklistener.core.IndexedFile) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = file.durationMs?.let { formatDuration(it) } ?: "时长未知",
+                text = file.durationMs?.let { formatDuration(it) } ?: stringResource(R.string.common_unknown_duration),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

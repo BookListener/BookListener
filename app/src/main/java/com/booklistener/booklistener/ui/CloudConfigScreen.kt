@@ -1,5 +1,7 @@
 package com.booklistener.ui
 
+import androidx.compose.ui.res.stringResource
+import com.booklistener.R
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -77,12 +79,12 @@ fun CloudConfigScreen(
                 IconButton(onClick = { onBack() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
                 Text(
-                    text = "WebDAV 账号",
+                    text = stringResource(R.string.cloud_title),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
@@ -92,7 +94,7 @@ fun CloudConfigScreen(
                 }) {
                     Icon(
                         imageVector = Icons.Outlined.Add,
-                        contentDescription = "添加 WebDAV 账号",
+                        contentDescription = stringResource(R.string.cloud_add),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -101,7 +103,7 @@ fun CloudConfigScreen(
             if (accounts.isEmpty()) {
                 // v2.0.12：空态提示统一设计规格——bodyLarge + onSurfaceVariant + 顶部48dp + 水平居中
                 Text(
-                    text = "尚未添加 WebDAV 账号\n点击右上角「+」添加",
+                    text = stringResource(R.string.cloud_empty),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -136,7 +138,7 @@ fun CloudConfigScreen(
                             IconButton(onClick = { pendingDelete = cred.normalizedUrl }) {
                                 Icon(
                                     imageVector = Icons.Outlined.Delete,
-                                    contentDescription = "删除 ${cred.host}",
+                                    contentDescription = stringResource(R.string.nav_delete) + " ${cred.host}",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -148,7 +150,8 @@ fun CloudConfigScreen(
         }
     } else {
         // ---- 编辑/新建视图 ----
-        val editingHost = selected?.host ?: "添加 WebDAV 账号"
+        // 新建时 host 初值为空（cloud_add 仅作"添加"入口语义，不得作为输入值）
+        val editingHost = selected?.host ?: ""
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -161,7 +164,7 @@ fun CloudConfigScreen(
                 }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -175,7 +178,7 @@ fun CloudConfigScreen(
 
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Text(
-                    "适用于 InfiniCLOUD / 中国科技云 / Nextcloud / 自建 NAS，在网盘后台生成应用密码填入",
+                    stringResource(R.string.cloud_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -183,20 +186,20 @@ fun CloudConfigScreen(
                 OutlinedTextField(
                     value = form.url,
                     onValueChange = viewModel::webDavFormUrlChange,
-                    label = { Text("WebDAV 地址") },
+                    label = { Text(stringResource(R.string.cloud_url)) },
                     placeholder = { Text("https://dav.example.com/dav/") },
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
                 )
                 OutlinedTextField(
                     value = form.user,
                     onValueChange = viewModel::webDavFormUserChange,
-                    label = { Text("用户名") },
+                    label = { Text(stringResource(R.string.cloud_user)) },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
                 OutlinedTextField(
                     value = form.pass,
                     onValueChange = viewModel::webDavFormPassChange,
-                    label = { Text("应用密码") },
+                    label = { Text(stringResource(R.string.cloud_password)) },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
 
@@ -205,27 +208,27 @@ fun CloudConfigScreen(
                         onClick = { viewModel.saveAndTestWebDav() },
                         enabled = !form.testing
                     ) {
-                        Text(if (form.testing) "测试中…" else "保存并测试连接")
+                        Text(if (form.testing) stringResource(R.string.cloud_testing) else stringResource(R.string.cloud_save_test))
                     }
                     if (form.editing) {
                         TextButton(
                             onClick = { viewModel.testWebDavOnly() },
                             enabled = !form.testing
                         ) {
-                            Text("重新测试")
+                            Text(stringResource(R.string.cloud_retest))
                         }
                         TextButton(
                             onClick = { pendingDelete = form.editingBaseUrl },
                             enabled = !form.testing
                         ) {
-                            Text("删除账号", color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(R.string.cloud_delete), color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
 
                 if (form.testing) {
                     Text(
-                        text = "正在连接服务器验证登录…",
+                        text = stringResource(R.string.cloud_connecting),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 10.dp)
@@ -263,8 +266,8 @@ fun CloudConfigScreen(
     pendingDelete?.let { baseUrl ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除 WebDAV 账号") },
-            text = { Text("将同时移除该账号对应的曲目条目与播放记录，且不可恢复。") },
+            title = { Text(stringResource(R.string.cloud_delete_title)) },
+            text = { Text(stringResource(R.string.cloud_delete_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.removeWebDavAccount(baseUrl)
@@ -272,12 +275,12 @@ fun CloudConfigScreen(
                     selected = null
                     addingNew = false
                 }) {
-                    Text("删除")
+                    Text(stringResource(R.string.nav_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) {
-                    Text("取消")
+                    Text(stringResource(R.string.nav_cancel))
                 }
             }
         )

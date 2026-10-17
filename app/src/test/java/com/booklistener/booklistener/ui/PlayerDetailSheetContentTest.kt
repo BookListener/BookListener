@@ -94,14 +94,14 @@ class PlayerDetailSheetContentTest {
         // 带真实封面 uri 渲染不崩溃，标题与进度正常（封面实际显示效果由真机验证；
         // Robolectric 无 content provider 且 bitmap 环境不可靠，不在此断言封面节点）
         composeRule.onNodeWithText("米店").assertExists()
-        composeRule.onNodeWithText("第 1 首 / 共 3 首").assertExists()
+        composeRule.onNodeWithText("Track 1 of 3").assertExists()
     }
 
     @Test
     fun showsTitleAndQueuePosition() {
         render(state())
         composeRule.onNodeWithText("米店").assertExists()
-        composeRule.onNodeWithText("第 1 首 / 共 3 首").assertExists()
+        composeRule.onNodeWithText("Track 1 of 3").assertExists()
     }
 
     @Test
@@ -146,8 +146,8 @@ class PlayerDetailSheetContentTest {
             )
         }
         composeRule.onNodeWithText("未设置 AB 点").assertDoesNotExist()
-        composeRule.onNodeWithContentDescription("清除 AB 点").assertDoesNotExist()
-        composeRule.onNodeWithContentDescription("设置复读区间").assertExists()
+        composeRule.onNodeWithContentDescription("Clear AB points").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Set repeat range").assertExists()
     }
 
     @Test
@@ -160,9 +160,9 @@ class PlayerDetailSheetContentTest {
                 onToggle = {}, onPrevious = {}, onNext = {}, onSeek = {}
             )
         }
-        composeRule.onNodeWithText("A 01:00（再点设 B）").assertExists()
-        composeRule.onNodeWithContentDescription("清除 AB 点").assertExists()
-        composeRule.onNodeWithContentDescription("设置复读区间").assertExists()
+        composeRule.onNodeWithText("A 01:00 (tap again to set B)").assertExists()
+        composeRule.onNodeWithContentDescription("Clear AB points").assertExists()
+        composeRule.onNodeWithContentDescription("Set repeat range").assertExists()
     }
 
     @Test

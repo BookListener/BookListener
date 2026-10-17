@@ -1,4 +1,160 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v2.0.14 国际化：values/ = English（默认/兜底语言）
+     三态：跟随系统(zh→中文, en→English, 其他→回退本文件 English)；手动 zh / en 由 AppCompatDelegate 指定 -->
 <resources>
     <string name="app_name">BookListener</string>
+
+    <!-- 通用 -->
+    <string name="nav_back">Back</string>    <string name="nav_cancel">Cancel</string>
+    <string name="nav_delete">Delete</string>
+    <string name="nav_confirm">OK</string>
+    <string name="nav_close">Close</string>    <string name="common_loading">Loading…</string>
+    <string name="common_off">Off</string>
+    <string name="common_minutes_label">Minutes</string>
+    <string name="common_minutes">%1$d min</string>
+    <string name="common_unknown_duration">Duration unknown</string>
+    <string name="common_refresh">Refresh</string>    <string name="common_selected">Selected</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_local">Local</string>
+    <string name="cd_cloud">Cloud</string>
+    <string name="cd_album_cover">Album cover</string>
+    <string name="cd_clear_search">Clear search</string>
+    <string name="cd_tracks">Tracks</string>
+    <string name="cd_settings">Settings</string>
+
+    <!-- 设置主页与子页 -->    <string name="settings_timer_title">Sleep timer (global)</string>
+    <string name="settings_timer_desc">Countdown starts when playback begins; auto-pauses when it ends. One-shot only.</string>
+    <string name="settings_timer_current">Current</string>
+    <string name="settings_timer_row_off">Off (countdown after each playback start)</string>
+    <string name="settings_timer_row_on">Pause after %1$d min of each playback</string>
+    <string name="settings_cache_title">Cache</string>
+    <string name="settings_cache_full">Full file cache</string>
+    <string name="settings_cache_full_desc">Network audio downloads fully before playing and keeps working offline; best for files ≤200 MB. Off streams directly.</string>
+    <string name="settings_cache_limit">Cache limit 5GB; least-recently-used items are evicted automatically</string>
+    <string name="settings_cache_clear_all">Clear all cache</string>
+    <string name="settings_about_title">About</string>
+    <string name="settings_about_desc">Sources: Local / WebDAV\nFormats: mp3 / m4a / flac / wav / ogg / aac</string>
+    <string name="settings_glass_title">Glass effects</string>
+    <string name="settings_glass_desc">Liquid glass (blur + refraction) for the home action bar and player panel. Off uses solid colors, saving power.</string>
+    <string name="settings_glass_action_bar">Action bar glass</string>
+    <string name="settings_glass_action_bar_desc">Liquid glass for the home action bar (blur + refraction)</string>
+    <string name="settings_glass_player_panel">Player panel glass</string>
+    <string name="settings_glass_player_panel_desc">Liquid glass for the player panel (blur + refraction)</string>
+    <string name="settings_folders_row">Folders</string>
+    <string name="settings_folders_row_desc">Manage added playback folders and cloud content</string>
+    <string name="settings_cloud_row">WebDAV accounts</string>
+    <string name="settings_cloud_row_desc">WebDAV server accounts</string>
+    <string name="settings_timer_row">Sleep timer</string>
+    <string name="settings_cache_row">Cache management</string>
+    <string name="settings_cache_row_desc">Network audio cache settings and cleanup</string>
+    <string name="settings_glass_row">Glass effects</string>
+    <string name="settings_glass_row_desc">Liquid glass for the home action bar and player panel</string>
+    <string name="settings_about_row">About</string>
+    <string name="settings_about_row_desc">Version, sources and audio formats</string>
+    <string name="settings_language_row">Language</string>
+    <string name="settings_language_row_desc">App display language</string>
+    <string name="settings_language_title">Language</string>
+    <string name="settings_language_desc">Switch the app UI language. System-level UI (keyboard, system dialogs) follows the system language.</string>
+    <string name="language_follow_system">Follow system</string>
+    <string name="language_zh">简体中文</string>
+    <string name="language_en">English</string>
+
+    <!-- 文件夹管理 -->
+    <string name="folder_add_title">Add content</string>
+    <string name="folder_add_desc">Choose a content source; added content can be browsed and played in Tracks</string>
+    <string name="folder_add_local">Add local folder</string>
+    <string name="folder_add_local_desc">Pick the audio directory from device storage</string>
+    <string name="folder_add_cloud">Add cloud folder</string>
+    <string name="folder_add_cloud_desc">Connect a WebDAV server, browse and add audio directories</string>
+    <string name="folder_select_account">Choose WebDAV account</string>
+    <string name="folder_no_account">No WebDAV account. Go to Settings → WebDAV accounts to add one first.</string>
+    <string name="folder_save">Save this folder</string>
+    <string name="folder_empty">This folder is empty\nGo back or pick another folder</string>
+    <string name="folder_delete_title">Delete confirmation</string>
+    <string name="folder_delete_text">Delete "%1$s"?\nPlayback progress and cached file records will also be removed.</string>
+    <string name="folder_title">Folder management</string>
+    <string name="folder_mode_file_name">File name</string>
+    <string name="folder_mode_tag">Tag</string>
+
+    <!-- 网盘配置 -->
+    <string name="cloud_title">WebDAV accounts</string>
+    <string name="cloud_add">Add WebDAV account</string>
+    <string name="cloud_empty">No WebDAV account yet\nTap "+" in the top-right to add</string>
+    <string name="cloud_desc">Works with InfiniCLOUD / CSTCloud / Nextcloud / self-hosted NAS. Generate an app password in the cloud dashboard.</string>
+    <string name="cloud_url">WebDAV URL</string>
+    <string name="cloud_user">Username</string>
+    <string name="cloud_password">App password</string>
+    <string name="cloud_testing">Testing…</string>
+    <string name="cloud_save_test">Save &amp; test connection</string>
+    <string name="cloud_retest">Test again</string>
+    <string name="cloud_delete">Delete account</string>
+    <string name="cloud_connecting">Connecting to server…</string>
+    <string name="cloud_delete_title">Delete WebDAV account</string>
+    <string name="cloud_delete_text">Entries and playback records for this account will be removed. This cannot be undone.</string>
+
+    <!-- 曲目/目录 -->
+    <string name="dir_loading_more">Loading more…</string>
+    <string name="dir_folder">Folder</string>
+    <string name="dir_search_placeholder">Search added content</string>
+    <string name="dir_recent">Recently played</string>
+    <string name="dir_not_played">Not played yet</string>
+    <string name="dir_song_count">%1$d tracks · total %2$s</string>
+    <string name="dir_source_local">Local file</string>
+    <string name="dir_source_cloud">Cloud file</string>
+
+    <!-- 播放详情 -->
+    <string name="player_track_of">Track %1$d of %2$d</string>
+    <string name="player_clear_ab">Clear AB points</string>
+    <string name="player_set_b">A %1$s (tap again to set B)</string>
+    <string name="player_set_a">B %1$s (tap again to set A)</string>
+    <string name="player_set_ab">Set repeat range</string>
+    <string name="player_sleep_timer">Sleep timer</string>
+    <string name="player_sleep_stop">Stop playback on timer</string>
+    <string name="player_sleep_remaining">%1$s remaining</string>
+    <string name="player_sleep_end_chapter">End of chapter</string>
+    <string name="player_sleep_custom">Custom</string>
+    <string name="player_speed">Playback speed</string>
+    <string name="player_speed_current">%1$s</string>
+
+    <!-- 空态与事件消息（MessageCatalog 引用） -->
+    <string name="empty_dir_audio">No playable audio files found in this folder</string>
+    <string name="empty_home">Nothing added yet\nAdd playback folders or cloud content in Settings</string>
+    <string name="empty_manage">Nothing added yet\nTap "+" in the top-right to add folders or cloud content</string>
+    <string name="empty_search">No matching content</string>
+    <string name="empty_player_title">Nothing is playing</string>
+    <string name="empty_player_guide">Add a playback folder and open it,\nor tap an item in the added content to start playing</string>
+    <string name="msg_found">Found %1$d playable audio files</string>
+    <string name="msg_added">Added %1$s</string>
+    <string name="msg_refreshed">Refreshed %1$d audio files</string>
+    <string name="msg_refresh_confirm_title">Refresh database</string>
+    <string name="msg_refresh_confirm_text">This will re-read all audio in this folder (tags/duration/cover) and keep playback progress. Refresh?</string>
+    <string name="msg_sleep_timer_done">Sleep timer: playback paused</string>
+    <string name="msg_global_sleep_done">Global sleep timer: playback paused</string>
+    <string name="msg_sleep_end_unknown">Current track duration is unknown; "End of chapter" is unavailable</string>
+
+    <!-- ViewModel 事件 -->
+    <string name="toast_aliyun_auth_ok">Aliyun Drive authorized</string>
+    <string name="toast_auth_failed">Authorization failed: %1$s</string>
+    <string name="toast_form_required">WebDAV URL, username and password are required</string>
+    <string name="toast_saved_testing">Saved, testing connection…</string>
+    <string name="toast_fill_required">Fill in the WebDAV URL, username and password first</string>
+    <string name="toast_login_ok_items">Login OK: %1$d audio files accessible</string>
+    <string name="toast_login_ok_dirs">Login OK: no audio in root; found %1$d subfolders (audio is inside them)</string>
+    <string name="toast_login_ok_empty">Login OK: this folder is empty (no audio, no subfolders)</string>
+    <string name="toast_login_failed_401">Login failed: wrong account or app password (HTTP 401/403)</string>
+    <string name="toast_conn_failed_429">Connection failed: too many requests (HTTP 429), retry later</string>
+    <string name="toast_conn_failed">Connection failed: %1$s</string>
+    <string name="toast_account_deleted">WebDAV account deleted</string>
+    <string name="toast_need_cloud_config">Configure %1$s in WebDAV accounts first</string>
+    <string name="toast_pick_cloud_folder">Pick the cloud folder in Folder management</string>
+    <string name="toast_added">Added %1$s</string>
+    <string name="toast_cache_cleared">Cache cleared</string>
+    <string name="toast_cached">Cached to local</string>
+    <string name="toast_cache_failed">Cache failed: %1$s</string>
+    <string name="source_aliyun">Aliyun Drive</string>
+    <string name="source_local">Local</string>
+
+    <!-- 通知 -->
+    <string name="notification_channel_playback">Playback</string>
 </resources>
