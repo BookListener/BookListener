@@ -100,7 +100,8 @@ class StoreMigrationTest {
             }.toString()
         ).commit()
         StoreMigration.run(prefs, db)
-        val rec = FolderProgressStore(db.dao()).load(treeA)
+        // v4.0：老 folder_progress 停写保留（回滚触发器），迁移验证直接查老表
+        val rec = kotlinx.coroutines.runBlocking { db.dao().getFolderProgress(treeA) }
         assertEquals(3, rec?.trackIndex)
         assertEquals(99_000L, rec?.positionMs)
     }
@@ -166,7 +167,7 @@ class StoreMigrationTest {
 
         // 2) 用当前 Room 定义打开同一 db 文件：应走 MIGRATION_1_2 并成功
         val roomDb = Room.databaseBuilder(ctx, AppDatabase::class.java, "migration_v1_test.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
         // 触发 open（首个查询）
@@ -208,7 +209,7 @@ class StoreMigrationTest {
         helper.create(config).writableDatabase
 
         val roomDb = Room.databaseBuilder(ctx, AppDatabase::class.java, "migration_v1_record.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
         kotlinx.coroutines.runBlocking { roomDb.dao().countSavedEntries() }

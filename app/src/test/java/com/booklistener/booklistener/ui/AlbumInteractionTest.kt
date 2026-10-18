@@ -6,10 +6,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.booklistener.core.AlbumSummary
 import com.booklistener.core.AudioItemFactory
+import com.booklistener.core.IndexedFile
 import com.booklistener.core.SourceType
+import com.booklistener.core.WorkStore
 import com.booklistener.db.AppDatabase
-import com.booklistener.db.EntryIndexEntity
-import com.booklistener.db.FolderProgressEntity
 import com.booklistener.db.SavedEntryEntity
 import com.booklistener.player.PlayableItem
 import com.booklistener.player.PlaybackController
@@ -24,9 +24,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * 专辑交互回归（v1.7.0 修复）：
- * 点击其他专辑后"暂停当前播放并把正在播放切换为该专辑记录、就绪不自动播放、弹详情"，
- * 点击正在播放的同一专辑不打断不弹详情。
+ * 专辑交互回归（v1.7.0 修复 + v4.0 作品化）：
+ * 点击其他专辑后"暂停当前播放并把正在播放切换为该作品记录、就绪不自动播放、弹详情"，
+ * 点击正在播放的同一作品不打断不弹详情。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -36,6 +36,7 @@ class AlbumInteractionTest {
     private val treeB = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3AMusic")
 
     private lateinit var db: AppDatabase
+    private var workId: Long = 0L
 
     @Before
     fun setUp() {
@@ -45,6 +46,10 @@ class AlbumInteractionTest {
             ApplicationProvider.getApplicationContext(),
             AppDatabase::class.java
         ).allowMainThreadQueries().build()
+        seedAlbumA()
+        workId = runBlocking {
+            db.dao().getWorkIdByEntryAndAlbum(treeA.toString(), "哈利·波特与魔法石")!!
+        }
     }
 
     private fun newViewModel(): PlayerViewModel =
@@ -61,20 +66,24 @@ class AlbumInteractionTest {
                     )
                 )
             )
-            db.dao().insertEntryIndex(
-                listOf(
-                    EntryIndexEntity(treeA.toString(), "第1章", "uri://a1", album, null, 1, null, 120_000L, "第1章.mp3"),
-                    EntryIndexEntity(treeA.toString(), "第2章", "uri://a2", album, null, 2, null, 150_000L, "第2章.mp3")
+            // v4.0 作品化扫描：作品实体 + entry_index(workId/sortRank)
+            db.dao().saveEntryIndexWithWorks(
+                entryId = treeA.toString(),
+                folderName = "Book",
+                sourceScope = "LOCAL",
+                files = listOf(
+                    IndexedFile("第1章", "uri://a1", album, null, 1, null, 120_000L, "第1章.mp3"),
+                    IndexedFile("第2章", "uri://a2", album, null, 2, null, 150_000L, "第2章.mp3")
                 )
             )
-            // 独立播放记录：定位第 2 首 5 秒处
-            db.dao().upsertFolderProgress(
-                FolderProgressEntity(treeA.toString(), trackIndex = 1, positionMs = 5_000L, updatedAt = 1_000L)
-            )
+            // 作品级播放记录：定位第 2 首 5 秒处（matchMode=1 精确）
+            val workId = db.dao().getWorkIdByUri("uri://a1")!!
+            WorkStore(db.dao()).save(workId, "uri://a2", 1, 5_000L, matchMode = 1)
         }
     }
 
     private fun recentAlbum(): AlbumSummary = AlbumSummary(
+        workId = workId,
         album = "哈利·波特与魔法石",
         entryId = treeA.toString(),
         artist = "J.K. Rowling",
@@ -105,15 +114,14 @@ class AlbumInteractionTest {
         assertTrue(msg, false)
     }
 
-    /** 核心回归：点击其他专辑 → 播放上下文切到该专辑记录，就绪不自动播放，弹详情 */
+    /** 核心回归：点击其他专辑 → 播放上下文切到该作品记录，就绪不自动播放，弹详情 */
     @Test
     fun openOtherAlbum_switchesPlaybackRecord_pausedAndShowsSheet() {
-        seedAlbumA()
         val vm = newViewModel()
         vm.openAlbum(recentAlbum())
 
-        // 队列归属切到目标专辑（等待 db 全量读取的异步完成）
-        awaitQueueOwner(treeA.toString())
+        // 队列归属切到目标作品（等待 db 全量读取的异步完成）
+        awaitQueueOwner("work:$workId")
         // 就绪不自动播放（暂停态）
         assertFalse("切换后不应自动开始播放", PlaybackController.state.value.isPlaying)
         // 弹出播放详情（轮询等待：弹详情发生在 prepareFolder 之后同一续体，idle 时序偶发滞后）
@@ -123,19 +131,18 @@ class AlbumInteractionTest {
         assertEquals(treeA, vm.currentFolderUri.value)
     }
 
-    /** v2.0.7：点击正在播放的同一专辑——不重建队列（保持播放不打断），但必须弹"正在播放页" */
+    /** v2.0.7：点击正在播放的同一作品——不重建队列（保持播放不打断），但必须弹"正在播放页" */
     @Test
     fun openSamePlayingAlbum_doesNotInterrupt() {
-        seedAlbumA()
         val vm = newViewModel()
-        // 模拟：目标专辑正在播放（非空队列 → queueReady=true，正在播放同一专辑）
+        // 模拟：目标作品正在播放（非空队列 → queueReady=true，正在播放同一作品）
         val item = AudioItemFactory.fromSearch(SourceType.LOCAL, "第1章", "uri://a1")
         PlaybackController.prepareFolder(
-            listOf(PlayableItem(item, item.path)), 0, 0L, treeA.toString()
+            listOf(PlayableItem(item, item.path)), 0, 0L, "work:$workId"
         )
         vm.openAlbum(recentAlbum())
 
-        assertEquals("正在播放同一专辑不应重建队列（保持播放）", treeA.toString(), PlaybackController.currentQueueOwnerId)
-        assertTrue("点击专辑必弹正在播放页（v2.0.7 bugfix），正在播放同一专辑也弹", vm.requestPlayerSheet.value)
+        assertEquals("正在播放同一作品不应重建队列（保持播放）", "work:$workId", PlaybackController.currentQueueOwnerId)
+        assertTrue("点击专辑必弹正在播放页（v2.0.7 bugfix），正在播放同一作品也弹", vm.requestPlayerSheet.value)
     }
 }

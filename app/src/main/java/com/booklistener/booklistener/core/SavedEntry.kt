@@ -129,7 +129,7 @@ data class HomeSections(
 
 // ---- 已添加内容索引（支撑搜索 + 专辑/播放列表 db 加载）----
 
-/** 单曲索引行：显示名（标题/去扩展名文件名）+ 原始文件名 + 标签 + 时长（v1.7.0 扩展） */
+/** 单曲索引行：显示名（标题/去扩展名文件名）+ 原始文件名 + 标签 + 时长（v1.7.0 扩展；v4.0 补作品/排序/体积） */
 data class IndexedFile(
     val displayName: String,
     val uri: String,
@@ -138,9 +138,12 @@ data class IndexedFile(
     val track: Int? = null,
     val disc: Int? = null,
     val durationMs: Long? = null,
-    val rawName: String? = null
+    val rawName: String? = null,
+    // v4.0：作品实体化辅助字段（不入库，扫描时由 saveEntryIndexWithWorks 派生写入）
+    val albumArtist: String? = null,
+    val sizeBytes: Long? = null
 ) {
-    fun toEntity(entryId: String): EntryIndexEntity = EntryIndexEntity(
+    fun toEntity(entryId: String, workId: Long? = null, sortRank: Int? = null): EntryIndexEntity = EntryIndexEntity(
         entryId = entryId,
         displayName = displayName,
         uri = uri,
@@ -149,7 +152,11 @@ data class IndexedFile(
         track = track,
         disc = disc,
         durationMs = durationMs,
-        rawName = rawName
+        rawName = rawName,
+        workId = workId,
+        sortRank = sortRank,
+        sizeBytes = sizeBytes,
+        albumArtist = albumArtist
     )
 
     companion object {
@@ -161,12 +168,14 @@ data class IndexedFile(
             track = e.track,
             disc = e.disc,
             durationMs = e.durationMs,
-            rawName = e.rawName
+            rawName = e.rawName,
+            albumArtist = e.albumArtist,
+            sizeBytes = e.sizeBytes
         )
     }
 }
 
-/** AudioItem → 索引行（v1.7.0：本地扫描/网盘浏览出口统一转换） */
+/** AudioItem → 索引行（v1.7.0：本地扫描/网盘浏览出口统一转换；v4.0 补 sizeBytes） */
 fun AudioItem.toIndexedFile(): IndexedFile = IndexedFile(
     displayName = displayName,
     uri = path,
@@ -175,7 +184,8 @@ fun AudioItem.toIndexedFile(): IndexedFile = IndexedFile(
     track = track,
     disc = disc,
     durationMs = durationMs,
-    rawName = rawName
+    rawName = rawName,
+    sizeBytes = size.takeIf { it > 0L }
 )
 
 /**
@@ -240,17 +250,29 @@ class EntryIndexStore(private val dao: AppDao) {
         dao.getEntryIndex(entryId).map { IndexedFile.fromEntity(it) }
     }
 
+    /**
+     * v4.0 扫描入库（作品实体化）：逐文件算作品键 → upsert works by key（id 稳定）→
+     * 写 entry_index（workId/sortRank/sizeBytes）→ 清理失效行与无引用作品（连带进度）。
+     * 禁止整删重建 works——workId 一旦重建，work_progress.workId 断链、进度全丢。
+     */
     fun save(entryId: String, files: List<IndexedFile>) = blockingRun {
-        dao.replaceEntryIndex(entryId, assignTrackNumbers(files).map { it.toEntity(entryId) })
+        val entry = dao.getAllSavedEntries().firstOrNull { it.id == entryId }
+        val folderName = entry?.displayName ?: entryId
+        val sourceScope = entry?.sourceType ?: SourceType.LOCAL.name
+        val withTrack = assignTrackNumbers(files)
+        dao.saveEntryIndexWithWorks(entryId, folderName, sourceScope, withTrack)
     }
 
-    /** 播放后补录/校正时长（网盘或扫描未知时长） */
+    /** 播放后补录/校正时长（网盘或扫描未知时长）；同步重算作品总时长缓存 */
     fun updateDurationMs(entryId: String, uri: String, durationMs: Long) = blockingRun {
         dao.updateIndexDuration(entryId, uri, durationMs)
+        dao.refreshWorkDurationByFile(entryId, uri)
     }
 
+    /** 删除条目内容索引，并清理因此失去引用的作品（连带其进度） */
     fun remove(entryId: String) = blockingRun {
         dao.deleteEntryIndex(entryId)
+        dao.cleanupOrphanWorks()
     }
 
     private fun blockingRun(block: suspend () -> Unit) {
@@ -287,6 +309,7 @@ fun searchEntries(query: String, entries: List<SavedEntry>, index: Map<String, L
                 val albumFiles = files.filter { (it.album ?: entry.displayName) == album }
                 hits += SearchHit.Album(
                     AlbumSummary(
+                        workId = 0L, // 搜索命中后由 openAlbum 按 (条目, 专辑名) 反查补全
                         album = album,
                         entryId = entry.id,
                         artist = albumFiles.firstNotNullOfOrNull { it.artist } ?: entry.artist,

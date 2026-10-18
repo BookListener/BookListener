@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.booklistener.core.IndexedFile
 import com.booklistener.core.SavedEntry
 import com.booklistener.core.SourceType
 import com.booklistener.db.AppDatabase
@@ -230,7 +231,7 @@ class DirectoryScreenFolderViewTest {
     /** UI 回归：主界面专辑行（专辑名=文件夹名兜底）点击后进入专辑视图（db 加载，不重扫） */
     @Test
     fun savedFolderEntry_click_entersFolderView() {
-        // Robolectric 无真实 DocumentsProvider，扫描返回空；直接注入条目+索引（专辑数据路径）
+        // Robolectric 无真实 DocumentsProvider，扫描返回空；直接注入条目+作品索引（作品化数据路径）
         runBlocking {
             db.dao().insertSavedEntries(
                 listOf(
@@ -241,13 +242,11 @@ class DirectoryScreenFolderViewTest {
                     )
                 )
             )
-            db.dao().insertEntryIndex(
-                listOf(
-                    EntryIndexEntity(
-                        treeA.toString(), "歌", "uri://song1", null, null,
-                        null, null, 1000L, "歌.mp3"
-                    )
-                )
+            db.dao().saveEntryIndexWithWorks(
+                entryId = treeA.toString(),
+                folderName = "Download",
+                sourceScope = "LOCAL",
+                files = listOf(IndexedFile("歌", "uri://song1", null, null, null, null, 1000L, "歌.mp3"))
             )
         }
         val vm = newViewModel()

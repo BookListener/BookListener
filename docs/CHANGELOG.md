@@ -3,6 +3,15 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.0.15（2026-10）数据库重构 v4：作品实体化 + 进度内容引用
+- 新增 `works`（作品/专辑为一等实体）：tag 优先跨文件夹合并同名专辑；无标签/网盘按「条目+文件夹名」独立；`key` 唯一索引，扫描 **upsert by key**（禁止整删重建，作品 id 稳定）
+- 新增 `work_progress`：进度锚点从「位置序号」改为「(作品, 曲目 uri) 内容引用 + orderIndex 近似回退」，uri 失配时按位置近似恢复并诚实标注（可能定位不准）
+- 老表处置：`folder_progress` / `play_record` **停写保留不删**（回滚能力）；`cache_index` 搬家为 `cloud_cache`；`favorite` 收藏粒度升到作品（映射不到的保留 NULL 标未知，不静默删除）
+- `entry_index` +4 列：`workId` / `sortRank`（条目内展示序下标，SQL 整数排序）/ `sizeBytes`（二期指纹用）/ `albumArtist`
+- 一次 v3→v4 迁移回填（作品聚合/排序下标/老进度/收藏作品级），升级不丢进度
+- **行为变更**：单文件夹多专辑从「一个进度」变「每专辑各自进度」；同名专辑跨文件夹合并后进度合并为一个；文件大量改名退化为位置近似并提示
+- 测试：新增 WorkBackfill / WorkStore / ScanUpsert（防进度断链）/ Migration34 迁移回填 4 组用例，全量 256 用例回归通过
+
 ## v1.6.12（2026-10）
 - 文档名称统一（README/BASELINE 全量改净），新增用户向 README 与架构文档
 - 深链 scheme `simplemusic://` → `booklistener://`（manifest、回调常量、云盘配置页、文档同步）

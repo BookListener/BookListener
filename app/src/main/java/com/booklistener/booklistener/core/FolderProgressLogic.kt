@@ -1,20 +1,25 @@
 package com.booklistener.core
 
 /**
- * 文件夹播放进度恢复的纯计算逻辑（无 Android / 协程依赖，可单测）：
- * 把记录中的 trackIndex 收敛到当前列表范围内，防止文件被删/改名后越界崩溃。
+ * 播放进度恢复的纯计算逻辑（无 Android / 协程依赖，可单测）。
+ * v4.0：进度锚点从"位置序号"改为"内容引用 (workId, fileUri)"——文件增删/改名/排序变化后，
+ * uri 命中则精确定位（matchMode=1）；uri 失配按 orderIndex 近似（matchMode=0，UI 可提示"可能定位不准"），
+ * 保留钳位兜底防止越界崩溃。
  */
 object FolderProgressLogic {
 
     /**
-     * 由进度记录解析恢复起点。
-     * @param itemCount 当前扫描到的可播放条目数
-     * @param record    该文件夹的进度记录（null = 无记录）
-     * @return (startIndex, startPositionMs)：无记录 → (0, 0)；越界 → clamp 到末尾并保留位置
+     * 由作品进度记录解析恢复起点。
+     * @param items  当前可播放条目列表
+     * @param record 该作品的进度记录（null = 无记录）
+     * @return (startIndex, startPositionMs)：无记录 → (0, 0)；
+     *         fileUri 命中 → 精确位置；失配 → orderIndex 近似（clamp 到列表内）并保留位置
      */
-    fun resolveStart(itemCount: Int, record: FolderProgress?): Pair<Int, Long> {
-        if (record == null || itemCount <= 0) return 0 to 0L
-        val safeIndex = record.trackIndex.coerceIn(0, itemCount - 1)
+    fun resolveStart(items: List<AudioItem>, record: WorkProgress?): Pair<Int, Long> {
+        if (record == null || items.isEmpty()) return 0 to 0L
+        val exact = items.indexOfFirst { it.path == record.fileUri }
+        if (exact >= 0) return exact to record.positionMs
+        val safeIndex = record.orderIndex.coerceIn(0, items.lastIndex)
         return safeIndex to record.positionMs
     }
 }

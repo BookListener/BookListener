@@ -5,11 +5,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.booklistener.db.AppDao
 import com.booklistener.db.AppDatabase
-import com.booklistener.db.EntryIndexEntity
 import com.booklistener.db.SavedEntryEntity
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,8 +16,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * v1.7.0 专辑聚合测试：分区（条目 lastPlayedAt）、专辑名兜底（COALESCE album→文件夹名）、
- * 分页 LIMIT/OFFSET、专辑内歌曲 disc→track→名称自然排序与内存分页。
+ * v4.0 作品化专辑聚合测试：
+ * 分区按 works.lastPlayedAt（touchWorkPlayed）、跨条目同名专辑合并为一个作品、
+ * 作品内歌曲按 sortRank 排序分页。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -29,6 +29,30 @@ class AlbumStoreTest {
 
     private val entryA = "content://tree/a"
     private val entryB = "content://tree/b"
+
+    private fun scanEntryA() = runBlocking {
+        dao.saveEntryIndexWithWorks(
+            entryId = entryA,
+            folderName = "文件夹A",
+            sourceScope = "LOCAL",
+            files = listOf(
+                IndexedFile("歌一", "uri://a1", "专辑甲", "作者甲", 1, 1, 60_000L, "01.mp3"),
+                IndexedFile("歌二", "uri://a2", "专辑甲", "作者甲", 2, 1, 90_000L, "02.mp3"),
+                IndexedFile("歌三", "uri://a3", null, "作者甲", null, null, 30_000L, "03.mp3")
+            )
+        )
+    }
+
+    private fun scanEntryB() = runBlocking {
+        dao.saveEntryIndexWithWorks(
+            entryId = entryB,
+            folderName = "文件夹B",
+            sourceScope = "LOCAL",
+            files = listOf(
+                IndexedFile("歌四", "uri://b1", null, null, null, null, 10_000L, "04.mp3")
+            )
+        )
+    }
 
     @Before
     fun setUp() {
@@ -52,54 +76,64 @@ class AlbumStoreTest {
                     )
                 )
             )
-            // 条目A：2 首带 album/artist/时长 + 1 首无 album（兜底文件夹名）
-            dao.insertEntryIndex(
-                listOf(
-                    EntryIndexEntity(entryA, "歌一", "uri://a1", "专辑甲", "作者甲", 1, 1, 60_000L, "01.mp3"),
-                    EntryIndexEntity(entryA, "歌二", "uri://a2", "专辑甲", "作者甲", 2, 1, 90_000L, "02.mp3"),
-                    EntryIndexEntity(entryA, "歌三", "uri://a3", null, "作者甲", null, null, 30_000L, "03.mp3")
-                )
-            )
-            // 条目B：1 首无 album（兜底文件夹B），未播放
-            dao.insertEntryIndex(
-                listOf(
-                    EntryIndexEntity(entryB, "歌四", "uri://b1", null, null, null, null, 10_000L, "04.mp3")
+        }
+        scanEntryA()
+        scanEntryB()
+    }
+
+    @Test
+    fun notPlayed_containsAllWorksInitially() {
+        // 全部未 touchPlayed → 2 个作品（专辑甲 / 文件夹A 兜底 / 文件夹B 兜底 = 3 个）
+        val rows = store.notPlayed(0)
+        assertEquals(3, rows.size)
+        val albumA = rows.first { it.album == "专辑甲" }
+        assertEquals(2, albumA.songCount)
+        assertEquals(150_000L, albumA.totalDurationMs)
+        assertEquals(entryA, albumA.entryId)
+    }
+
+    @Test
+    fun recentPlayed_afterTouchMovesWorkToPlayedPartition() {
+        val workId = runBlocking { dao.getWorkIdByUri("uri://a1") }!!
+        runBlocking { dao.touchWorkPlayed(workId, System.currentTimeMillis()) }
+        val recent = store.recentPlayed(0)
+        assertEquals(1, recent.size)
+        assertEquals("专辑甲", recent[0].album)
+        val never = store.notPlayed(0)
+        assertEquals(2, never.size)
+    }
+
+    @Test
+    fun crossFolderSameAlbum_mergesIntoOneWork() {
+        // 条目B 也扫描同名"专辑甲" → 跨条目合并为同一作品，songCount 累加
+        runBlocking {
+            dao.saveEntryIndexWithWorks(
+                entryId = entryB,
+                folderName = "文件夹B",
+                sourceScope = "LOCAL",
+                files = listOf(
+                    IndexedFile("歌四", "uri://b1", "专辑甲", "作者甲", 1, 1, 10_000L, "04.mp3")
                 )
             )
         }
-    }
-
-    @Test
-    fun recentPlayed_groupsByAlbumAndOrdersByEntryRecency() {
-        val rows = store.recentPlayed(0)
-        assertEquals(2, rows.size)
-        // 条目A 已播放 → 两个专辑（专辑甲 / 文件夹A 兜底）；按条目 lastPlayedAt 倒序
-        assertEquals("专辑甲", rows[0].album)
-        assertEquals(entryA, rows[0].entryId)
-        assertEquals(2, rows[0].songCount)
-        assertEquals(150_000L, rows[0].totalDurationMs)
-        assertEquals("文件夹A", rows[1].album)
-        assertEquals(1, rows[1].songCount)
-    }
-
-    @Test
-    fun notPlayed_excludesPlayedEntries() {
         val rows = store.notPlayed(0)
-        assertEquals(1, rows.size)
-        assertEquals("文件夹B", rows[0].album)
-        assertEquals(entryB, rows[0].entryId)
+        val albumA = rows.first { it.album == "专辑甲" }
+        assertEquals(3, albumA.songCount)        // 2 + 1
+        assertEquals(160_000L, albumA.totalDurationMs) // 150 + 10
+        assertEquals(2, albumA.albumCountInEntry)      // 覆盖两个条目
     }
 
     @Test
-    fun paging_limitsToOneHundredAndOffsets() {
-        // 已播放区仅 2 行：第 2 页为空
-        assertTrue(store.recentPlayed(1).isEmpty())
+    fun paging_offsetsEmptyPage() {
+        // 未播放 3 行：第 1 页（100/页）已含全部，第 2 页为空
+        assertEquals(3, store.notPlayed(0).size)
+        assertEquals(0, store.notPlayed(1).size)
     }
 
     @Test
-    fun songs_naturalSortsByTrackThenName() {
-        // 专辑甲：track 1/2 → 歌一、歌二
-        val songs = store.songs(entryA, "专辑甲", 0)
+    fun songs_byWorkIdOrdersBySortRank() {
+        val workId = runBlocking { dao.getWorkIdByUri("uri://a1") }!!
+        val songs = store.songs(workId, 0)
         assertEquals(2, songs.size)
         assertEquals("歌一", songs[0].displayName)
         assertEquals("歌二", songs[1].displayName)
@@ -107,26 +141,19 @@ class AlbumStoreTest {
     }
 
     @Test
-    fun songs_albumFallbackUsesFolderName() {
-        // 无 album 曲目按兜底专辑名（文件夹A）也能查到
-        val songs = store.songs(entryA, "文件夹A", 0)
-        assertEquals(1, songs.size)
-        assertEquals("歌三", songs[0].displayName)
+    fun allSongs_byWorkIdReturnsFullQueue() {
+        val workId = runBlocking { dao.getWorkIdByUri("uri://a1") }!!
+        val all = store.allSongs(workId)
+        assertEquals(2, all.size)
+        assertEquals("歌一", all[0].displayName)
     }
 
     @Test
-    fun songs_naturalOrder_overDictionaryOrder() {
-        // 同 track 缺失时按显示名自然排序："2" 应排在 "10" 前
-        runBlocking {
-            dao.insertEntryIndex(
-                listOf(
-                    EntryIndexEntity(entryB, "10", "uri://b10", "专辑B", null, null, null, 1000L, "10.mp3"),
-                    EntryIndexEntity(entryB, "2", "uri://b2", "专辑B", null, null, null, 1000L, "2.mp3")
-                )
-            )
-        }
-        val songs = store.songs(entryB, "专辑B", 0)
-        assertEquals("2", songs[0].displayName)
-        assertEquals("10", songs[1].displayName)
+    fun folderFallbackWork_songsQueryable() {
+        // 无 album 曲目 → 独立作品（key=entry:entryA|文件夹A）
+        val workId = runBlocking { dao.getWorkIdByUri("uri://a3") }!!
+        val songs = store.allSongs(workId)
+        assertEquals(1, songs.size)
+        assertEquals("歌三", songs[0].displayName)
     }
 }

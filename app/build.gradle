@@ -13,8 +13,8 @@ android {
         applicationId 'com.booklistener'
         minSdk 26
         targetSdk 34
-        versionCode 68
-        versionName '2.0.14'
+        versionCode 69
+        versionName '2.0.15'
     }
 
     buildTypes {
@@ -118,4 +118,9 @@ dependencies {
     testImplementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.4'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
+}
+
+// v4.0：exportSchema=true，schema JSON 入库（app/schemas/）供编译期校验与迁移测试
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

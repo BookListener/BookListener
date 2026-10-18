@@ -5,6 +5,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.booklistener.core.IndexedFile
+import com.booklistener.core.WorkBackfill
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -33,22 +35,24 @@ interface AppDao {
     @Query("DELETE FROM favorite WHERE itemId = :id")
     suspend fun removeFavorite(id: String)
 
-    @Query("SELECT * FROM cache_index")
+    // ---- v4.0：cache_index 搬家为 cloud_cache（表名改，API 不变）----
+
+    @Query("SELECT * FROM cloud_cache")
     fun getAllCacheIndex(): Flow<List<CacheIndex>>
 
-    @Query("SELECT * FROM cache_index")
+    @Query("SELECT * FROM cloud_cache")
     suspend fun getAllCacheIndexList(): List<CacheIndex>
 
-    @Query("SELECT * FROM cache_index WHERE itemId = :id LIMIT 1")
+    @Query("SELECT * FROM cloud_cache WHERE itemId = :id LIMIT 1")
     suspend fun getCacheByItemId(id: String): CacheIndex?
 
-    @Query("UPDATE cache_index SET lastAccess = :lastAccess WHERE itemId = :id")
+    @Query("UPDATE cloud_cache SET lastAccess = :lastAccess WHERE itemId = :id")
     suspend fun updateCacheLastAccess(id: String, lastAccess: Long)
 
     @Insert
     suspend fun addCacheIndex(cacheIndex: CacheIndex)
 
-    @Query("DELETE FROM cache_index WHERE itemId = :id")
+    @Query("DELETE FROM cloud_cache WHERE itemId = :id")
     suspend fun deleteCache(id: String)
 
     // ---- v1.6.0：业务 Store 表（saved_entry / folder_progress / entry_index）----
@@ -68,9 +72,7 @@ interface AppDao {
     @Insert
     suspend fun insertSavedEntries(entries: List<SavedEntryEntity>)
 
-    /** 单条 upsert（并发安全）：同 id 整行覆盖（REPLACE），不触碰其他行。
-     * v1.6.0 修正：整表替换在并发（异步扫描 afterLoad 与用户操作）下
-     * 会以过期列表覆盖先提交数据（丢条目），逐行写从根本上消除该竞态。 */
+    /** 单条 upsert（并发安全）：同 id 整行覆盖（REPLACE），不触碰其他行。 */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSavedEntry(entry: SavedEntryEntity)
 
@@ -80,7 +82,7 @@ interface AppDao {
     @Query("UPDATE saved_entry SET lastOpenedAt = :ts WHERE id = :id")
     suspend fun updateSavedEntryLastOpened(id: String, ts: Long)
 
-    /** 整表替换（保序）：事务化，避免并发 DELETE+INSERT 交错触发主键冲突（迁移/测试兼容用） */
+    /** 整表替换（保序）：事务化（迁移/测试兼容用） */
     @androidx.room.Transaction
     suspend fun replaceAllSavedEntries(entries: List<SavedEntryEntity>) {
         deleteAllSavedEntries()
@@ -102,8 +104,8 @@ interface AppDao {
     @Query("SELECT * FROM entry_index")
     suspend fun getAllEntryIndex(): List<EntryIndexEntity>
 
-    /** 按条目加载（v1.6.14：进入条目视图改从 db 读取，不再每次全量扫描） */
-    @Query("SELECT * FROM entry_index WHERE entryId = :entryId")
+    /** 按条目加载 */
+    @Query("SELECT * FROM entry_index WHERE entryId = :entryId ORDER BY sortRank ASC")
     suspend fun getEntryIndex(entryId: String): List<EntryIndexEntity>
 
     @Query("DELETE FROM entry_index WHERE entryId = :entryId")
@@ -112,9 +114,18 @@ interface AppDao {
     @Insert
     suspend fun insertEntryIndex(files: List<EntryIndexEntity>)
 
-    /** 播放后补录/校正时长（v1.7.0：网盘或扫描未知时长由播放器回写） */
+    /** 播放后补录/校正时长（网盘或扫描未知时长由播放器回写） */
     @Query("UPDATE entry_index SET durationMs = :durationMs WHERE entryId = :entryId AND uri = :uri")
     suspend fun updateIndexDuration(entryId: String, uri: String, durationMs: Long)
+
+    /** 时长补录后同步重算作品总时长缓存（只重算受影响的作品） */
+    @Query(
+        """
+        UPDATE works SET totalDurationMs = (SELECT COALESCE(SUM(durationMs), 0) FROM entry_index WHERE workId = works.id)
+        WHERE id IN (SELECT i.workId FROM entry_index i WHERE i.entryId = :entryId AND i.uri = :uri AND i.workId IS NOT NULL)
+        """
+    )
+    suspend fun refreshWorkDurationByFile(entryId: String, uri: String)
 
     /** 单条目文件清单整体替换：事务化（并发安全） */
     @androidx.room.Transaction
@@ -123,61 +134,206 @@ interface AppDao {
         insertEntryIndex(files)
     }
 
-    // ---- v1.7.0：专辑聚合（曲目界面）----
+    // ---- v4.0：作品实体（works）与作品进度（work_progress）----
+
+    @Query("SELECT * FROM works WHERE key = :key LIMIT 1")
+    suspend fun getWorkByKey(key: String): WorkEntity?
+
+    @Query("SELECT * FROM works WHERE id = :id LIMIT 1")
+    suspend fun getWorkById(id: Long): WorkEntity?
+
+    @Query("SELECT w.* FROM works w JOIN entry_index i ON i.workId = w.id WHERE i.entryId = :entryId ORDER BY w.title COLLATE NOCASE ASC")
+    suspend fun getWorksByEntry(entryId: String): List<WorkEntity>
+
+    @Insert
+    suspend fun insertWork(work: WorkEntity): Long
+
+    @Query(
+        """
+        UPDATE works SET title = :title, albumArtist = :albumArtist, sourceScope = :sourceScope,
+        coverUri = :coverUri, songCount = :songCount, totalDurationMs = :totalDurationMs, updatedAt = :updatedAt
+        WHERE id = :id
+        """
+    )
+    suspend fun updateWorkContent(
+        id: Long, title: String, albumArtist: String?, sourceScope: String,
+        coverUri: String?, songCount: Int, totalDurationMs: Long, updatedAt: Long
+    )
+
+    @Query("DELETE FROM works WHERE id = :id")
+    suspend fun deleteWork(id: Long)
+
+    @Query("UPDATE works SET lastPlayedAt = :ts WHERE id = :id")
+    suspend fun touchWorkPlayed(id: Long, ts: Long)
+
+    @Query("DELETE FROM work_progress WHERE workId NOT IN (SELECT id FROM works)")
+    suspend fun deleteOrphanWorkProgress()
+
+    @Query("DELETE FROM works WHERE id NOT IN (SELECT DISTINCT workId FROM entry_index WHERE workId IS NOT NULL)")
+    suspend fun deleteOrphanWorks()
 
     /**
-     * 已播放专辑：来源条目播放过（s.lastPlayedAt > 0），按播放时间新→旧。
-     * 专辑名 = COALESCE(i.album, s.displayName)（缺失按文件夹名兜底）；
-     * artist 取组内首个非空（MIN 保证确定性）；totalDurationMs 汇总时长（NULL → 0）。
+     * 作品统计派生重算（跨条目合并/条目缩容后作品字段永远等于真实聚合，避免覆盖丢贡献）。
+     * 扫描事务内 replaceEntryIndex 后对受影响作品调用。
      */
     @Query(
         """
-        SELECT COALESCE(i.album, s.displayName) AS album, s.id AS entryId,
-               MIN(i.artist) AS artist, COUNT(*) AS songCount,
-               COALESCE(SUM(i.durationMs), 0) AS totalDurationMs,
-               (SELECT COUNT(DISTINCT COALESCE(i2.album, s2.displayName))
-                FROM entry_index i2 JOIN saved_entry s2 ON s2.id = i2.entryId
-                WHERE s2.id = s.id) AS albumCountInEntry
-        FROM entry_index i JOIN saved_entry s ON s.id = i.entryId
-        WHERE s.lastPlayedAt > 0
-        GROUP BY album, s.id
-        ORDER BY s.lastPlayedAt DESC, album ASC
+        UPDATE works SET
+          songCount = (SELECT COUNT(*) FROM entry_index WHERE entry_index.workId = works.id),
+          totalDurationMs = (SELECT COALESCE(SUM(durationMs), 0) FROM entry_index WHERE entry_index.workId = works.id),
+          updatedAt = :now
+        WHERE id IN (:ids)
+        """
+    )
+    suspend fun recomputeWorkStats(ids: List<Long>, now: Long)
+
+    /** 删除无任何文件引用的作品，再清理其孤儿进度（顺序不可颠倒：先删作品，进度随之失引用） */
+    @androidx.room.Transaction
+    suspend fun cleanupOrphanWorks() {
+        deleteOrphanWorks()
+        deleteOrphanWorkProgress()
+    }
+
+    /** 作品级进度：按 workId upsert（REPLACE） */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWorkProgress(progress: WorkProgressEntity)
+
+    @Query("SELECT * FROM work_progress WHERE workId = :workId LIMIT 1")
+    suspend fun getWorkProgress(workId: Long): WorkProgressEntity?
+
+    @Query("DELETE FROM work_progress WHERE workId = :workId")
+    suspend fun deleteWorkProgress(workId: Long)
+
+    /** 条目内最近更新的作品进度（杀后台/条目视图恢复用） */
+    @Query(
+        """
+        SELECT wp.* FROM work_progress wp
+        JOIN entry_index i ON i.workId = wp.workId
+        WHERE i.entryId = :entryId
+        ORDER BY wp.updatedAt DESC LIMIT 1
+        """
+    )
+    suspend fun getMostRecentWorkProgressByEntry(entryId: String): WorkProgressEntity?
+
+    /** 曲目 → 作品（进度保存按当前曲目反查） */
+    @Query("SELECT workId FROM entry_index WHERE uri = :uri AND workId IS NOT NULL LIMIT 1")
+    suspend fun getWorkIdByUri(uri: String): Long?
+
+    /** 曲目 → 来源条目（时长补录定位） */
+    @Query("SELECT entryId FROM entry_index WHERE uri = :uri LIMIT 1")
+    suspend fun getEntryIdByUri(uri: String): String?
+
+    /** 条目+专辑名 → 作品（搜索命中专辑懒解析 workId） */
+    @Query(
+        """
+        SELECT id FROM works
+        WHERE id IN (SELECT workId FROM entry_index WHERE entryId = :entryId)
+          AND title = :title LIMIT 1
+        """
+    )
+    suspend fun getWorkIdByEntryAndAlbum(entryId: String, title: String): Long?
+
+    /**
+     * v4.0 扫描入库（作品实体化核心，事务）：
+     * 1) 逐文件算 workKey → buildWorks 聚合 → upsert works by key（id 保持稳定，禁止整删重建）
+     * 2) 查回 workId → 写 entry_index（含 workId / sortRank / sizeBytes / albumArtist）
+     * 3) 清理该条目失效行 + 无引用作品（连带进度）
+     */
+    @androidx.room.Transaction
+    suspend fun saveEntryIndexWithWorks(
+        entryId: String,
+        folderName: String,
+        sourceScope: String,
+        files: List<IndexedFile>
+    ) {
+        val works = WorkBackfill.buildWorks(files, entryId, folderName, sourceScope)
+        val workIdByKey = LinkedHashMap<String, Long>()
+        works.forEach { w ->
+            workIdByKey[w.key] = upsertWorkByKey(w)
+        }
+        val ranks = WorkBackfill.assignSortRank(files).toMap()
+        val rows = files.map { f ->
+            val key = WorkBackfill.workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
+            f.toEntity(
+                entryId = entryId,
+                workId = workIdByKey.getValue(key),
+                sortRank = ranks.getValue(f.uri)
+            )
+        }
+        replaceEntryIndex(entryId, rows)
+        // 作品统计派生重算：跨条目同名专辑合并 songCount/时长累加、条目缩容正确收敛
+        if (workIdByKey.isNotEmpty()) {
+            recomputeWorkStats(workIdByKey.values.toList(), System.currentTimeMillis())
+        }
+        cleanupOrphanWorks()
+    }
+
+    /** upsert works by key（SQLite 3.18 无 ON CONFLICT DO UPDATE，用 select-then-write 事务内实现） */
+    @androidx.room.Transaction
+    suspend fun upsertWorkByKey(work: WorkEntity): Long {
+        val existing = getWorkByKey(work.key)
+        return if (existing != null) {
+            updateWorkContent(
+                existing.id, work.title, work.albumArtist, work.sourceScope,
+                work.coverUri, work.songCount, work.totalDurationMs, work.updatedAt
+            )
+            existing.id
+        } else {
+            insertWork(work)
+        }
+    }
+
+    // ---- v4.0：专辑聚合（曲目界面，改走作品实体）----
+
+    /**
+     * 已播放作品：works.lastPlayedAt > 0，按播放时间新→旧。
+     * entryId = 作品内来源条目（MIN(s.id)，跨条目合并取首条目；本地合并场景 sourceType 相同）；
+     * albumCountInEntry = 作品覆盖的条目数（单条目=1 → 文件夹封面；跨条目 → 内嵌封面）。
+     */
+    @Query(
+        """
+        SELECT w.id AS workId, w.title AS album, MIN(s.id) AS entryId,
+               COALESCE(w.albumArtist, MIN(s.artist)) AS artist,
+               w.songCount AS songCount, w.totalDurationMs AS totalDurationMs,
+               COUNT(DISTINCT s.id) AS albumCountInEntry
+        FROM works w
+        JOIN entry_index i ON i.workId = w.id
+        JOIN saved_entry s ON s.id = i.entryId
+        WHERE w.lastPlayedAt > 0
+        GROUP BY w.id
+        ORDER BY w.lastPlayedAt DESC, w.title COLLATE NOCASE ASC
         LIMIT :limit OFFSET :offset
         """
     )
-    suspend fun albumsOfPlayed(limit: Int, offset: Int): List<com.booklistener.core.AlbumRow>
+    suspend fun worksOfPlayed(limit: Int, offset: Int): List<com.booklistener.core.AlbumRow>
 
     /**
-     * 尚未播放专辑：来源条目未播放过（s.lastPlayedAt <= 0），按条目保存顺序（sortOrder ASC）。
+     * 尚未播放作品：works.lastPlayedAt <= 0，按来源条目保存顺序（MIN(s.sortOrder)）稳定排序。
      */
     @Query(
         """
-        SELECT COALESCE(i.album, s.displayName) AS album, s.id AS entryId,
-               MIN(i.artist) AS artist, COUNT(*) AS songCount,
-               COALESCE(SUM(i.durationMs), 0) AS totalDurationMs,
-               (SELECT COUNT(DISTINCT COALESCE(i2.album, s2.displayName))
-                FROM entry_index i2 JOIN saved_entry s2 ON s2.id = i2.entryId
-                WHERE s2.id = s.id) AS albumCountInEntry
-        FROM entry_index i JOIN saved_entry s ON s.id = i.entryId
-        WHERE s.lastPlayedAt <= 0
-        GROUP BY album, s.id
-        ORDER BY s.sortOrder ASC
+        SELECT w.id AS workId, w.title AS album, MIN(s.id) AS entryId,
+               COALESCE(w.albumArtist, MIN(s.artist)) AS artist,
+               w.songCount AS songCount, w.totalDurationMs AS totalDurationMs,
+               COUNT(DISTINCT s.id) AS albumCountInEntry
+        FROM works w
+        JOIN entry_index i ON i.workId = w.id
+        JOIN saved_entry s ON s.id = i.entryId
+        WHERE w.lastPlayedAt <= 0
+        GROUP BY w.id
+        ORDER BY MIN(s.sortOrder) ASC, w.title COLLATE NOCASE ASC
         LIMIT :limit OFFSET :offset
         """
     )
-    suspend fun albumsOfNeverPlayed(limit: Int, offset: Int): List<com.booklistener.core.AlbumRow>
+    suspend fun worksOfNeverPlayed(limit: Int, offset: Int): List<com.booklistener.core.AlbumRow>
 
-    /**
-     * 专辑内歌曲（全量）：disc → track → 名称**自然序**在 Kotlin 层完成
-     * （SQLite 无自然排序，AlbumStore 取回后按 AudioSortKey 排序再内存分页），
-     * 这里只按条目+专辑过滤，保证分页与排序语义一致。
-     */
+    /** 专辑内歌曲（作品）：按 sortRank 排序 + 分页下推 SQL（v4.0，替代内存排序） */
     @Query(
-        """
-        SELECT * FROM entry_index
-        WHERE entryId = :entryId AND
-              COALESCE(album, (SELECT displayName FROM saved_entry WHERE saved_entry.id = entry_index.entryId)) = :album
-        """
+        "SELECT * FROM entry_index WHERE workId = :workId ORDER BY sortRank ASC LIMIT :limit OFFSET :offset"
     )
-    suspend fun albumSongs(entryId: String, album: String): List<EntryIndexEntity>
+    suspend fun albumSongsByWork(workId: Long, limit: Int, offset: Int): List<EntryIndexEntity>
+
+    /** 专辑内全部歌曲（作品，排序后，供播放队列与"总数/总时长"） */
+    @Query("SELECT * FROM entry_index WHERE workId = :workId ORDER BY sortRank ASC")
+    suspend fun allSongsByWork(workId: Long): List<EntryIndexEntity>
 }

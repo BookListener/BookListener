@@ -18,7 +18,7 @@ import com.booklistener.core.CoverScanner
 import com.booklistener.core.EntryIndexStore
 import com.booklistener.core.FolderEntry
 import com.booklistener.core.FolderProgressLogic
-import com.booklistener.core.FolderProgressStore
+import com.booklistener.core.WorkStore
 import com.booklistener.core.FolderScanner
 import com.booklistener.core.IndexedFile
 import com.booklistener.core.LastSessionLogic
@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -456,15 +457,21 @@ class PlayerViewModel @JvmOverloads constructor(
      * 封面沿用来源条目 coverUri；专辑内歌曲全量排序后内存分页（100/页）。
      */
     fun openAlbum(album: AlbumSummary) {
-        _currentAlbum.value = album
+        // 搜索构造的摘要 workId=0：按 (条目, 专辑名) 反查补全
+        val effective = if (album.workId > 0L) album else runBlocking {
+            appDb.dao().getWorkIdByEntryAndAlbum(album.entryId, album.album)
+                ?.let { album.copy(workId = it) } ?: album
+        }
+        if (effective.workId <= 0L) return
+        _currentAlbum.value = effective
         songPage = 0
         _albumSongsEnded.value = false
         _albumSongs.value = emptyList()
         _inFolderView.value = true
-        _currentFolderUri.value = Uri.parse(album.entryId)
+        _currentFolderUri.value = Uri.parse(effective.entryId)
         loadAlbumSongsMore()
-        resolveCurrentAlbumCover(album)
-        enterAlbumWithRecord(album)
+        resolveCurrentAlbumCover(effective)
+        enterAlbumWithRecord(effective)
         // v2.0.7 bugfix：弹窗请求独立于队列重载——点击专辑必弹"正在播放页"。
         // 原实现把 _requestPlayerSheet 放在 enterAlbumWithRecord 的"重载队列"分支尾部，
         // 点击正在播放的专辑时 shouldRestartOnEnter=false 提前 return，弹窗永不触发。
@@ -477,7 +484,7 @@ class PlayerViewModel @JvmOverloads constructor(
         if (album.coverUri != null) return
         val entry = savedEntryById(album.entryId) ?: return
         viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { albumStore.allSongs(album.entryId, album.album) }
+            val all = withContext(Dispatchers.IO) { albumStore.allSongs(album.workId) }
             if (all.isEmpty()) return@launch
             val cover = coverManager.resolveAlbumCover(
                 entry.coverUri, album.albumCountInEntry, all.first().uri
@@ -486,24 +493,25 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    /** 切换播放上下文到目标专辑记录（db 全量歌曲，就绪不自动播放；正在播放同一专辑则不打断） */
+    /** 切换播放上下文到目标作品记录（db 全量歌曲，就绪不自动播放；正在播放同一作品则不打断） */
     private fun enterAlbumWithRecord(album: AlbumSummary) {
-        val entryId = album.entryId
-        if (!shouldRestartOnEnter(entryId, PlaybackController.state.value.isPlaying)) return
+        val workId = album.workId
+        if (workId <= 0L) return
+        if (!shouldRestartOnEnter("work:$workId", PlaybackController.state.value.isPlaying)) return
         saveCurrentPlaybackProgress()
         viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { albumStore.allSongs(entryId, album.album) }
+            val all = withContext(Dispatchers.IO) { albumStore.allSongs(workId) }
             if (all.isEmpty()) return@launch
-            val sourceType = savedEntryById(entryId)?.sourceType ?: SourceType.LOCAL
+            val entry = savedEntryById(album.entryId)
+            val sourceType = entry?.sourceType ?: SourceType.LOCAL
             val items = all.map { it.toAudioItem(sourceType) }
-            val record = progressStore.load(entryId)
-            val (startIndex, startPos) = FolderProgressLogic.resolveStart(items.size, record)
+            val record = workStore.load(workId)
+            val (startIndex, startPos) = FolderProgressLogic.resolveStart(items, record)
             lastSavedIndex = startIndex
-            lastSavedUri = entryId
-            val entry = savedEntryById(entryId)
+            lastSavedUri = items.getOrNull(startIndex)?.path
             val cover = entry?.let { coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri) }
             MediaPlayService.start(getApplication())
-            PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, entryId)
+            PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:$workId")
             // v2.0.7：弹窗请求已上移 openAlbum（点击专辑必弹），此处不再重复触发
         }
     }
@@ -515,7 +523,7 @@ class PlayerViewModel @JvmOverloads constructor(
         songsLoading = true
         viewModelScope.launch {
             val pageItems = withContext(Dispatchers.IO) {
-                albumStore.songs(album.entryId, album.album, songPage)
+                albumStore.songs(album.workId, songPage)
             }
             if (pageItems.isEmpty()) {
                 _albumSongsEnded.value = true
@@ -528,31 +536,34 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    /** 打开来源条目的专辑视图（中间播放按钮后台切换用，db 索引构造专辑摘要，不重扫） */
+    /** 打开来源条目的作品视图（中间播放按钮后台切换用，查 works 表，不重扫） */
     fun openEntryAlbum(entry: SavedEntry) {
-        val files = indexStore.load()[entry.id] ?: emptyList()
-        val albumCount = files.map { it.album ?: entry.displayName }.distinct().size
+        val works = runBlocking { appDb.dao().getWorksByEntry(entry.id) }
+        val first = works.firstOrNull() ?: return
         val summary = AlbumSummary(
-            album = files.firstNotNullOfOrNull { it.album } ?: entry.displayName,
+            workId = first.id,
+            album = first.title,
             entryId = entry.id,
-            artist = files.firstNotNullOfOrNull { it.artist } ?: entry.artist,
-            songCount = files.size,
-            totalDurationMs = files.mapNotNull { it.durationMs }.sum(),
-            albumCountInEntry = albumCount.coerceAtLeast(1),
+            artist = first.albumArtist ?: entry.artist,
+            songCount = first.songCount,
+            totalDurationMs = first.totalDurationMs,
+            albumCountInEntry = works.size.coerceAtLeast(1),
             coverUri = coverManager.resolveAlbumCover(
-                entry.coverUri, albumCount.coerceAtLeast(1), files.firstOrNull()?.uri
+                entry.coverUri, works.size.coerceAtLeast(1), null
             )
         )
         openAlbum(summary)
     }
 
-    /** 播放专辑队列（点击专辑内歌曲 → 以该曲为起点整专播放，db 数据不入文件夹进度） */
+    /** 播放作品队列（点击作品内歌曲 → 以该曲为起点整专播放，db 数据入作品进度） */
     fun playAlbumFrom(album: AlbumSummary, startIndex: Int) {
+        val workId = album.workId
+        if (workId <= 0L) return
         // 播放专辑时同步当前播放上下文（详情页/正在播放卡/通知封面定位）
         _currentAlbum.value = album
         resolveCurrentAlbumCover(album)
         viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { albumStore.allSongs(album.entryId, album.album) }
+            val all = withContext(Dispatchers.IO) { albumStore.allSongs(workId) }
             if (all.isEmpty()) return@launch
             val sourceType = savedEntryById(album.entryId)?.sourceType ?: SourceType.LOCAL
             val items = all.map { it.toAudioItem(sourceType) }
@@ -562,18 +573,20 @@ class PlayerViewModel @JvmOverloads constructor(
             PlaybackController.setQueue(
                 resolveAll(items, coverUri = cover),
                 startIndex.coerceIn(0, items.lastIndex),
-                ownerId = album.entryId
+                ownerId = "work:$workId"
             )
         }
     }
 
-    // ---- 条目独立播放进度 ----
-    private val progressStore = FolderProgressStore(appDb.dao())
+    // ---- 作品级播放进度（v4.0：WorkStore 替代 FolderProgressStore）----
+    private val workStore = WorkStore(appDb.dao())
     private var lastSavedIndex = -1
     private var lastSavedUri: String? = null
 
     // 最近一次标记播放过的条目（节流，避免每次状态变化写盘）
     private var lastMarkedEntryId: String? = null
+    // 最近一次标记播放过的作品（节流）
+    private var lastMarkedWorkId: Long? = null
 
     companion object {
         private const val KEY_ALBUM_TITLE_MODE = "album_title_mode"
@@ -602,19 +615,22 @@ class PlayerViewModel @JvmOverloads constructor(
             var lastIsPlaying = false
             var lastQueueIndex = -1
             PlaybackController.state.collect { st ->
-                val uri = _currentFolderUri.value?.toString() ?: return@collect
                 val idx = st.queueIndex
                 if (st.isPlaying && idx >= 0 && st.currentItem != null) {
                     markCurrentEntryPlayed()
-                    if (idx != lastSavedIndex || uri != lastSavedUri) {
-                        progressStore.save(uri, idx, st.positionMs)
+                    val path = st.currentItem.path
+                    if (idx != lastSavedIndex || path != lastSavedUri) {
+                        saveWorkProgress(path, idx, st.positionMs)
                         lastSavedIndex = idx
-                        lastSavedUri = uri
+                        lastSavedUri = path
                     }
+                    markCurrentWorkPlayed(path)
                 }
                 // v1.7.0：时长补录（网盘或扫描未知时长 → 播放器拿到实际时长后回写 db）
                 if (st.durationMs > 0L && st.currentItem != null && st.currentItem.durationMs == null) {
-                    indexStore.updateDurationMs(uri, st.currentItem.path, st.durationMs)
+                    val path = st.currentItem.path
+                    val entryId = runBlocking { appDb.dao().getEntryIdByUri(path) }
+                    if (entryId != null) indexStore.updateDurationMs(entryId, path, st.durationMs)
                 }
                 // v1.6.7：全局定时关闭——每次开始播放重置倒计时
                 if (st.isPlaying && !lastIsPlaying && _globalSleepMinutes.value > 0) {
@@ -1115,38 +1131,35 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     /**
-     * v2.0.1：仅恢复条目的播放上下文（上次专辑队列 + 进度），不进入任何视图。
-     * 与 enterAlbumWithRecord 的播放恢复逻辑一致，但不写 _currentAlbum/_inFolderView，
-     * 也不弹播放详情；恢复后刷新主页专辑分区（最近播放/尚未播放）。
+     * v2.0.1：仅恢复条目的播放上下文（上次作品队列 + 进度），不进入任何视图。
+     * v4.0：作品化——取该条目最近播放过的作品（works.lastPlayedAt 最新）恢复，不猜测专辑名。
      */
     private fun resumePlaybackOfEntry(entry: SavedEntry) {
         val entryId = entry.id
-        val files = indexStore.load()[entryId] ?: emptyList()
-        if (files.isEmpty()) return
         if (!shouldRestartOnEnter(entryId, PlaybackController.state.value.isPlaying)) return
         saveCurrentPlaybackProgress()
-        val album = files.firstNotNullOfOrNull { it.album } ?: entry.displayName
+        val work = runBlocking { appDb.dao().getWorksByEntry(entryId) }
+            .maxByOrNull { it.lastPlayedAt } ?: return
         viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { albumStore.allSongs(entryId, album) }
+            val all = withContext(Dispatchers.IO) { albumStore.allSongs(work.id) }
             if (all.isEmpty()) return@launch
             val items = all.map { it.toAudioItem(entry.sourceType) }
-            val record = progressStore.load(entryId)
-            val (startIndex, startPos) = FolderProgressLogic.resolveStart(items.size, record)
+            val record = workStore.load(work.id)
+            val (startIndex, startPos) = FolderProgressLogic.resolveStart(items, record)
             lastSavedIndex = startIndex
-            lastSavedUri = entryId
-            val albumCount = files.map { it.album ?: entry.displayName }.distinct().size
+            lastSavedUri = items.getOrNull(startIndex)?.path
+            val albumCount = runBlocking { appDb.dao().getWorksByEntry(entryId) }.size.coerceAtLeast(1)
             val cover = coverManager.resolveAlbumCover(entry.coverUri, albumCount, all.firstOrNull()?.uri)
             MediaPlayService.start(getApplication())
-            PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, entryId)
+            PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:${work.id}")
             refreshAlbums()
         }
     }
 
-    /** 删除已添加条目（含进度记录、内容索引、本地封面缓存） */
+    /** 删除已添加条目（含内容索引、本地封面缓存；无引用作品连同其进度由 cleanupOrphanWorks 收敛） */
     fun clearSavedEntry(entry: SavedEntry) {
         setEntries(entryStore.remove(_savedEntries.value, entry.id))
         indexStore.remove(entry.id)
-        progressStore.remove(entry.id)
         if (entry.coverUri?.startsWith("file://") == true) {
             runCatching { File(Uri.parse(entry.coverUri).path!!).delete() }
         }
@@ -1225,13 +1238,14 @@ class PlayerViewModel @JvmOverloads constructor(
         _requestPlayerSheet.value = false
     }
 
-    /** 加载条目记录并就绪（不播）；点播放后从记录位置续播 */
+    /** 加载条目记录并就绪（不播）；点播放后从记录位置续播（v4.0：恢复该条目最近播放的作品进度） */
     private fun enterFolderWithRecord(folderUri: Uri, items: List<AudioItem>) {
-        val record = progressStore.load(folderUri.toString())
-        val (startIndex, startPos) = FolderProgressLogic.resolveStart(items.size, record)
+        val entryId = folderUri.toString()
+        val record = workStore.loadMostRecentByEntry(entryId)
+        val (startIndex, startPos) = FolderProgressLogic.resolveStart(items, record)
         lastSavedIndex = startIndex
-        lastSavedUri = folderUri.toString()
-        val entry = savedEntryById(folderUri.toString())
+        lastSavedUri = items.getOrNull(startIndex)?.path
+        val entry = savedEntryById(entryId)
         // v1.6.22：修复"无封面专辑串用其他专辑图"（老问题回归）。
         // 文件夹视图进入的封面规则与专辑入口共用 resolveAlbumCover：
         // 单专辑文件夹 → 文件夹封面；多专辑文件夹 → 记录定位曲目的内嵌封面（解析不到返回 null，绝不串图）
@@ -1243,19 +1257,33 @@ class PlayerViewModel @JvmOverloads constructor(
         MediaPlayService.start(getApplication())
         viewModelScope.launch {
             PlaybackController.prepareFolder(
-                resolveAll(items, coverUri = cover), startIndex, startPos, folderUri.toString()
+                resolveAll(items, coverUri = cover), startIndex, startPos, entryId
             )
         }
     }
 
-    /** 保存当前条目的播放进度（无当前条目或未播放时不存） */
+    /** 按当前曲目保存作品进度（v4.0：锚点 = 曲目 uri 反查 workId + 内容引用） */
     fun saveCurrentPlaybackProgress() {
-        val uri = _currentFolderUri.value ?: return
         val st = PlaybackController.state.value
         if (st.queueIndex < 0 || st.currentItem == null) return
-        progressStore.save(uri.toString(), st.queueIndex, st.positionMs)
+        val path = st.currentItem.path
+        saveWorkProgress(path, st.queueIndex, st.positionMs)
         lastSavedIndex = st.queueIndex
-        lastSavedUri = uri.toString()
+        lastSavedUri = path
+    }
+
+    /** 保存作品进度：曲目 uri 反查 workId（找不到作品的单曲播放不存） */
+    private fun saveWorkProgress(path: String, orderIndex: Int, positionMs: Long) {
+        val workId = workStore.workIdForUri(path) ?: return
+        workStore.save(workId, path, orderIndex, positionMs, matchMode = 1)
+    }
+
+    /** 播放开始时标记当前作品"已播放过"（节流；支撑最近播放分区） */
+    private fun markCurrentWorkPlayed(path: String) {
+        val workId = workStore.workIdForUri(path) ?: return
+        if (lastMarkedWorkId == workId) return
+        lastMarkedWorkId = workId
+        workStore.touchPlayed(workId, System.currentTimeMillis())
     }
 
     /** 播放开始时把当前条目标记为"已播放过"（更新 lastPlayedAt，支撑最近播放排序） */

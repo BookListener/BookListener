@@ -134,7 +134,15 @@ object StoreMigration {
                         val f = filesArr.optJSONObject(j) ?: continue
                         val name = f.optString("displayName")
                         val uri = f.optString("uri")
-                        if (name.isNotBlank()) add(com.booklistener.db.EntryIndexEntity(entryId, name, uri, null, null, null, null, null, null))
+                        if (name.isNotBlank()) add(
+                            com.booklistener.db.EntryIndexEntity(
+                                entryId = entryId,
+                                displayName = name,
+                                uri = uri,
+                                album = null, artist = null, track = null, disc = null,
+                                durationMs = null, rawName = null
+                            )
+                        )
                     }
                 }
                 if (rows.isNotEmpty()) dao.insertEntryIndex(rows)

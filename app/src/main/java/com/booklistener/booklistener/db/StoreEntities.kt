@@ -1,6 +1,7 @@
 package com.booklistener.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -31,7 +32,15 @@ data class FolderProgressEntity(
     val updatedAt: Long
 )
 
-@Entity(tableName = "entry_index", primaryKeys = ["entryId", "uri"])
+@Entity(
+    tableName = "entry_index",
+    primaryKeys = ["entryId", "uri"],
+    indices = [
+        Index(value = ["workId"]),
+        Index(value = ["entryId", "workId"]),
+        Index(value = ["entryId", "sortRank"])
+    ]
+)
 data class EntryIndexEntity(
     val entryId: String,
     val displayName: String,
@@ -42,5 +51,10 @@ data class EntryIndexEntity(
     val track: Int?,
     val disc: Int?,
     val durationMs: Long?,
-    val rawName: String?
+    val rawName: String?,
+    // v4.0：作品实体化（DESIGN-数据库重构-v4）
+    val workId: Long? = null,      // 指向 works.id（扫描后回填），替代查询时 GROUP BY 聚合
+    val sortRank: Int? = null,     // 条目内展示序下标（AudioSortKey.byName），专辑内 ORDER BY sortRank
+    val sizeBytes: Long? = null,   // 二期内容指纹用；本期仅落库
+    val albumArtist: String? = null // 参与作品键（当前解析无 albumArtist 概念，暂空，key 用 artist 兜底）
 )
