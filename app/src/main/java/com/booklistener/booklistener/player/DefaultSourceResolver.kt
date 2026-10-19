@@ -27,8 +27,10 @@ class DefaultSourceResolver(
             SourceType.LOCAL -> Result.success(item.path)
 
             SourceType.WEBDAV -> {
+                // v5.0：虚拟轨共用同一整轨文件——缓存键必须归一到整轨 uri，避免同文件缓存两份
+                val cacheItem = cacheKeyItem(item)
                 if (fullFileCacheEnabled) {
-                    val cached = cache.cachedFile(item)
+                    val cached = cache.cachedFile(cacheItem)
                     if (cached != null) {
                         Result.success(cached.toURI().toString())
                     } else {
@@ -88,5 +90,11 @@ class DefaultSourceResolver(
             target.outputStream().use { out -> body.byteStream().copyTo(out) }
             return target.length()
         }
+    }
+
+    /** 虚拟轨的缓存键归一：id 落到整轨 uri（ClippingConfiguration 播放同一文件） */
+    private fun cacheKeyItem(item: AudioItem): AudioItem {
+        val whole = com.booklistener.core.VirtualTrackUri.parse(item.path)?.first ?: return item
+        return item.copy(id = whole)
     }
 }

@@ -134,6 +134,36 @@ interface AppDao {
         insertEntryIndex(files)
     }
 
+    // ---- v5.0（spec: cue-virtual-tracks）：cue_sheets 关联表与虚拟轨查询 ----
+
+    @Query("SELECT * FROM cue_sheets WHERE cueUri = :cueUri LIMIT 1")
+    suspend fun getCueSheetByUri(cueUri: String): CueSheetEntity?
+
+    /** 内容文件列表：某条目的全部 cue 文件行（含被吸收整轨 audioUri，UI 层与 entry_index 去重） */
+    @Query("SELECT * FROM cue_sheets WHERE entryId = :entryId")
+    suspend fun getCueSheetsByEntry(entryId: String): List<CueSheetEntity>
+
+    /** 某条目的被吸收整轨 uri（audioUri 非空；UI 层判断是否已在 entry_index 中决定是否展示整轨行） */
+    @Query("SELECT audioUri FROM cue_sheets WHERE entryId = :entryId AND audioUri IS NOT NULL")
+    suspend fun getAbsorbedAudioUrisByEntry(entryId: String): List<String>
+
+    @Query("DELETE FROM cue_sheets WHERE entryId = :entryId")
+    suspend fun deleteCueSheetsByEntry(entryId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCueSheet(sheet: CueSheetEntity)
+
+    /** 虚拟轨列表页数据源：按作品查虚拟轨行（D5：db 查询，不重新解析 cue） */
+    @Query("SELECT * FROM entry_index WHERE workId = :workId ORDER BY sortRank ASC")
+    suspend fun listVirtualTracksByWork(workId: Long): List<EntryIndexEntity>
+
+    /** cue_sheets 与 entry_index 同生命周期：扫描 replaceEntryIndex 时一并整体替换 */
+    @androidx.room.Transaction
+    suspend fun replaceCueSheets(entryId: String, sheets: List<CueSheetEntity>) {
+        deleteCueSheetsByEntry(entryId)
+        sheets.forEach { upsertCueSheet(it) }
+    }
+
     // ---- v4.0：作品实体（works）与作品进度（work_progress）----
 
     @Query("SELECT * FROM works WHERE key = :key LIMIT 1")

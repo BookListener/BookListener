@@ -51,3 +51,21 @@ data class WorkProgressEntity(
     val speed: Float,
     val updatedAt: Long
 )
+
+/**
+ * v5.0（spec: cue-virtual-tracks）CUE 整轨虚拟分轨关联表：
+ * cue 文件本身**不是**媒体条目（不入 entry_index），用本表记录其存在与归属。
+ * - cueUri 主键：cue 文件 uri（本地 SAF docId / 网盘 href）
+ * - audioUri：定位到的整轨 uri（FILE 声明优先 + 同名扩展名探测兜底）；解析失败/未定位 = null
+ * - workId：cue 专辑作品 id（无有效轨 = null）；虚拟轨行（uri=<audioUri>#track_<startMs>）在 entry_index 中按此 workId 聚合
+ */
+@Entity(
+    tableName = "cue_sheets",
+    indices = [Index(value = ["entryId"]), Index(value = ["workId"]), Index(value = ["audioUri"])]
+)
+data class CueSheetEntity(
+    @PrimaryKey val cueUri: String,
+    val entryId: String,
+    val audioUri: String?,
+    val workId: Long?
+)

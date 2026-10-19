@@ -328,9 +328,14 @@ class PlayerViewModel @JvmOverloads constructor(
     // ---- 文件夹浏览（SAF OpenDocumentTree）----
     // v1.6.0：扫描注入真实标签解析（title/artist/track/disc → 显示名与排序）
     private val tagResolver = TagResolver(app)
-    private val folderScanner = FolderScanner(::queryFolderChildren, tagResolver = { uri, name ->
-        tagResolver.resolve(android.net.Uri.parse(uri))
-    })
+    private val folderScanner = FolderScanner(
+        ::queryFolderChildren,
+        tagResolver = { uri, name ->
+            tagResolver.resolve(android.net.Uri.parse(uri))
+        },
+        // v5.0：读 .cue 文本（SAF ContentResolver；失败返回 null，该 cue 不参与解析）
+        readText = { uri -> readSafText(uri) }
+    )
     private val coverManager = CoverManager(app, CoverScanner(::queryFolderChildren))
     private val _folderItems = MutableStateFlow<List<AudioItem>>(emptyList())
     val folderItems: StateFlow<List<AudioItem>> = _folderItems.asStateFlow()
@@ -705,7 +710,10 @@ class PlayerViewModel @JvmOverloads constructor(
     private suspend fun resolveAll(items: List<AudioItem>, coverUri: String? = null): List<PlayableItem> {
         val playable = mutableListOf<PlayableItem>()
         for (item in items) {
-            val uri = repo.resolver.resolve(item)
+            // v5.0：虚拟轨 uri（<整轨>#track_<startMs>）需拆出整轨 uri 解析真实播放地址，裁剪交给 MediaItem
+            val wholeUri = com.booklistener.core.VirtualTrackUri.parse(item.path)?.first
+            val resolveTarget = if (wholeUri != null) item.copy(path = wholeUri) else item
+            val uri = repo.resolver.resolve(resolveTarget)
                 .getOrElse { e ->
                     AppLog.e("resolve ${item.displayName} failed", e)
                     item.path
@@ -777,7 +785,9 @@ class PlayerViewModel @JvmOverloads constructor(
             val items = withContext(Dispatchers.IO) {
                 loadFromIndex(treeUri.toString(), SourceType.LOCAL) ?: run {
                     val scanned = folderScanner.scan(treeUri.toString())
-                    indexStore.save(treeUri.toString(), scanned.map { it.toIndexedFile() })
+                    // v5.0：cue 虚拟分轨——扫描时收集 .cue 候选参与解析/吸收
+                    val cues = folderScanner.scanCues(treeUri.toString())
+                    indexStore.save(treeUri.toString(), scanned.map { it.toIndexedFile() }, cues)
                     scanned
                 }
             }
@@ -968,7 +978,8 @@ class PlayerViewModel @JvmOverloads constructor(
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 val (_, list) = repo.listWebDavDirEntries(folderUrl).getOrThrow()
-                indexStore.save(entry.id, list.map { it.toIndexedFile() })
+                val cues = repo.listWebDavCueFiles(folderUrl).getOrDefault(emptyList())
+                indexStore.save(entry.id, list.map { it.toIndexedFile() }, cues)
             }
             withContext(Dispatchers.Main) { refreshAlbums() }
         }
@@ -995,7 +1006,8 @@ class PlayerViewModel @JvmOverloads constructor(
                     SourceType.WEBDAV -> {
                         val (dirs, list) = repo.listWebDavDirEntries(entry.uri).getOrThrow()
                         _webDavDirs.value = dirs
-                        indexStore.save(entry.id, list.map { it.toIndexedFile() })
+                        val cues = repo.listWebDavCueFiles(entry.uri).getOrDefault(emptyList())
+                        indexStore.save(entry.id, list.map { it.toIndexedFile() }, cues)
                         list
                     }
                     else -> loadFromIndex(entry.id, entry.sourceType) ?: run {
@@ -1339,6 +1351,43 @@ class PlayerViewModel @JvmOverloads constructor(
         _manageFiles.value = null
     }
 
+    // ---- v5.0：内容文件列表 .cue 行点击 → 虚拟轨列表（纯浏览，不关联播放） ----
+
+    /** 虚拟轨浏览弹层状态：cue 名 + 该 cue 的虚拟轨（按轨号排序；退化/无轨时空列表） */
+    data class VirtualTrackSheetState(
+        val cueName: String,
+        val tracks: List<com.booklistener.core.IndexedFile>
+    )
+
+    private val _virtualTrackSheet = MutableStateFlow<VirtualTrackSheetState?>(null)
+    val virtualTrackSheet: StateFlow<VirtualTrackSheetState?> = _virtualTrackSheet.asStateFlow()
+
+    /**
+     * 点击 .cue 行：按 cue_sheets 关联的作品查虚拟轨（db，不重新解析）。
+     * 同作品可能并存多 cue（同名专辑）→ 用 rawName 前缀（"cue显示名#轨号"）精确过滤本 cue 的轨。
+     */
+    fun openVirtualTracks(cueUri: String, cueName: String) {
+        viewModelScope.launch {
+            val tracks = withContext(Dispatchers.IO) {
+                val sheet = appDb.dao().getCueSheetByUri(cueUri)
+                if (sheet?.workId == null) {
+                    emptyList()
+                } else {
+                    val cueBase = cueName.substringBeforeLast('.')
+                    appDb.dao().listVirtualTracksByWork(sheet.workId)
+                        .map { com.booklistener.core.IndexedFile.fromEntity(it) }
+                        .filter { (it.rawName ?: "").startsWith("$cueBase#") }
+                        .sortedBy { it.track ?: Int.MAX_VALUE }
+                }
+            }
+            _virtualTrackSheet.value = VirtualTrackSheetState(cueName, tracks)
+        }
+    }
+
+    fun dismissVirtualTracks() {
+        _virtualTrackSheet.value = null
+    }
+
     /**
      * 刷新条目数据库（v1.6.3，文件夹管理文件列表"刷新"按钮）：
      * 重读该条目全部文件（本地重扫文件头/网盘重列目录）→ 重建内容索引（标签/时长/原始文件名）
@@ -1347,21 +1396,25 @@ class PlayerViewModel @JvmOverloads constructor(
      */
     fun refreshEntry(entry: SavedEntry) {
         viewModelScope.launch {
-            val items = withContext(Dispatchers.IO) {
+            val (items, cues) = withContext(Dispatchers.IO) {
                 runCatching {
                     if (entry.isLocal) {
-                        folderScanner.scan(entry.uri)
+                        val scanned = folderScanner.scan(entry.uri)
+                        val scannedCues = folderScanner.scanCues(entry.uri)
+                        scanned to scannedCues
                     } else if (entry.sourceType == SourceType.WEBDAV) {
-                        repo.listWebDavDirEntries(entry.uri).getOrThrow().second
+                        val list = repo.listWebDavDirEntries(entry.uri).getOrThrow().second
+                        val cueFiles = repo.listWebDavCueFiles(entry.uri).getOrDefault(emptyList())
+                        list to cueFiles
                     } else {
-                        repo.listDirectory(entry.sourceType, entry.uri).getOrThrow()
+                        repo.listDirectory(entry.sourceType, entry.uri).getOrThrow() to emptyList()
                     }
                 }.getOrElse { e ->
                     AppLog.e("refresh entry failed: ${entry.id}", e)
-                    emptyList()
+                    emptyList<AudioItem>() to emptyList()
                 }
             }
-            indexStore.save(entry.id, items.map { it.toIndexedFile() })
+            indexStore.save(entry.id, items.map { it.toIndexedFile() }, cues)
             if (entry.isLocal) {
                 val newEntry = buildLocalEntry(Uri.parse(entry.uri), items, prev = entry)
                 setEntries(entryStore.replace(_savedEntries.value, newEntry))
@@ -1425,6 +1478,13 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     // ---- SAF 查询 ----
+
+    /** v5.0：读 SAF 文件文本（.cue 解析用；读取失败/无权限返回 null） */
+    private fun readSafText(uri: String): String? = runCatching {
+        getApplication<Application>().contentResolver
+            .openInputStream(android.net.Uri.parse(uri))
+            ?.use { it.readBytes().toString(Charsets.UTF_8) }
+    }.getOrNull()
 
     /** SAF 树目录的子项查询（ContentResolver，DocumentsContract 规范） */
     private fun queryFolderChildren(treeUriStr: String, parentDocId: String): List<FolderEntry> {

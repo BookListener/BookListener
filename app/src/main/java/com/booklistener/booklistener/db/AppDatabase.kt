@@ -19,9 +19,10 @@ import com.booklistener.core.WorkBackfill
         FolderProgressEntity::class,
         EntryIndexEntity::class,
         WorkEntity::class,
-        WorkProgressEntity::class
+        WorkProgressEntity::class,
+        CueSheetEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -305,6 +306,25 @@ abstract class AppDatabase : RoomDatabase() {
                 }
         }
 
+        /**
+         * v5.0（spec: cue-virtual-tracks）：仅新增 cue_sheets 关联表，无数据搬移、无既有表结构变更。
+         * cue_sheets 与 entry_index 同生命周期：扫描时 replaceCueSheets 整体替换。
+         */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `cue_sheets` (" +
+                        "`cueUri` TEXT NOT NULL PRIMARY KEY, " +
+                        "`entryId` TEXT NOT NULL, " +
+                        "`audioUri` TEXT, " +
+                        "`workId` INTEGER)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cue_sheets_entryId` ON `cue_sheets`(`entryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cue_sheets_workId` ON `cue_sheets`(`workId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cue_sheets_audioUri` ON `cue_sheets`(`audioUri`)")
+            }
+        }
+
         /** 迁移回填用行（entry_index JOIN saved_entry） */
         private data class Row(
             val entryId: String,
@@ -323,7 +343,7 @@ abstract class AppDatabase : RoomDatabase() {
                     ctx.applicationContext,
                     AppDatabase::class.java,
                     "music_db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
                 INSTANCE = ins
                 ins
             }

@@ -27,7 +27,9 @@ class FolderScanner(
     private val treeDocumentId: (treeUri: String) -> String = { defaultTreeDocumentId(it) },
     private val fileUriBuilder: (treeUri: String, docId: String) -> String =
         { tree, doc -> defaultFileUri(tree, doc) },
-    private val tagResolver: (uri: String, fileName: String) -> TagResolver.AudioTags? = { _, _ -> null }
+    private val tagResolver: (uri: String, fileName: String) -> TagResolver.AudioTags? = { _, _ -> null },
+    /** v5.0（spec: cue-virtual-tracks）：读 .cue 文件文本（SAF ContentResolver 等），null = 读取失败/无权限 */
+    private val readText: (uri: String) -> String? = { null }
 ) {
 
     fun scan(treeUri: String, maxDepth: Int = 3): List<AudioItem> {
@@ -35,6 +37,39 @@ class FolderScanner(
         walk(treeUri, treeDocumentId(treeUri), 0, maxDepth, collected)
         // 出口统一自然排序（disc → track → 名称），播放顺序与列表一致；稳定排序保留扫描原序
         return collected.sortedWith(compareBy(AudioSortKey.byName) { it.second }).map { it.first }
+    }
+
+    /** v5.0：扫描目录内 .cue 文件候选（文本已读取；读取失败的文件不产出） */
+    fun scanCues(treeUri: String, maxDepth: Int = 3): List<CueIndexer.CueCandidate> {
+        val cues = mutableListOf<CueIndexer.CueCandidate>()
+        walkCues(treeUri, treeDocumentId(treeUri), 0, maxDepth, cues)
+        return cues
+    }
+
+    private fun walkCues(
+        treeUri: String,
+        parentDocId: String,
+        depth: Int,
+        maxDepth: Int,
+        out: MutableList<CueIndexer.CueCandidate>
+    ) {
+        if (depth > maxDepth) return
+        val children = listChildren(treeUri, parentDocId) ?: return
+        for (entry in children) {
+            if (entry.isDirectory) {
+                walkCues(treeUri, entry.docId, depth + 1, maxDepth, out)
+            } else if (isCueFile(entry.displayName)) {
+                val fileUri = fileUriBuilder(treeUri, entry.docId)
+                val text = readText(fileUri)
+                if (text != null) {
+                    out += CueIndexer.CueCandidate(
+                        cueUri = fileUri,
+                        displayName = entry.displayName,
+                        text = text
+                    )
+                }
+            }
+        }
     }
 
     private fun walk(
@@ -90,6 +125,10 @@ class FolderScanner(
         val ext = entry.displayName.substringAfterLast('.', "").lowercase()
         return ext in AUDIO_EXTENSIONS
     }
+
+    /** .cue 索引文件判定（大小写不敏感） */
+    private fun isCueFile(name: String): Boolean =
+        name.isNotBlank() && name.substringAfterLast('.', "").lowercase() == "cue"
 
     companion object {
         private const val AUDIO_MIME_PREFIX = "audio/"

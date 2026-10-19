@@ -150,10 +150,21 @@ object PlaybackController {
             val metaBuilder = MediaMetadata.Builder().setTitle(it.item.displayName)
             // v1.6.3：通知/锁屏封面 = 播放上下文解析的专辑封面（无则不设，绝不串用其他专辑图）
             it.coverUri?.let { uri -> metaBuilder.setArtworkUri(Uri.parse(uri)) }
-            MediaItem.Builder()
+            val builder = MediaItem.Builder()
                 .setUri(it.uri)
                 .setMediaMetadata(metaBuilder.build())
-                .build()
+            // v5.0：虚拟轨（uri = <整轨>#track_<startMs>）→ 裁剪窗口（ClippingConfiguration，零切割位完美）。
+            // endMs = start + 轨长；末轨（durationMs 未知）不设 end（ClippingConfiguration 默认播到文件尾）。
+            com.booklistener.core.VirtualTrackUri.parse(it.uri)?.let { (base, startMs) ->
+                builder.setUri(base)
+                val clipping = MediaItem.ClippingConfiguration.Builder()
+                    .setStartPositionMs(startMs)
+                it.item.durationMs?.takeIf { d -> d > 0 }?.let { d ->
+                    clipping.setEndPositionMs(startMs + d)
+                }
+                builder.setClippingConfiguration(clipping.build())
+            }
+            builder.build()
         }
         val audioItems = items.map { it.item }
         // 关键：autoPlay=false 时必须先显式 pause() 把 playWhenReady 置 false，

@@ -254,13 +254,30 @@ class EntryIndexStore(private val dao: AppDao) {
      * v4.0 扫描入库（作品实体化）：逐文件算作品键 → upsert works by key（id 稳定）→
      * 写 entry_index（workId/sortRank/sizeBytes）→ 清理失效行与无引用作品（连带进度）。
      * 禁止整删重建 works——workId 一旦重建，work_progress.workId 断链、进度全丢。
+     *
+     * v5.0（spec: cue-virtual-tracks）：可选 cue 候选。存在时先做 CUE 预处理：
+     * 解析 → 定位整轨（FILE 声明优先 + 同名扩展名探测）→ 虚拟轨并入 files、被吸收整轨剔除、
+     * cue_sheets 落库（workId 按虚拟轨 uri 反查回填）。
      */
-    fun save(entryId: String, files: List<IndexedFile>) = blockingRun {
+    fun save(entryId: String, files: List<IndexedFile>, cueCandidates: List<CueIndexer.CueCandidate> = emptyList()) = blockingRun {
         val entry = dao.getAllSavedEntries().firstOrNull { it.id == entryId }
         val folderName = entry?.displayName ?: entryId
         val sourceScope = entry?.sourceType ?: SourceType.LOCAL.name
-        val withTrack = assignTrackNumbers(files)
+        val cueResult = CueIndexer.index(entryId, files, cueCandidates)
+        val merged = files.filterNot { it.uri in cueResult.absorbedAudioUris } + cueResult.virtualTracks
+        val withTrack = assignTrackNumbers(merged)
         dao.saveEntryIndexWithWorks(entryId, folderName, sourceScope, withTrack)
+        // cue_sheets 与 entry_index 同生命周期整体替换；workId = 该 cue 首个虚拟轨所在作品
+        if (cueResult.cueSheets.isNotEmpty()) {
+            val sheets = cueResult.cueSheets.map { s ->
+                val sample = cueResult.sampleTrackUris[s.cueUri]
+                if (s.workId == null && sample != null) {
+                    val wid = dao.getWorkIdByUri(sample)
+                    if (wid != null) s.copy(workId = wid) else s
+                } else s
+            }
+            dao.replaceCueSheets(entryId, sheets)
+        }
     }
 
     /** 播放后补录/校正时长（网盘或扫描未知时长）；同步重算作品总时长缓存 */

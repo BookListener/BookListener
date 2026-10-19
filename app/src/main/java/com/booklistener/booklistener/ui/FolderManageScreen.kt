@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.booklistener.ui
 import androidx.compose.ui.res.stringResource
 import com.booklistener.R
@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
@@ -30,8 +32,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -437,7 +441,13 @@ fun FolderManageScreen(
             } else {
                 LazyColumn {
                     items(files, key = { it.uri }) { file ->
-                        ManageFileRow(file)
+                        ManageFileRow(
+                            file = file,
+                            // v5.0：仅 .cue 行可点击（打开该 cue 的虚拟轨列表，纯浏览不播放）；常规行无点击
+                            onClick = if (isCueFileRow(file)) {
+                                { viewModel.openVirtualTracks(file.uri, file.rawName ?: file.displayName) }
+                            } else null
+                        )
                         // v2.0.12：文件列表行间格线（同设置页/账号列表风格）
                         HorizontalDivider()
                     }
@@ -445,6 +455,47 @@ fun FolderManageScreen(
             }
         }
         return
+    }
+
+    // v5.0：内容文件列表 .cue 行 → 虚拟轨浏览弹层（数据源 = cue_sheets 关联作品的虚拟轨）
+    val vts = viewModel.virtualTrackSheet.collectAsStateWithLifecycle().value
+    if (vts != null) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.dismissVirtualTracks() },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                Text(
+                    text = vts.cueName,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
+                Text(
+                    text = stringResource(MessageCatalog.CUE_VIRTUAL_TRACKS),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+                )
+                if (vts.tracks.isEmpty()) {
+                    Text(
+                        text = stringResource(MessageCatalog.CUE_NO_TRACKS),
+                        modifier = Modifier.fillMaxWidth().padding(top = 32.dp, start = 24.dp, end = 24.dp, bottom = 16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    LazyColumn {
+                        items(vts.tracks, key = { it.uri }) { track ->
+                            VirtualTrackRow(track)
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -539,12 +590,20 @@ private fun FolderManageRow(
     }
 }
 
+/** .cue 文件行判定（rawName 或显示名以 .cue 结尾，大小写不敏感） */
+private fun isCueFileRow(file: com.booklistener.core.IndexedFile): Boolean =
+    (file.rawName ?: file.displayName).substringAfterLast('.', "").equals("cue", ignoreCase = true)
+
 /** 管理文件行（v1.7.0）：文件名（含扩展名，优先原始文件名）+ 时长 */
 @Composable
-private fun ManageFileRow(file: com.booklistener.core.IndexedFile) {
+private fun ManageFileRow(
+    file: com.booklistener.core.IndexedFile,
+    onClick: (() -> Unit)? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -565,6 +624,50 @@ private fun ManageFileRow(file: com.booklistener.core.IndexedFile) {
                 text = file.durationMs?.let { formatDuration(it) } ?: stringResource(R.string.common_unknown_duration),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (onClick != null) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = stringResource(MessageCatalog.CUE_VIRTUAL_TRACKS),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+/** 虚拟轨行（v5.0）：轨号 · 标题 + 表演者 · 时长（纯浏览） */
+@Composable
+private fun VirtualTrackRow(track: com.booklistener.core.IndexedFile) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = track.track?.let { "%02d".format(it) } ?: "--",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(28.dp)
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+            Text(
+                text = track.displayName,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = listOfNotNull(
+                    track.artist?.takeIf { it.isNotBlank() },
+                    track.durationMs?.let { formatDuration(it) }
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

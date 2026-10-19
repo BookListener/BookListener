@@ -42,7 +42,7 @@ cue 有全局 PERFORMER/TITLE → 按表演者/专辑聚合（可与同名 tag �
 - [cue 编辑导致全轨 startMs 漂移 → 进度近似回退] → v4 matchMode=0 诚实标注，可接受（虚拟轨播放对象不变）
 - [整轨曾入库的用户：吸收后整轨进度丢失] → 吸收只发生在"有 cue 且定位成功"的目录，属语义升级；CHANGELOG 行为变更说明
 - [WebDAV readText 需网络] → 仅扫描时一次小文本读取；失败按"无 cue"处理（整轨普通条目），不阻塞扫描
-- [ape/dsf/dff seek 精度依赖解码器] → 显式 mimeType 派发；精度问题不在本 change 解决（文档已知限制）
+- [ape/dsf/dff 无 Media3 官方解码器（项目未引入 FFmpeg 扩展）] → 吸收探测仅限可解码格式 flac/wav/mp3/m4a（CueIndexer.WHOLE_EXTENSIONS）；ape/dsf/dff 整轨保持普通条目，不新增扫描支持（避免入库却播不了）；文档已知限制
 
 ## Migration Plan
 

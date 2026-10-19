@@ -7,6 +7,7 @@ import com.booklistener.cache.CacheManager
 import com.booklistener.core.AudioItem
 import com.booklistener.core.AudioSource
 import com.booklistener.core.AudioSourceException
+import com.booklistener.core.CueIndexer
 import com.booklistener.core.SourceType
 import com.booklistener.db.AppDatabase
 import com.booklistener.db.FavoriteItem
@@ -70,6 +71,13 @@ class MediaRepository(
         val source = webDavSourceFor(url)
             ?: return Result.failure(AudioSourceException.AuthFailed("WebDAV not configured"))
         return source.listDirEntries(url)
+    }
+
+    /** v5.0（spec: cue-virtual-tracks）：列举 WebDAV 目录内 .cue 文件并读文本（整轨虚拟分轨） */
+    suspend fun listWebDavCueFiles(url: String): Result<List<CueIndexer.CueCandidate>> {
+        val source = webDavSourceFor(url)
+            ?: return Result.failure(AudioSourceException.AuthFailed("WebDAV not configured"))
+        return source.listCueFiles(url)
     }
 
     val resolver: DefaultSourceResolver by lazy {

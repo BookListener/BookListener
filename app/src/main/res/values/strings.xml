@@ -73,7 +73,9 @@
     <string name="folder_empty">This folder is empty\nGo back or pick another folder</string>
     <string name="folder_delete_title">Delete confirmation</string>
     <string name="folder_delete_text">Delete "%1$s"?\nPlayback progress and cached file records will also be removed.</string>
-    <string name="folder_title">Folder management</string>
+    <string name="folder_title">Content management</string>
+    <string name="cue_virtual_tracks">Virtual tracks</string>
+    <string name="cue_no_tracks">No virtual tracks in this cue file</string>
     <string name="folder_mode_file_name">File name</string>
     <string name="folder_mode_tag">Tag</string>
 

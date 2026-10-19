@@ -9,6 +9,7 @@ import com.booklistener.core.AudioItem
 import com.booklistener.core.AudioMeta
 import com.booklistener.core.AudioSource
 import com.booklistener.core.AudioSourceException
+import com.booklistener.core.CueIndexer
 import com.booklistener.core.SourceType
 import com.booklistener.net.OkHttpHolder
 import okhttp3.Credentials
@@ -86,6 +87,40 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
         }
     }
 
+    /**
+     * v5.0（spec: cue-virtual-tracks）：列举目录内 .cue 文件并读取文本。
+     * 一次 PROPFIND（同 listDirEntries）+ 每 cue 一次 GET；无 .cue 时零 GET 开销。
+     */
+    suspend fun listCueFiles(url: String): Result<List<CueIndexer.CueCandidate>> = runCatching {
+        val cred = credentialProvider()
+            ?: throw AudioSourceException.AuthFailed("WebDAV not configured")
+        val request = Request.Builder()
+            .url(url)
+            .method("PROPFIND", propfindBody().toRequestBody("application/xml".toMediaTypeOrNull()))
+            .header("Depth", "1")
+            .header("Authorization", Credentials.basic(cred.username, cred.password))
+            .build()
+        OkHttpHolder.client.newCall(request).execute().use { resp ->
+            if (!resp.isSuccessful) throw mapHttpError(resp)
+            val xml = resp.body?.string().orEmpty()
+            parseWebDavCueFiles(xml, url).mapNotNull { (href, name) ->
+                val text = readWebDavText(href, cred)
+                if (text == null) null else CueIndexer.CueCandidate(cueUri = href, displayName = name, text = text)
+            }
+        }
+    }
+
+    /** GET 读取 .cue 文本（读取失败返回 null，该 cue 不参与解析，整轨保持普通条目） */
+    private suspend fun readWebDavText(href: String, cred: WebDavCredential): String? = runCatching {
+        val request = Request.Builder()
+            .url(href)
+            .header("Authorization", Credentials.basic(cred.username, cred.password))
+            .build()
+        OkHttpHolder.client.newCall(request).execute().use { resp ->
+            if (resp.isSuccessful) resp.body?.string() else null
+        }
+    }.getOrNull()
+
     override suspend fun getPlayUri(item: AudioItem): Result<String> = runCatching {
         if (item.sourceType != SourceType.WEBDAV) {
             throw AudioSourceException.NotFound("item not webdav")
@@ -130,6 +165,72 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
  */
 internal fun parseWebDavMultiStatus(xml: String, base: String): List<AudioItem> =
     parseWebDavDirEntries(xml, base).second
+
+/**
+ * v5.0（spec: cue-virtual-tracks）：从 multistatus 响应提取 .cue 文件（href + 解码后文件名），
+ * 供整轨虚拟分轨解析。与 parseWebDavDirEntries 同构的局部名匹配；目录与音频条目均忽略。
+ */
+internal fun parseWebDavCueFiles(xml: String, base: String): List<Pair<String, String>> {
+    val parser = Xml.newPullParser()
+    parser.setInput(StringReader(xml))
+    val cues = mutableListOf<Pair<String, String>>()
+    var currentHref = ""
+    var currentDisplayName = ""
+    var isCollection = false
+    var inResponse = false
+
+    fun localTag(name: String?): String {
+        if (name.isNullOrEmpty()) return ""
+        val idx = name.indexOf(':')
+        return if (idx >= 0) name.substring(idx + 1) else name
+    }
+
+    fun isSelf(href: String, base: String): Boolean {
+        fun pathOf(u: String): String {
+            val s = u.trim().trimEnd('/')
+            val afterScheme = if (s.contains("://")) s.substring(s.indexOf("://") + 3) else s
+            val slash = afterScheme.indexOf('/')
+            return if (slash >= 0) afterScheme.substring(slash) else "/"
+        }
+        return pathOf(href) == pathOf(base)
+    }
+
+    var event = parser.eventType
+    while (event != XmlPullParser.END_DOCUMENT) {
+        when (event) {
+            XmlPullParser.START_TAG -> {
+                when (localTag(parser.name)) {
+                    "response" -> {
+                        inResponse = true
+                        currentHref = ""
+                        currentDisplayName = ""
+                        isCollection = false
+                    }
+                    "href" -> currentHref = parser.nextText()
+                    "displayname" -> currentDisplayName = parser.nextText()
+                    "collection" -> isCollection = true
+                }
+            }
+            XmlPullParser.END_TAG -> {
+                if (localTag(parser.name) == "response" && inResponse) {
+                    val rawHref = currentHref
+                    val href = resolveWebDavHref(base, rawHref)
+                    if (href.isNotEmpty() && !isSelf(href, base) && !isCollection && !href.endsWith("/")) {
+                        val name = currentDisplayName.ifEmpty {
+                            android.net.Uri.decode(rawHref.substringAfterLast('/'))
+                        }
+                        if (name.substringAfterLast('.', "").equals("cue", ignoreCase = true)) {
+                            cues += href to name
+                        }
+                    }
+                    inResponse = false
+                }
+            }
+        }
+        event = parser.next()
+    }
+    return cues
+}
 
 /** 解析 multistatus 并同时统计子目录数量（根自身不计入），目录计数供测试连接提示用 */
 internal fun parseWebDavMultiStatusDetailed(xml: String, base: String): Pair<List<AudioItem>, Int> {

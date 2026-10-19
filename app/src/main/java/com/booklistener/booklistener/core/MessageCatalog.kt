@@ -30,4 +30,8 @@ object MessageCatalog {
     val MSG_SLEEP_TIMER_DONE = R.string.msg_sleep_timer_done
     val MSG_GLOBAL_SLEEP_DONE = R.string.msg_global_sleep_done
     val MSG_SLEEP_END_UNKNOWN = R.string.msg_sleep_end_unknown
+
+    // v5.0（spec: cue-virtual-tracks）：虚拟轨浏览弹层
+    val CUE_VIRTUAL_TRACKS = R.string.cue_virtual_tracks
+    val CUE_NO_TRACKS = R.string.cue_no_tracks
 }
