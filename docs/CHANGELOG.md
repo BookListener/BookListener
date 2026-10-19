@@ -3,6 +3,18 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.1（2026-10）CUE 整轨虚拟分轨（spec: cue-virtual-tracks）
+- 新增 CUE 解析（`core/CueParser`）：多 FILE 段上下文、INDEX 00/01、MM:SS:FF→ms（75 帧/秒）、PREGAP 忽略、无 INDEX 跳过、末轨播到文件尾
+- 整轨**吸收**与退化：目录含 .cue 且成功定位整轨（FILE 声明优先 + 同名扩展名探测 flac/wav/mp3/m4a）时，专辑/曲目层只显示虚拟轨；解析失败或未定位时整轨退化为普通条目
+- 虚拟轨作为普通媒体条目入库（`<整轨uri>#track_<起始ms>` 唯一 uri），按既有作品键聚合；新增 `cue_sheets` 表（MIGRATION_4_5，仅建表无搬移）维护 cue → (条目, 整轨, 作品) 关联
+- 虚拟轨播放 = Media3 **ClippingConfiguration 裁剪窗口**（零切割、位完美保真）；进度按 (作品, 虚拟 uri) 内容引用记录，杀后台/重进精确恢复；cue 编辑致 startMs 漂移时按 v4 orderIndex 近似恢复并诚实标注
+- 内容文件列表（内容管理 → 条目）忠实显示所有文件（含 .cue 与整轨，常规行无点击）；.cue 行可点击浏览其**虚拟轨列表**（纯浏览，不触发播放/入队）
+- 列表命名统一（定稿）：主页聚合=专辑、专辑内=曲目、文件夹管理页=内容管理、其内文件列表=内容文件、cue 分轨列表=虚拟轨（i18n 资源 + GLOSSARY 同步）
+- **已知限制**：ape/dsf/dff 无 Media3 官方解码器（未引入 FFmpeg 扩展），不纳入吸收探测，整轨保持普通条目
+- **行为变更**：有 cue 且定位成功的目录，整轨不再单独出现在专辑/曲目层（吸收语义升级）；无 cue 目录行为不变
+- 测试：新增 CueParser / ScanCue / VirtualTrackUri / Migration45 共 17 用例，全量 273 用例回归通过
+- 注：本次按项目默认策略升 patch（用户未确认 minor）；如需 v2.2.0 再升版重建
+
 ## v2.1.0（2026-10）数据库重构 v4：作品实体化 + 进度内容引用
 - 新增 `works`（作品/专辑为一等实体）：tag 优先跨文件夹合并同名专辑；无标签/网盘按「条目+文件夹名」独立；`key` 唯一索引，扫描 **upsert by key**（禁止整删重建，作品 id 稳定）
 - 新增 `work_progress`：进度锚点从「位置序号」改为「(作品, 曲目 uri) 内容引用 + orderIndex 近似回退」，uri 失配时按位置近似恢复并诚实标注（可能定位不准）
