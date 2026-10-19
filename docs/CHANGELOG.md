@@ -3,7 +3,7 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
-## v2.0.15（2026-10）数据库重构 v4：作品实体化 + 进度内容引用
+## v2.1.0（2026-10）数据库重构 v4：作品实体化 + 进度内容引用
 - 新增 `works`（作品/专辑为一等实体）：tag 优先跨文件夹合并同名专辑；无标签/网盘按「条目+文件夹名」独立；`key` 唯一索引，扫描 **upsert by key**（禁止整删重建，作品 id 稳定）
 - 新增 `work_progress`：进度锚点从「位置序号」改为「(作品, 曲目 uri) 内容引用 + orderIndex 近似回退」，uri 失配时按位置近似恢复并诚实标注（可能定位不准）
 - 老表处置：`folder_progress` / `play_record` **停写保留不删**（回滚能力）；`cache_index` 搬家为 `cloud_cache`；`favorite` 收藏粒度升到作品（映射不到的保留 NULL 标未知，不静默删除）
