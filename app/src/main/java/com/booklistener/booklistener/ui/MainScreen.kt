@@ -263,17 +263,11 @@ fun MainScreen(
                     }
                     .clip(CircleShape)
                     .clickable {
-                        // 播放框弹出的同时，后台切换到当前播放队列所属文件夹的条目视图
-                        // v2.1.2：队列所属语义为 "work:<workId>"，经 queueOwnerEntry 反查到来源条目
-                        val entry = playerViewModel.queueOwnerEntry()
-                        if (entry != null) {
-                            tabIndex = 0
-                            val alreadyIn = playerViewModel.inFolderView.value &&
-                                playerViewModel.currentFolderUri.value?.toString() == entry.id
-                            if (!alreadyIn) {
-                                playerViewModel.openEntryAlbum(entry)
-                            }
-                        }
+                        // 播放框弹出的同时，后台切换到当前播放队列所属作品的专辑视图
+                        // v2.1.5：直接用 ownerId 中的 workId 定位正在播放的作品，
+                        // 而非该条目下第一个作品（同条目多专辑时封面点击跳错专辑）
+                        tabIndex = 0
+                        playerViewModel.openCurrentWorkAlbum()
                         // 暂停状态点击：弹出详情的同时恢复播放
                         if (!playbackState.isPlaying && playbackState.currentItem != null) {
                             playerViewModel.togglePlayPause()

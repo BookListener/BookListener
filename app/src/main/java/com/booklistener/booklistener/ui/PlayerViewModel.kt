@@ -561,6 +561,38 @@ class PlayerViewModel @JvmOverloads constructor(
         openAlbum(summary)
     }
 
+    /**
+     * v2.1.5：打开正在播放的作品视图（封面点击用）。
+     * ownerId = "work:<workId>" 时直接定位该作品，而非该条目下第一个作品——
+     * 同条目多作品（多专辑文件夹）时封面点击必须跳到正在播放的那个专辑。
+     */
+    fun openCurrentWorkAlbum() {
+        val ownerId = PlaybackController.currentQueueOwnerId ?: return
+        if (!ownerId.startsWith("work:")) {
+            // 非作品级队列（文件夹播放/测试挂载）→ 兼容旧逻辑，打开条目第一个作品
+            savedEntryById(ownerId)?.let { openEntryAlbum(it) }
+            return
+        }
+        val workId = ownerId.removePrefix("work:").toLongOrNull() ?: return
+        val work = runBlocking { appDb.dao().getWorkById(workId) } ?: return
+        val entryId = runBlocking { appDb.dao().getEntryIdByWorkId(workId) } ?: return
+        val entry = savedEntryById(entryId) ?: return
+        val worksInEntry = runBlocking { appDb.dao().getWorksByEntry(entryId) }
+        val summary = AlbumSummary(
+            workId = work.id,
+            album = work.title,
+            entryId = entryId,
+            artist = work.albumArtist ?: entry.artist,
+            songCount = work.songCount,
+            totalDurationMs = work.totalDurationMs,
+            albumCountInEntry = worksInEntry.size.coerceAtLeast(1),
+            coverUri = coverManager.resolveAlbumCover(
+                entry.coverUri, worksInEntry.size.coerceAtLeast(1), null
+            )
+        )
+        openAlbum(summary)
+    }
+
     /** 播放作品队列（点击作品内歌曲 → 以该曲为起点整专播放，db 数据入作品进度） */
     fun playAlbumFrom(album: AlbumSummary, startIndex: Int) {
         val workId = album.workId

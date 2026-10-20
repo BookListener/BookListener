@@ -3,6 +3,11 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.6（2026-10）修复：点击正在播放的专辑封面跳转到第一个专辑
+- 根因：封面点击经 queueOwnerEntry 反查到来源条目后，openEntryAlbum 取该条目下 works.firstOrNull()（第一个作品），而非正在播放的作品；同条目多专辑文件夹时必然跳错
+- 修复：新增 PlayerViewModel.openCurrentWorkAlbum()，从 PlaybackController ownerId（"work:<workId>"）直接定位正在播放的作品，构造 AlbumSummary 后 openAlbum；非作品级队列（文件夹播放）回退 openEntryAlbum 兼容旧逻辑
+- MainScreen 封面点击改为调 openCurrentWorkAlbum()，保留 tabIndex=0 切专辑 tab
+- 全量 285 用例通过
 ## v2.1.5（2026-10）修复：专辑列表遮挡 + 文件夹管理命名回退 + 同专辑多作者合并
 - 专辑列表底部遮挡：主页专辑聚合/专辑曲目/搜索结果三处 LazyColumn 加底部内容留白（88dp），最后一行不再被底部播放控制栏盖住，且可滚动到完全可见
 - 文件夹管理命名回退：入口页标题恢复"文件夹管理"（不再叫"内容管理"）；点击进入目录后标题即目录名（原本的目录）
