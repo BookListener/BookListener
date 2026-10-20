@@ -15,6 +15,7 @@ import com.booklistener.core.AppLog
 import com.booklistener.core.AudioItem
 import com.booklistener.core.CoverManager
 import com.booklistener.core.CoverScanner
+import com.booklistener.core.CueTextDecoder
 import com.booklistener.core.EntryIndexStore
 import com.booklistener.core.FolderEntry
 import com.booklistener.core.FolderProgressLogic
@@ -1515,11 +1516,11 @@ class PlayerViewModel @JvmOverloads constructor(
 
     // ---- SAF 查询 ----
 
-    /** v5.0：读 SAF 文件文本（.cue 解析用；读取失败/无权限返回 null） */
+    /** v5.0：读 SAF 文件文本（.cue 解析用；v2.1.4 自动编码探测，GBK/GB18030 中文 cue 不乱码） */
     private fun readSafText(uri: String): String? = runCatching {
         getApplication<Application>().contentResolver
             .openInputStream(android.net.Uri.parse(uri))
-            ?.use { it.readBytes().toString(Charsets.UTF_8) }
+            ?.use { CueTextDecoder.decode(it.readBytes()) }
     }.getOrNull()
 
     /** SAF 树目录的子项查询（ContentResolver，DocumentsContract 规范） */

@@ -439,8 +439,11 @@ fun FolderManageScreen(
                     textAlign = TextAlign.Center
                 )
             } else {
+                // v2.1.4：内容文件列表忠实显示"原始文件"——过滤虚拟轨行（rawName 形如 "整轨.cue#1"），
+                // .cue 文件本身照常显示，虚拟轨仅在该 cue 行点击后的弹层中展示
+                val sourceFiles = files.filterNot { com.booklistener.core.VirtualTrackUri.parse(it.uri) != null }
                 LazyColumn {
-                    items(files, key = { it.uri }) { file ->
+                    items(sourceFiles, key = { it.uri }) { file ->
                         ManageFileRow(
                             file = file,
                             // v5.0：仅 .cue 行可点击（打开该 cue 的虚拟轨列表，纯浏览不播放）；常规行无点击

@@ -10,6 +10,7 @@ import com.booklistener.core.AudioMeta
 import com.booklistener.core.AudioSource
 import com.booklistener.core.AudioSourceException
 import com.booklistener.core.CueIndexer
+import com.booklistener.core.CueTextDecoder
 import com.booklistener.core.SourceType
 import com.booklistener.net.OkHttpHolder
 import okhttp3.Credentials
@@ -110,14 +111,14 @@ class WebDavAudioSource(private val credentialProvider: () -> WebDavCredential?)
         }
     }
 
-    /** GET 读取 .cue 文本（读取失败返回 null，该 cue 不参与解析，整轨保持普通条目） */
+    /** GET 读取 .cue 文本（读取失败返回 null，该 cue 不参与解析，整轨保持普通条目；v2.1.4 自动编码探测） */
     private suspend fun readWebDavText(href: String, cred: WebDavCredential): String? = runCatching {
         val request = Request.Builder()
             .url(href)
             .header("Authorization", Credentials.basic(cred.username, cred.password))
             .build()
         OkHttpHolder.client.newCall(request).execute().use { resp ->
-            if (resp.isSuccessful) resp.body?.string() else null
+            if (resp.isSuccessful) CueTextDecoder.decode(resp.body?.bytes() ?: ByteArray(0)) else null
         }
     }.getOrNull()
 

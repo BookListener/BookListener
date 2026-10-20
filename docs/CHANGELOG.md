@@ -3,6 +3,10 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.4（2026-10）修复：cue 中文乱码 + 内容文件列表混入虚拟轨行
+- cue 中文乱码：cue 规范无强制编码，中文 cue 多为 GBK/GB18030。新增 core/CueTextDecoder（BOM 剥离 → 严格 UTF-8 校验 → GB18030 回退 → 兜底），本地 SAF 与 WebDAV 读取点统一接入，中文 cue 完整还原（含专辑/曲目/表演者名与整轨定位）
+- 内容文件列表：过滤虚拟轨行（rawName 形如 "整轨.cue#1"）——只显示原始文件（cue/整轨/普通文件），.cue 行点击后仍可在弹层浏览可播放曲目列表；虚拟轨仅在该入口展示
+- 测试：CueTextDecoderTest（GBK/UTF-8/UTF-8 BOM/纯 ASCII）+ ScanCueMixedTest 回归，全量通过
 ## v2.1.3（2026-10）修复：cue+普通音频混合文件夹切换专辑列表闪退
 - **根因**：主页专辑聚合/搜索的 LazyColumn key 用 `entryId_album`——同一条目下两个不同作品（cue 虚拟轨作品 + 普通 flac 作品）展示 title 撞名时 key 重复，Compose 抛 duplicate key 崩溃。cue 无 TITLE（虚拟轨走条目级作品键）且 flac 内嵌专辑名等于文件夹名时必然触发
 - 修复：专辑列表/搜索 key 改用 `workId`（works 主键，全局唯一）；封面读取本有 runCatching 保护，数据层 SQL 已验证无异常
