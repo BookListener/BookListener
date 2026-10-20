@@ -390,7 +390,9 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             if (recentAlbums.isNotEmpty()) {
                 item(key = "header_recent") { SectionHeader(stringResource(R.string.dir_recent)) }
                 recentAlbums.forEachIndexed { i, album ->
-                    item(key = "album_${album.entryId}_${album.album}") {
+                    // v2.1.2：key 用 workId（works 主键唯一）——同条目下不同作品 title 撞名时
+                    // （cue 虚拟轨作品 + 普通 flac 作品同专辑名）旧 key "entryId_album" 会重复 → LazyColumn 崩溃
+                    item(key = "album_${album.workId}") {
                         val albumMeta = stringResource(
                             R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)
                         )
@@ -425,7 +427,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             }
             item(key = "header_not") { SectionHeader(stringResource(R.string.dir_not_played)) }
             neverAlbums.forEach { album ->
-                item(key = "album_${album.entryId}_${album.album}") {
+                item(key = "album_${album.workId}") {
                     val albumMeta = stringResource(
                         R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)
                     )
@@ -474,7 +476,8 @@ private fun isCurrentEntry(entry: SavedEntry, currentUri: android.net.Uri?, stat
     state.currentItem != null && currentUri?.toString() == entry.id
 
 private fun hitKey(hit: SearchHit): String = when (hit) {
-    is SearchHit.Album -> "album_${hit.album.entryId}_${hit.album.album}"
+    // v2.1.2：key 用 workId（works 主键唯一），同条目 title 撞名不重复
+    is SearchHit.Album -> "album_${hit.album.workId}"
     is SearchHit.File -> "file_${hit.entry.id}_${hit.file.uri}"
 }
 

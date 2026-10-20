@@ -3,6 +3,10 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.3（2026-10）修复：cue+普通音频混合文件夹切换专辑列表闪退
+- **根因**：主页专辑聚合/搜索的 LazyColumn key 用 `entryId_album`——同一条目下两个不同作品（cue 虚拟轨作品 + 普通 flac 作品）展示 title 撞名时 key 重复，Compose 抛 duplicate key 崩溃。cue 无 TITLE（虚拟轨走条目级作品键）且 flac 内嵌专辑名等于文件夹名时必然触发
+- 修复：专辑列表/搜索 key 改用 `workId`（works 主键，全局唯一）；封面读取本有 runCatching 保护，数据层 SQL 已验证无异常
+- 测试：ScanCueMixedTest 新增混合目录撞名场景（两作品同 title、workId 互异），全量 281 用例回归通过
 ## v2.1.2（2026-10）修复：点击正在播放的封面无法进入专辑曲目列表
 - **根因**：作品级播放进度改造后队列所属（queueOwnerId）语义为 `"work:<workId>"`，但封面点击/详情/进文件夹判定仍按「条目 id」查找来源条目，恒匹配失败 → 点击封面只弹详情面板、后台不切换专辑曲目列表（静默失败）
 - 修复：DAO 新增 `getEntryIdByWorkId`（作品 → 来源条目，跨条目合并取 MIN，与 AlbumStore 口径一致）；VM 新增 `queueOwnerEntry`（事件回调反查）与 `queueEntryForDisplay`（组合期内存兜底，回退当前专辑来源条目）；`shouldRestartOnEnter` 改按反查条目 id 比较——进入正在播放的文件夹不再误走记录恢复
