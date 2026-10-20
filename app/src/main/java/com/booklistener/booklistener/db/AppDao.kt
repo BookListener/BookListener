@@ -203,6 +203,9 @@ interface AppDao {
     @Query("DELETE FROM work_progress WHERE workId NOT IN (SELECT id FROM works)")
     suspend fun deleteOrphanWorkProgress()
 
+    @Query("SELECT * FROM works WHERE id NOT IN (SELECT DISTINCT workId FROM entry_index WHERE workId IS NOT NULL)")
+    suspend fun getOrphanWorks(): List<WorkEntity>
+
     @Query("DELETE FROM works WHERE id NOT IN (SELECT DISTINCT workId FROM entry_index WHERE workId IS NOT NULL)")
     suspend fun deleteOrphanWorks()
 
@@ -226,6 +229,28 @@ interface AppDao {
     suspend fun cleanupOrphanWorks() {
         deleteOrphanWorks()
         deleteOrphanWorkProgress()
+    }
+
+    /**
+     * v2.1.5：workKey 规则变更（local 键去掉 artist）后，重扫会把"同专辑多表演者"的旧拆分作品
+     * 合并为一个新作品。合并前把将被删除的孤儿作品的**最近播放进度**转移到合并目标，
+     * 避免进度静默丢失。转移规则：目标无进度 → 直接迁移；双方都有 → 保留 lastPlayedAt 较新者。
+     */
+    @androidx.room.Transaction
+    suspend fun migrateOrphanWorkProgress() {
+        getOrphanWorks().forEach { orphan ->
+            val p = getWorkProgress(orphan.id) ?: return@forEach
+            val key = orphan.key
+            // 旧 local 键格式 "local:<norm(artist)>|<norm(album)>"；新格式 "local:<norm(album)>"（无 |，无转移目标）
+            if (key.startsWith("local:") && key.contains('|')) {
+                val targetKey = "local:${key.substringAfter('|')}"
+                val target = getWorkByKey(targetKey) ?: return@forEach
+                val tp = getWorkProgress(target.id)
+                if (tp == null || orphan.lastPlayedAt > target.lastPlayedAt) {
+                    upsertWorkProgress(p.copy(workId = target.id))
+                }
+            }
+        }
     }
 
     /** 作品级进度：按 workId upsert（REPLACE） */
@@ -299,6 +324,8 @@ interface AppDao {
         if (workIdByKey.isNotEmpty()) {
             recomputeWorkStats(workIdByKey.values.toList(), System.currentTimeMillis())
         }
+        // v2.1.5：key 规则变更后先迁移孤儿进度（合并目标），再清理孤儿作品/进度
+        migrateOrphanWorkProgress()
         cleanupOrphanWorks()
     }
 

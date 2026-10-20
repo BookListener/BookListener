@@ -281,7 +281,7 @@ class DirectoryScreenFolderViewTest {
             shadowOf(Looper.getMainLooper()).idle()
             vm.savedEntries.value.size >= 2
         }
-        composeRule.onNodeWithText("Content management").assertExists()
+        composeRule.onNodeWithText("Folder management").assertExists()
         composeRule.onNodeWithText("Download").assertExists()
         composeRule.onNodeWithText("Music").assertExists()
 

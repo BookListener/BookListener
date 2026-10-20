@@ -73,7 +73,7 @@
     <string name="folder_empty">该目录为空\n请返回上级目录或另选目录</string>
     <string name="folder_delete_title">删除确认</string>
     <string name="folder_delete_text">确定删除「%1$s」？\n将同时移除播放进度与已缓存文件清单。</string>
-    <string name="folder_title">内容管理</string>
+    <string name="folder_title">文件夹管理</string>
     <string name="cue_virtual_tracks">虚拟轨</string>
     <string name="cue_no_tracks">该 cue 文件没有可用的虚拟轨</string>
     <string name="folder_mode_file_name">文件名</string>

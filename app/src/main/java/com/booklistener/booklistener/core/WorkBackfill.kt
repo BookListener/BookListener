@@ -20,7 +20,9 @@ object WorkBackfill {
 
     /**
      * 作品键规则（tag 优先，文件夹兜底）：
-     * - 本地有 album tag → "local:<norm(albumArtist ?: artist)>|<norm(album)>"，可跨文件夹合并
+     * - 本地有 album tag → "local:<norm(album)>"，可跨文件夹合并。
+     *   v2.1.5：不再把 albumArtist/artist 纳入 key——同一专辑不同表演者（如"周杰伦"与
+     *   "周杰伦 with 五月天阿信"的同名专辑曲目）必须合并为一个作品；artist 仅用于展示。
      * - 无 tag / 网盘 → "entry:<entryId>|<norm(folderName)>"，不跨 entry、不跨源合并
      *   （网盘不做标签解析，按名字跨源合并会让不同盘的"新建文件夹"撞成一本书）
      */
@@ -31,7 +33,7 @@ object WorkBackfill {
         albumArtist: String?,
         artist: String?
     ): String =
-        if (!album.isNullOrBlank()) "local:${norm(albumArtist ?: artist)}|${norm(album)}"
+        if (!album.isNullOrBlank()) "local:${norm(album)}"
         else "entry:$entryId|${norm(folderName)}"
 
     /** norm：trim + 小写 + 连续空白折叠为一个空格 */

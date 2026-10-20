@@ -152,4 +152,56 @@ class ScanUpsertTest {
     private fun assertNull2(any: Any?) {
         if (any != null) throw AssertionError("期望为空，实际=$any")
     }
+
+    @Test
+    fun legacySplitWork_progressMigratesToMergedWork_onRescan() {
+        // v2.1.5：key 规则变更（local 去 artist）前，同专辑多表演者被拆成多个作品。
+        // 模拟旧拆分作品（key 含 artist）+ 已存进度
+        val legacy = com.booklistener.db.WorkEntity(
+            key = "local:周杰伦 with 五月天阿信|最伟大的作品",
+            title = "最伟大的作品", albumArtist = "周杰伦 with 五月天阿信",
+            sourceScope = "LOCAL", coverUri = null, songCount = 1, totalDurationMs = 222_000L,
+            lastPlayedAt = 500L, updatedAt = 500L
+        )
+        val legacyId = runBlocking { dao.insertWork(legacy) }
+        runBlocking {
+            dao.upsertWorkProgress(
+                com.booklistener.db.WorkProgressEntity(
+                    legacyId, "uri://co.wav", 0, 1, 12_000L, 1.0f, 500L
+                )
+            )
+        }
+        // 重扫：同专辑（新 key 无 artist）→ 合并 work；旧 work 变孤儿，进度必须转移到合并 work
+        scan(
+            listOf(IndexedFile("合作曲", "uri://co.wav", "最伟大的作品", "周杰伦 with 五月天阿信", 2, 1, 222_000L, "co.wav"))
+        )
+        val merged = runBlocking { dao.getWorkByKey("local:最伟大的作品") }
+        assertNotNull("合并 work 必须存在", merged)
+        val progress = runBlocking { dao.getWorkProgress(merged!!.id) }
+        assertNotNull("旧拆分作品的进度必须迁移到合并 work", progress)
+        assertEquals(12_000L, progress!!.positionMs)
+        assertEquals("uri://co.wav", progress.fileUri)
+        assertNull2(runBlocking { dao.getWorkByKey("local:周杰伦 with 五月天阿信|最伟大的作品") })
+        assertNull2(runBlocking { dao.getWorkById(legacyId) })
+    }
+
+    @Test
+    fun sameAlbumDifferentArtists_mergeIntoSingleWork_onScan() {
+        // 用户场景：专辑"最伟大的作品"含多表演者曲目 → 必须聚合成一个专辑（不再按作者拆开）
+        scan(
+            listOf(
+                IndexedFile("主曲", "uri://m1", "最伟大的作品", "周杰伦", 1, 1, 222_000L, "m1.wav"),
+                IndexedFile("合作曲", "uri://c1", "最伟大的作品", "周杰伦 with 五月天阿信", 2, 1, 222_000L, "c1.wav"),
+                IndexedFile("合作曲2", "uri://c2", "最伟大的作品", "周杰伦 with 杨瑞代", 3, 1, 270_000L, "c2.wav")
+            )
+        )
+        val id1 = runBlocking { dao.getWorkIdByUri("uri://m1") }!!
+        val id2 = runBlocking { dao.getWorkIdByUri("uri://c1") }!!
+        val id3 = runBlocking { dao.getWorkIdByUri("uri://c2") }!!
+        assertEquals("同专辑多表演者必须合并为同一作品", id1, id2)
+        assertEquals(id1, id3)
+        val work = runBlocking { dao.getWorkById(id1) }!!
+        assertEquals(3, work.songCount)
+        assertEquals(714_000L, work.totalDurationMs)
+    }
 }

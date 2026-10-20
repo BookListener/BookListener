@@ -20,14 +20,19 @@ class WorkBackfillTest {
 
     @Test
     fun workKey_localAlbumUsesTagNormalized() {
+        // v2.1.5：local 键只含 album（不再把 albumArtist/artist 纳入）——同专辑多表演者合并
         assertEquals(
-            "local:the beatles|abbey road",
+            "local:abbey road",
             WorkBackfill.workKey("e1", "文件夹", "  Abbey   Road ", "The Beatles", "甲")
         )
-        // albumArtist 优先于 artist
+        // artist 不同但 album 相同 → 同一作品键
         assertEquals(
-            "local:the beatles|abbey road",
-            WorkBackfill.workKey("e1", "文件夹", "Abbey Road", "The Beatles", "The Beatles")
+            WorkBackfill.workKey("e1", "文件夹", "Abbey Road", "The Beatles", "甲"),
+            WorkBackfill.workKey("e1", "文件夹", "Abbey Road", "The Beatles", "乙")
+        )
+        assertEquals(
+            WorkBackfill.workKey("e1", "文件夹", "Abbey Road", "The Beatles", "甲"),
+            WorkBackfill.workKey("e1", "文件夹", "Abbey Road", "其它歌手", "丙")
         )
     }
 
@@ -46,6 +51,22 @@ class WorkBackfillTest {
         val keyB = WorkBackfill.workKey("e1", "夹1", null, null, "作者")
         assertEquals(keyA1, keyA2)   // 同名专辑跨文件夹 → 同一作品
         assertEquals("entry:e1|夹1", keyB) // 无 album 不跨源合并
+    }
+
+    @Test
+    fun buildWorks_sameAlbumDifferentArtists_mergeIntoSingleWork() {
+        // 用户场景：同一专辑多表演者（如 "周杰伦" 与 "周杰伦 with 五月天阿信" 的同名专辑曲目）→ 一个专辑
+        val files = listOf(
+            f("1", "u1", "最伟大的作品", "周杰伦", 1, 1, 222_000L),
+            f("2", "u2", "最伟大的作品", "周杰伦 with 五月天阿信", 2, 1, 222_000L),
+            f("3", "u3", "最伟大的作品", "周杰伦 with 杨瑞代", 3, 1, 270_000L)
+        )
+        val works = WorkBackfill.buildWorks(files, "e1", "文件夹", "LOCAL")
+        assertEquals(1, works.size)
+        assertEquals(3, works[0].songCount)
+        assertEquals(714_000L, works[0].totalDurationMs)
+        assertEquals("最伟大的作品", works[0].title)
+        assertEquals("周杰伦", works[0].albumArtist) // 主表演者作专辑展示
     }
 
     // ---- buildWorks / mergeWorks ----

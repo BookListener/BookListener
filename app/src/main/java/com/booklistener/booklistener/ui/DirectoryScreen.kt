@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -162,7 +163,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                     PlaybackQueueLogic.isCurrentItem(playbackState, it.uri)
                 }
                 rememberScrollToPlaying(songListState, playingIndex, albumSongs.size, albumView.entryId)
-                LazyColumn(state = songListState) {
+                LazyColumn(state = songListState, contentPadding = PaddingValues(bottom = 88.dp)) {
                     itemsIndexed(albumSongs, key = { _, file -> file.uri }) { index, file ->
                         AlbumSongRow(
                             file = file,
@@ -326,7 +327,7 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                LazyColumn {
+                LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
                     items(searchResults, key = { hit -> hitKey(hit) }) { hit ->
                         when (hit) {
                             is SearchHit.Album -> {
@@ -386,7 +387,8 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             return
         }
         val listState = rememberLazyListState()
-        LazyColumn(state = listState) {
+        // v2.1.5：底部留白（内容 padding）——最后一行不被底部播放控制栏遮挡，且可滚动到完全可见
+        LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 88.dp)) {
             if (recentAlbums.isNotEmpty()) {
                 item(key = "header_recent") { SectionHeader(stringResource(R.string.dir_recent)) }
                 recentAlbums.forEachIndexed { i, album ->
