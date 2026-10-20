@@ -264,12 +264,12 @@ fun MainScreen(
                     .clip(CircleShape)
                     .clickable {
                         // 播放框弹出的同时，后台切换到当前播放队列所属文件夹的条目视图
-                        val ownerId = PlaybackController.currentQueueOwnerId
-                        val entry = ownerId?.let { playerViewModel.savedEntryById(it) }
+                        // v2.1.2：队列所属语义为 "work:<workId>"，经 queueOwnerEntry 反查到来源条目
+                        val entry = playerViewModel.queueOwnerEntry()
                         if (entry != null) {
                             tabIndex = 0
                             val alreadyIn = playerViewModel.inFolderView.value &&
-                                playerViewModel.currentFolderUri.value?.toString() == ownerId
+                                playerViewModel.currentFolderUri.value?.toString() == entry.id
                             if (!alreadyIn) {
                                 playerViewModel.openEntryAlbum(entry)
                             }
@@ -285,8 +285,8 @@ fun MainScreen(
                     .padding(vertical = 8.dp)
             ) {
                 // 底部"正在播放"封面：播放上下文专辑封面优先（单专辑文件夹图/多专辑内嵌），无则渐变占位
-                val ownerEntry = PlaybackController.currentQueueOwnerId
-                    ?.let { playerViewModel.savedEntryById(it) }
+                // v2.1.2：队列所属为作品级时经专辑来源条目兜底（内存版，组合期不查库）
+                val ownerEntry = playerViewModel.queueEntryForDisplay()
                 val coverUri = playerViewModel.currentAlbum.value?.coverUri ?: ownerEntry?.coverUri
                 val displayName = playbackState.currentItem?.displayName
                     ?: ownerEntry?.displayName ?: ""
@@ -368,7 +368,8 @@ fun MainScreen(
         PlayerDetailSheet(
             viewModel = playerViewModel,
             state = playbackState,
-            entry = PlaybackController.currentQueueOwnerId?.let { playerViewModel.savedEntryById(it) },
+            // v2.1.2：队列所属为作品级时经专辑来源条目兜底（内存版）
+            entry = playerViewModel.queueEntryForDisplay(),
             albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
             // v2.0.10：播放详情面板玻璃开关——关闭时传 null，面板走 surfaceContainerLow 纯色回退分支
             backdrop = if (glassPlayerPanel) backdrop else null,

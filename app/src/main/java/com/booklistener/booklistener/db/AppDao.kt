@@ -175,6 +175,10 @@ interface AppDao {
     @Query("SELECT w.* FROM works w JOIN entry_index i ON i.workId = w.id WHERE i.entryId = :entryId ORDER BY w.title COLLATE NOCASE ASC")
     suspend fun getWorksByEntry(entryId: String): List<WorkEntity>
 
+    /** 作品 → 来源条目（跨条目合并时取最小 entryId，与 AlbumStore 聚合口径一致） */
+    @Query("SELECT MIN(entryId) FROM entry_index WHERE workId = :workId")
+    suspend fun getEntryIdByWorkId(workId: Long): String?
+
     @Insert
     suspend fun insertWork(work: WorkEntity): Long
 

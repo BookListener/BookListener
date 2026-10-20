@@ -3,6 +3,12 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.2（2026-10）修复：点击正在播放的封面无法进入专辑曲目列表
+- **根因**：作品级播放进度改造后队列所属（queueOwnerId）语义为 `"work:<workId>"`，但封面点击/详情/进文件夹判定仍按「条目 id」查找来源条目，恒匹配失败 → 点击封面只弹详情面板、后台不切换专辑曲目列表（静默失败）
+- 修复：DAO 新增 `getEntryIdByWorkId`（作品 → 来源条目，跨条目合并取 MIN，与 AlbumStore 口径一致）；VM 新增 `queueOwnerEntry`（事件回调反查）与 `queueEntryForDisplay`（组合期内存兜底，回退当前专辑来源条目）；`shouldRestartOnEnter` 改按反查条目 id 比较——进入正在播放的文件夹不再误走记录恢复
+- 影响面一并修复：底部封面兜底条目、播放详情面板来源条目信息、进文件夹"保持当前会话"判定
+- 测试：新增 WorkEntryLookupTest 3 用例（反查命中/跨条目 MIN/无记录 null），全量 279 用例回归通过
+
 ## v2.1.1（2026-10）CUE 整轨虚拟分轨（spec: cue-virtual-tracks）
 - 新增 CUE 解析（`core/CueParser`）：多 FILE 段上下文、INDEX 00/01、MM:SS:FF→ms（75 帧/秒）、PREGAP 忽略、无 INDEX 跳过、末轨播到文件尾
 - 整轨**吸收**与退化：目录含 .cue 且成功定位整轨（FILE 声明优先 + 同名扩展名探测 flac/wav/mp3/m4a）时，专辑/曲目层只显示虚拟轨；解析失败或未定位时整轨退化为普通条目

@@ -812,8 +812,44 @@ class PlayerViewModel @JvmOverloads constructor(
      * v1.6.9：判定源由 isPlaying 改为 queueReady——暂停态点击封面恢复播放是异步的，
      * 旧判定在暂停态恒判重启并覆盖刚恢复的播放（点击暂停封面进详情再次停止播放的根因）。
      */
+    /**
+     * v2.1.2：队列所属条目 id——ownerId 语义为 "work:<workId>"（作品级进度）时反查来源条目；
+     * 非 work: 前缀（文件夹播放/测试挂载）按条目 id 原样返回。纯播放层比较用，不依赖 savedEntries 列表。
+     */
+    fun queueOwnerEntryId(): String? {
+        val ownerId = PlaybackController.currentQueueOwnerId ?: return null
+        if (!ownerId.startsWith("work:")) return ownerId
+        val workId = ownerId.removePrefix("work:").toLongOrNull() ?: return null
+        return runBlocking { appDb.dao().getEntryIdByWorkId(workId) }
+    }
+
+    /**
+     * v2.1.2：队列所属语义为 "work:<workId>"（作品级进度），需反查到来源条目后与目标条目比较。
+     */
     fun shouldRestartOnEnter(targetId: String, isPlaying: Boolean): Boolean =
-        !(PlaybackController.currentQueueOwnerId == targetId && PlaybackController.queueReady)
+        !(queueOwnerEntryId() == targetId && PlaybackController.queueReady)
+
+    /**
+     * v2.1.2：播放层队列所属 → 来源条目。
+     * - ownerId 语义 "work:<workId>"：反查 entry_index（跨条目合并取最小 entryId）
+     * - 非 work: 前缀：兼容旧语义直接按条目 id 匹配
+     * DB 反查版（事件回调/VM 内部用；组合期请用 queueEntryForDisplay 避免阻塞）。
+     */
+    fun queueOwnerEntry(): SavedEntry? {
+        val ownerId = PlaybackController.currentQueueOwnerId ?: return null
+        if (!ownerId.startsWith("work:")) return savedEntryById(ownerId)
+        val workId = ownerId.removePrefix("work:").toLongOrNull() ?: return null
+        val entryId = runBlocking { appDb.dao().getEntryIdByWorkId(workId) } ?: return null
+        return savedEntryById(entryId)
+    }
+
+    /** 播放上下文来源条目（内存版，供组合期封面/详情兜底；作品队列时回退当前专辑来源条目） */
+    fun queueEntryForDisplay(): SavedEntry? {
+        PlaybackController.currentQueueOwnerId?.let { owner ->
+            if (!owner.startsWith("work:")) return savedEntryById(owner)
+        }
+        return _currentAlbum.value?.entryId?.let { savedEntryById(it) }
+    }
 
     /** 按条目 id 查找已添加条目（播放层队列所属 → 定位到对应文件夹） */
     fun savedEntryById(id: String): SavedEntry? =
