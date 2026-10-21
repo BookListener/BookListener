@@ -14,13 +14,15 @@ class ScanCoordinator(
     private val tagReader: suspend (SourceFile) -> TagResolver.AudioTags?,
     /** 读 .cue 文本（本地 SAF / 网盘 GET，已做编码探测）；失败返回 null */
     private val cueTextReader: suspend (SourceFile) -> String?,
-    private val indexStore: EntryIndexStore
+    private val indexStore: EntryIndexStore,
+    /** v2.1.15：提取音频内嵌封面（null 表示不提取作品封面，网盘无内嵌封面传 null） */
+    private val coverExtractor: (suspend (audioUri: String) -> String?)? = null
 ) {
 
     companion object {
-        // v2.1.14：跳过过小的音频文件（铃声/通知音/系统音效）
+        // v2.1.15：跳过过小/过短的音频文件（铃声/通知音/系统音效）
         const val MIN_AUDIO_SIZE_BYTES = 100L * 1024L   // 100 KB
-        const val MIN_AUDIO_DURATION_MS = 10L * 1000L    // 10 秒
+        const val MIN_AUDIO_DURATION_MS = 30L * 1000L    // 30 秒
     }
 
     /**
@@ -30,8 +32,8 @@ class ScanCoordinator(
      */
     suspend fun scan(entryId: String, rootUri: String = entryId) {
         val sourceFiles = source.listFiles(rootUri)
-        // 只处理文件（目录条目不入库；relativePath 已表达目录结构）
-        val files = sourceFiles.filterNot { it.isDirectory }
+        // v2.1.15：过滤目录 + 隐藏文件（. 开头）；CUE/封面图片不受音频大小/时长过滤影响
+        val files = sourceFiles.filterNot { it.isDirectory || it.name.startsWith(".") }
 
         val indexed = mutableListOf<IndexedFile>()
         val cueCandidates = mutableListOf<CueIndexer.CueCandidate>()
@@ -96,6 +98,28 @@ class ScanCoordinator(
         // 出口统一排序（disc → track → 名称自然序），列表顺序稳定
         val sorted = sortIndexed(indexed)
         indexStore.save(entryId, sorted, cueCandidates)
+
+        // v2.1.15：扫描后为每个作品提取首曲内嵌封面入库（专辑列表零 IO 显示封面）
+        coverExtractor?.let { extractor ->
+            val folderName = indexStore.getFolderName(entryId) ?: entryId
+            // 按 workKey 分组，取每组第一首音频 uri（排序后第一首即 disc/track 最前）
+            val firstAudioByKey = LinkedHashMap<String, String>()
+            for (f in sorted) {
+                if (!AudioExt.isAudio(f.rawName ?: f.uri)) continue
+                // 虚拟轨也计入（封面在整轨上，extractor 内部解析）
+                val key = WorkBackfill.workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
+                if (!firstAudioByKey.containsKey(key)) {
+                    firstAudioByKey[key] = f.uri
+                }
+            }
+            val covers = mutableMapOf<String, String>()
+            for ((key, audioUri) in firstAudioByKey) {
+                runCatching { extractor(audioUri) }.getOrNull()?.let { covers[key] = it }
+            }
+            if (covers.isNotEmpty()) {
+                indexStore.updateWorkCovers(covers)
+            }
+        }
     }
 
     private fun SourceFile.toIndexedFile(error: String?): IndexedFile = IndexedFile(

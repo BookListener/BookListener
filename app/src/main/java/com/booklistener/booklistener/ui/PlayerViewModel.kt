@@ -348,7 +348,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private val entryStore = SavedEntryStore(appDb.dao())
     private val indexStore = EntryIndexStore(appDb.dao())
     private val scanFactory = ScanCoordinatorFactory(
-        app, repo.credentialStore, indexStore
+        app, repo.credentialStore, indexStore, coverManager
     )
     // v1.6.28：加载时过滤旧的"网盘根条目"（自动固化、uri 非完整 URL）——
     // 网盘改为只通过文件夹管理固化具体文件夹；账号凭证保留在 CredentialStore。

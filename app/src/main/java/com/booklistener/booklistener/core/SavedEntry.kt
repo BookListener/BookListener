@@ -257,6 +257,11 @@ class EntryIndexStore(private val dao: AppDao) {
         dao.getEntryIndex(entryId).map { IndexedFile.fromEntity(it) }
     }
 
+    /** v2.1.15：读取条目标题（用作无 tag 时的 workKey folderName 部分） */
+    fun getFolderName(entryId: String): String? = kotlinx.coroutines.runBlocking {
+        dao.getAllSavedEntries().firstOrNull { it.id == entryId }?.displayName
+    }
+
     /**
      * v4.0 扫描入库（作品实体化）：逐文件算作品键 → upsert works by key（id 稳定）→
      * 写 entry_index（workId/sortRank/sizeBytes）→ 清理失效行与无引用作品（连带进度）。
@@ -297,6 +302,19 @@ class EntryIndexStore(private val dao: AppDao) {
     fun remove(entryId: String) = blockingRun {
         dao.deleteEntryIndex(entryId)
         dao.cleanupOrphanWorks()
+    }
+
+    /**
+     * v2.1.15：扫描后按作品键回填封面（首曲内嵌封面提取后入库）。
+     * covers: workKey -> coverUri；仅更新非空封面，空封面不覆盖已有值。
+     */
+    fun updateWorkCovers(covers: Map<String, String>) = blockingRun {
+        val now = System.currentTimeMillis()
+        covers.forEach { (key, coverUri) ->
+            if (coverUri.isNotBlank()) {
+                dao.updateWorkCoverByKey(key, coverUri, now)
+            }
+        }
     }
 
     private fun blockingRun(block: suspend () -> Unit) {

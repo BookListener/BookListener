@@ -232,6 +232,10 @@ interface AppDao {
     @Query("UPDATE works SET lastPlayedAt = :ts WHERE id = :id")
     suspend fun touchWorkPlayed(id: Long, ts: Long)
 
+    /** v2.1.15：扫描时按作品键回填封面（首曲内嵌封面提取后入库） */
+    @Query("UPDATE works SET coverUri = :coverUri, updatedAt = :updatedAt WHERE key = :key")
+    suspend fun updateWorkCoverByKey(key: String, coverUri: String?, updatedAt: Long)
+
     @Query("DELETE FROM work_progress WHERE workId NOT IN (SELECT id FROM works)")
     suspend fun deleteOrphanWorkProgress()
 
@@ -388,7 +392,8 @@ interface AppDao {
         SELECT w.id AS workId, w.title AS album, MIN(s.id) AS entryId,
                COALESCE(w.albumArtist, MIN(s.artist)) AS artist,
                w.songCount AS songCount, w.totalDurationMs AS totalDurationMs,
-               COUNT(DISTINCT s.id) AS albumCountInEntry
+               COUNT(DISTINCT s.id) AS albumCountInEntry,
+               w.coverUri AS coverUri
         FROM works w
         JOIN entry_index i ON i.workId = w.id
         JOIN saved_entry s ON s.id = i.entryId
@@ -408,7 +413,8 @@ interface AppDao {
         SELECT w.id AS workId, w.title AS album, MIN(s.id) AS entryId,
                COALESCE(w.albumArtist, MIN(s.artist)) AS artist,
                w.songCount AS songCount, w.totalDurationMs AS totalDurationMs,
-               COUNT(DISTINCT s.id) AS albumCountInEntry
+               COUNT(DISTINCT s.id) AS albumCountInEntry,
+               w.coverUri AS coverUri
         FROM works w
         JOIN entry_index i ON i.workId = w.id
         JOIN saved_entry s ON s.id = i.entryId

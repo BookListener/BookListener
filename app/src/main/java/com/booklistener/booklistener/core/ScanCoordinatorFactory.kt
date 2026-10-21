@@ -15,27 +15,30 @@ import okhttp3.Request
 class ScanCoordinatorFactory(
     private val context: Context,
     private val credentialStore: CredentialStore,
-    private val indexStore: EntryIndexStore
+    private val indexStore: EntryIndexStore,
+    private val coverManager: CoverManager? = null
 ) {
 
-    /** 本地：SAF 列目录 + MediaMetadataRetriever 标签 + SAF 读 cue */
+    /** 本地：SAF 列目录 + MediaMetadataRetriever 标签 + SAF 读 cue + 内嵌封面提取 */
     fun forLocal(): ScanCoordinator {
         val tagResolver = TagResolver(context)
         return ScanCoordinator(
             source = LocalSource(context),
             tagReader = { file -> tagResolver.resolve(android.net.Uri.parse(file.path)) },
             cueTextReader = { file -> readSafText(file.path) },
-            indexStore = indexStore
+            indexStore = indexStore,
+            coverExtractor = coverManager?.let { mgr -> { uri -> mgr.extractCover(uri) } }
         )
     }
 
-    /** 网盘：PROPFIND 列目录，无内嵌标签（tagReader 恒 null），GET 读 cue */
+    /** 网盘：PROPFIND 列目录，无内嵌标签（tagReader 恒 null），GET 读 cue，无内嵌封面 */
     fun forWebDav(): ScanCoordinator {
         return ScanCoordinator(
             source = WebDavSource(credentialProvider = { url -> credentialFor(url) }),
             tagReader = { null },
             cueTextReader = { file -> readWebDavText(file.path) },
-            indexStore = indexStore
+            indexStore = indexStore,
+            coverExtractor = null
         )
     }
 

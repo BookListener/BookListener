@@ -38,6 +38,9 @@ class CoverManager(
     fun resolveArtist(firstAudioPath: String?): String? =
         firstAudioPath?.let { extractArtist(it) }
 
+    /** v2.1.15：公开内嵌封面提取（供扫描时为作品提取首曲封面入库） */
+    fun extractCover(audioUri: String): String? = extractEmbeddedCover(audioUri)
+
     /** 条目文件集合的专辑数判定（v1.6.22）：无 tag 的 null 视为同组；空集合返回 0 */
     fun albumCountOf(items: List<AudioItem>): Int = items.map { it.album }.distinct().size
 

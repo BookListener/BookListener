@@ -61,7 +61,8 @@ data class AlbumRow(
     val artist: String?,
     val songCount: Int,
     val totalDurationMs: Long,
-    val albumCountInEntry: Int
+    val albumCountInEntry: Int,
+    val coverUri: String?
 )
 
 fun AlbumRow.toSummary(): AlbumSummary = AlbumSummary(
@@ -72,7 +73,7 @@ fun AlbumRow.toSummary(): AlbumSummary = AlbumSummary(
     songCount = songCount,
     totalDurationMs = totalDurationMs,
     albumCountInEntry = albumCountInEntry,
-    coverUri = null
+    coverUri = coverUri
 )
 
 /** 作品内歌曲行（Room 映射到实体） */

@@ -602,8 +602,9 @@ private fun AlbumRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         CoverImage(
-            // v2.1.13：entry.coverUri 已在多专辑文件夹时设为 null，直接用即可，不再用 albumCountInEntry 判断
-            coverUri = entry?.coverUri,
+            // v2.1.15：优先用作品封面（works.coverUri，扫描时提取首曲内嵌封面入库）；
+            // 回退 entry.coverUri（单专辑文件夹的文件夹图片/首曲内嵌）
+            coverUri = album.coverUri ?: entry?.coverUri,
             displayName = album.album,
             size = 56.dp
         )
