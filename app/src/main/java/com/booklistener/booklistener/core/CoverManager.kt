@@ -25,14 +25,14 @@ class CoverManager(
     }
 
     /**
-     * 专辑封面规则（v1.6.3 修复"当前专辑没封面却用了其他专辑图"）：
-     * - 来源条目只聚合出 1 个专辑（单专辑文件夹）→ 用文件夹封面（entry.coverUri，零 IO）
-     * - 条目聚合出多个专辑 → 只用该专辑内文件的内嵌封面（首曲，磁盘缓存），解析不到返回 null（绝不串图）
-     * - 返回 null 时由 UI 回退渐变占位
+     * 专辑封面规则（v2.1.13 修复多子文件夹串图）：
+     * - entry.coverUri 非空（单专辑文件夹的文件夹图片/首曲内嵌）→ 直接用
+     * - entry.coverUri 为空（多专辑文件夹不设封面，Q14）→ 用该专辑首曲内嵌封面
+     * - 都没有 → null（UI 回退渐变占位）
+     * 注意：albumCountInEntry 是"专辑跨文件夹数"，不是"文件夹内专辑数"，不能用作判断依据。
      */
     fun resolveAlbumCover(entryCoverUri: String?, albumCountInEntry: Int, firstAudioUri: String?): String? =
-        if (albumCountInEntry <= 1) entryCoverUri
-        else firstAudioUri?.let { extractEmbeddedCover(it) }
+        entryCoverUri ?: firstAudioUri?.let { extractEmbeddedCover(it) }
 
     /** 解析首曲作者信息（无则 null，用于条目作者行展示） */
     fun resolveArtist(firstAudioPath: String?): String? =

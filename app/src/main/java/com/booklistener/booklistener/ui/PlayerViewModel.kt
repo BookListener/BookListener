@@ -1522,7 +1522,12 @@ class PlayerViewModel @JvmOverloads constructor(
      */
     private fun buildLocalEntry(treeUri: Uri, items: List<AudioItem>, prev: SavedEntry? = null): SavedEntry {
         val uriStr = treeUri.toString()
-        val cover = coverManager.resolveFolderCover(uriStr, items.firstOrNull()?.path)
+        // v2.1.13：多专辑文件夹不设 entry 封面（Q14），避免跨子文件夹串图；
+        // 单专辑文件夹才提取文件夹图片/首曲内嵌封面
+        val albumCount = coverManager.albumCountOf(items)
+        val cover = if (albumCount <= 1) {
+            coverManager.resolveFolderCover(uriStr, items.firstOrNull()?.path)
+        } else null
         val artist = coverManager.resolveArtist(items.firstOrNull()?.path)
         return SavedEntry(
             id = uriStr,

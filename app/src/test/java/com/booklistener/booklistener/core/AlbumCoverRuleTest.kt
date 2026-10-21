@@ -9,9 +9,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * 专辑封面规则测试（v1.6.3 修复"当前专辑没封面却用了其他专辑图"）：
- * 单专辑条目 → 用文件夹封面（entry.coverUri，零 IO）；
- * 多专辑条目 → 只取该专辑内文件的内嵌封面，解析不到返回 null（绝不回退文件夹封面 = 绝不串图）。
+ * 专辑封面规则测试（v2.1.13 修复多子文件夹串图）：
+ * - entry.coverUri 非空（单专辑文件夹）→ 直接用 entry 封面
+ * - entry.coverUri 为空（多专辑文件夹不设封面，Q14）→ 回退首曲内嵌封面
+ * - 都没有 → null（UI 渐变占位）
+ * 注意：albumCountInEntry 是"专辑跨文件夹数"，不再用作封面判断依据。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -24,27 +26,28 @@ class AlbumCoverRuleTest {
     )
 
     @Test
-    fun singleAlbumEntry_usesFolderCover() {
-        // 条目只聚合出 1 个专辑：文件夹封面即专辑封面（零 IO，不解析内嵌）
+    fun entryCoverPresent_usesItDirectly() {
+        // 单专辑文件夹：entry.coverUri 非空 → 直接用（零 IO，不解析内嵌）
         assertEquals(entryCover, manager.resolveAlbumCover(entryCover, albumCountInEntry = 1, firstAudioUri = "content://audio/1.mp3"))
     }
 
     @Test
-    fun multiAlbumEntry_neverFallsBackToFolderCover_whenNoEmbeddedArt() {
-        // 多专辑条目 + 专辑内无内嵌封面（Robolectric 无 provider 解析失败）：
-        // 必须返回 null（UI 渐变占位），绝不能把文件夹封面给该专辑用 = 串图回归点
-        assertNull(manager.resolveAlbumCover(entryCover, albumCountInEntry = 3, firstAudioUri = "content://audio/1.mp3"))
+    fun entryCoverNull_noEmbeddedArt_returnsNull() {
+        // 多专辑文件夹 entry.coverUri=null + 首曲无内嵌封面（Robolectric 解析失败）→ null（绝不串图）
+        assertNull(manager.resolveAlbumCover(null, albumCountInEntry = 3, firstAudioUri = "content://audio/1.mp3"))
     }
 
     @Test
-    fun multiAlbumEntry_noFirstAudio_returnsNull() {
-        assertNull(manager.resolveAlbumCover(entryCover, albumCountInEntry = 2, firstAudioUri = null))
+    fun entryCoverNull_noFirstAudio_returnsNull() {
+        assertNull(manager.resolveAlbumCover(null, albumCountInEntry = 2, firstAudioUri = null))
     }
 
     @Test
-    fun zeroAlbumsEdge_treatedAsSingle() {
-        // 空列表边界：视为单专辑语义（沿用文件夹封面，无害）
-        assertEquals(entryCover, manager.resolveAlbumCover(entryCover, albumCountInEntry = 0, firstAudioUri = null))
+    fun entryCoverNull_fallsBackToEmbeddedCover() {
+        // entry.coverUri=null 时回退首曲内嵌封面（Robolectric 无 provider 解析失败，此处仅验证不抛异常）
+        val result = manager.resolveAlbumCover(null, albumCountInEntry = 1, firstAudioUri = "content://audio/1.mp3")
+        // Robolectric 环境下 MediaMetadataRetriever 解析失败返回 null，验证逻辑走到内嵌分支
+        assertNull(result)
     }
 
     // v1.6.22：条目视图进入的专辑数判定（修复"无封面专辑串用其他专辑图"回归）

@@ -602,7 +602,8 @@ private fun AlbumRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         CoverImage(
-            coverUri = if (album.albumCountInEntry <= 1) entry?.coverUri else null,
+            // v2.1.13：entry.coverUri 已在多专辑文件夹时设为 null，直接用即可，不再用 albumCountInEntry 判断
+            coverUri = entry?.coverUri,
             displayName = album.album,
             size = 56.dp
         )
