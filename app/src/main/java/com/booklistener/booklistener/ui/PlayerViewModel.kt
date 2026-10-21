@@ -542,7 +542,12 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    /** 打开来源条目的作品视图（中间播放按钮后台切换用，查 works 表，不重扫） */
+    /**
+     * 打开来源条目的作品视图（查 works 表，不重扫）。
+     * @deprecated v2.1.5 起封面点击统一走 [openCurrentWorkAlbum]（按正在播放的作品定位），
+     *             本方法取条目下第一个作品，多专辑文件夹会跳错专辑；保留仅作历史参考。
+     */
+    @Deprecated("Use openCurrentWorkAlbum() instead")
     fun openEntryAlbum(entry: SavedEntry) {
         val works = runBlocking { appDb.dao().getWorksByEntry(entry.id) }
         val first = works.firstOrNull() ?: return
@@ -563,17 +568,13 @@ class PlayerViewModel @JvmOverloads constructor(
 
     /**
      * v2.1.5：打开正在播放的作品视图（封面点击用）。
-     * ownerId = "work:<workId>" 时直接定位该作品，而非该条目下第一个作品——
-     * 同条目多作品（多专辑文件夹）时封面点击必须跳到正在播放的那个专辑。
+     * 统一所有播放路径（作品级/条目级/无主队列）的封面点击，避免取条目下第一个作品。
      */
     fun openCurrentWorkAlbum() {
-        val ownerId = PlaybackController.currentQueueOwnerId ?: return
-        if (!ownerId.startsWith("work:")) {
-            // 非作品级队列（文件夹播放/测试挂载）→ 兼容旧逻辑，打开条目第一个作品
-            savedEntryById(ownerId)?.let { openEntryAlbum(it) }
-            return
-        }
-        val workId = ownerId.removePrefix("work:").toLongOrNull() ?: return
+        val workId = resolveCurrentWorkId(
+            PlaybackController.currentQueueOwnerId,
+            PlaybackController.state.value.currentItem?.path
+        ) ?: return
         val work = runBlocking { appDb.dao().getWorkById(workId) } ?: return
         val entryId = runBlocking { appDb.dao().getEntryIdByWorkId(workId) } ?: return
         val entry = savedEntryById(entryId) ?: return
@@ -591,6 +592,19 @@ class PlayerViewModel @JvmOverloads constructor(
             )
         )
         openAlbum(summary)
+    }
+
+    /**
+     * v2.1.5：解析当前播放队列所属的作品 id（封面点击/进度保存共用的定位逻辑）。
+     * - ownerId = "work:<id>"（作品级队列，主页专辑播放）→ 直接取
+     * - ownerId = entryId（条目级队列，网盘 enterFolderWithRecord）或 null（搜索/单曲 playItems）
+     *   → 从当前播放曲目 uri 反查所属作品（与 saveWorkProgress 同一反查路径）
+     */
+    internal fun resolveCurrentWorkId(ownerId: String?, currentPath: String?): Long? {
+        if (ownerId != null && ownerId.startsWith("work:")) {
+            return ownerId.removePrefix("work:").toLongOrNull()
+        }
+        return currentPath?.let { workStore.workIdForUri(it) }
     }
 
     /** 播放作品队列（点击作品内歌曲 → 以该曲为起点整专播放，db 数据入作品进度） */

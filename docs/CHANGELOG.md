@@ -3,6 +3,16 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.7（2026-10）修复：封面点击作品定位补全（条目级队列/无主队列）
+- 排查发现 v2.1.6 只覆盖了作品级队列（ownerId="work:<id>"），另有两种播放路径未覆盖：
+  ① 条目级队列（ownerId=entryId，网盘 enterFolderWithRecord）→ 旧实现走 openEntryAlbum 取条目下第一个作品
+  ② 无主队列（ownerId=null，搜索结果/文件夹视图点击单曲 playItems）→ 旧实现 ownerId 为 null 直接 return，封面点击无响应
+- 修复：新增 PlayerViewModel.resolveCurrentWorkId(ownerId, currentPath) 统一三种队列归属的作品定位——
+  work: 前缀直接取；其余从当前播放曲目 uri 反查 workId（与 saveWorkProgress 同一反查路径）
+- openCurrentWorkAlbum 重构为调用 resolveCurrentWorkId，覆盖所有播放路径
+- openEntryAlbum 标记 @Deprecated（已无调用点，取首个作品的逻辑是跳错专辑根源）
+- 新增 CoverClickWorkResolutionTest：resolveCurrentWorkId 三分支 + openCurrentWorkAlbum 端到端 + 同专辑多作者合并联动，共 6 用例
+- 全量 291 用例通过
 ## v2.1.6（2026-10）修复：点击正在播放的专辑封面跳转到第一个专辑
 - 根因：封面点击经 queueOwnerEntry 反查到来源条目后，openEntryAlbum 取该条目下 works.firstOrNull()（第一个作品），而非正在播放的作品；同条目多专辑文件夹时必然跳错
 - 修复：新增 PlayerViewModel.openCurrentWorkAlbum()，从 PlaybackController ownerId（"work:<workId>"）直接定位正在播放的作品，构造 AlbumSummary 后 openAlbum；非作品级队列（文件夹播放）回退 openEntryAlbum 兼容旧逻辑
