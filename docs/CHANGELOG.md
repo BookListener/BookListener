@@ -3,6 +3,16 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.8（2026-10）修复：封面点击进入正在播放的专辑会暂停
+- 根因：enterAlbumWithRecord 调 shouldRestartOnEnter("work:$workId")，但该方法内部把 work: 前缀反查为 entryId，
+  与 "work:<id>" 比较永远不等 → 永远返回 true → 每次 openAlbum 都 prepareFolder(autoPlay=false) → 暂停。
+  这是 v2.1.2 引入的潜伏 bug，v2.1.6/v2.1.7 只修了封面点击的作品定位，没修进入专辑时的重启判断。
+- 修复：新增 PlayerViewModel.shouldRestartForWork(workId)，用 resolveCurrentWorkId 直接比较作品级维度；
+  正在播放同一作品且 queueReady → 不重启（保持播放），否则重启（暂停并加载目标作品记录）。
+- 排查确认：shouldRestartOnEnter 的另两个调用点（openEntryView/resumePlaybackOfEntry）传 entryId，类型匹配无此问题。
+- 新增 shouldRestartForWork 测试 5 用例（同作品不重启/不同作品重启/条目级队列按曲目反查/无主队列按曲目反查/队列未就绪重启）。
+- PlaybackController 新增 setStateForTest 测试辅助（Robolectric 中 player=null 时模拟 currentItem）。
+- 全量 296 用例通过。
 ## v2.1.7（2026-10）修复：封面点击作品定位补全（条目级队列/无主队列）
 - 排查发现 v2.1.6 只覆盖了作品级队列（ownerId="work:<id>"），另有两种播放路径未覆盖：
   ① 条目级队列（ownerId=entryId，网盘 enterFolderWithRecord）→ 旧实现走 openEntryAlbum 取条目下第一个作品

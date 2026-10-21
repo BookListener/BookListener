@@ -10,8 +10,10 @@ import com.booklistener.db.SavedEntryEntity
 import com.booklistener.player.PlaybackController
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -37,6 +39,9 @@ class CoverClickWorkResolutionTest {
 
     @Before
     fun setUp() {
+        // 隔离用例间单例残留：默认无队列归属、无播放状态
+        PlaybackController.setStateForTest(com.booklistener.player.PlaybackState())
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, null)
         val ctx: android.content.Context = ApplicationProvider.getApplicationContext()
         db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java)
             .allowMainThreadQueries().build()
@@ -137,6 +142,87 @@ class CoverClickWorkResolutionTest {
         PlaybackController.prepareFolder(emptyList(), 0, 0L, null)
         vm.openCurrentWorkAlbum()
         assertNull(vm.currentAlbum.value)
+    }
+
+    // ---- shouldRestartForWork：进入专辑时是否暂停（v2.1.7 修复）----
+
+    private fun playingState(path: String) = com.booklistener.player.PlaybackState(
+        currentItem = com.booklistener.core.AudioItem(
+            id = path, displayName = path, path = path,
+            sourceType = com.booklistener.core.SourceType.LOCAL, size = 1L
+        ),
+        isPlaying = true,
+        queueIndex = 0
+    )
+
+    @Test
+    fun shouldRestartForWork_samePlayingWork_doesNotRestart() {
+        val vm = newViewModel()
+        val workA = workIdOf("uri://a1")
+        PlaybackController.setStateForTest(playingState("uri://a1"))
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, "work:$workA")
+        // queueReady: pendingQueue 为空但 _state.currentItem != null → true
+        assertFalse(
+            "正在播放同一作品且队列就绪 → 不应重启（不暂停）",
+            vm.shouldRestartForWork(workA)
+        )
+    }
+
+    @Test
+    fun shouldRestartForWork_differentWork_restarts() {
+        val vm = newViewModel()
+        val workA = workIdOf("uri://a1")
+        val workB = workIdOf("uri://b1")
+        PlaybackController.setStateForTest(playingState("uri://a1"))
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, "work:$workA")
+        assertTrue(
+            "正在播放作品 A，进入作品 B → 应重启（暂停并加载 B）",
+            vm.shouldRestartForWork(workB)
+        )
+    }
+
+    @Test
+    fun shouldRestartForWork_entryOwner_sameWorkResolvesByTrack() {
+        val vm = newViewModel()
+        val workB = workIdOf("uri://b1")
+        // 条目级队列（ownerId=entryId）：从当前播放曲目反查作品
+        PlaybackController.setStateForTest(playingState("uri://b1"))
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, entryId)
+        assertFalse(
+            "条目级队列正在播放专辑乙的曲目 → 进入专辑乙不应重启",
+            vm.shouldRestartForWork(workB)
+        )
+        val workA = workIdOf("uri://a1")
+        assertTrue(
+            "条目级队列正在播放专辑乙 → 进入专辑甲应重启",
+            vm.shouldRestartForWork(workA)
+        )
+    }
+
+    @Test
+    fun shouldRestartForWork_nullOwner_sameWorkResolvesByTrack() {
+        val vm = newViewModel()
+        val workA = workIdOf("uri://a1")
+        // 无主队列（ownerId=null，搜索/单曲播放）：从当前曲目反查
+        PlaybackController.setStateForTest(playingState("uri://a1"))
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, null)
+        assertFalse(
+            "无主队列正在播放专辑甲的曲目 → 进入专辑甲不应重启",
+            vm.shouldRestartForWork(workA)
+        )
+    }
+
+    @Test
+    fun shouldRestartForWork_queueNotReady_restarts() {
+        val vm = newViewModel()
+        val workA = workIdOf("uri://a1")
+        // 队列未就绪（空 state + 空 pendingQueue）→ 即使 ownerId 匹配也应重启
+        PlaybackController.setStateForTest(com.booklistener.player.PlaybackState())
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, "work:$workA")
+        assertTrue(
+            "队列未就绪时应重启（加载作品记录）",
+            vm.shouldRestartForWork(workA)
+        )
     }
 
     // ---- 同专辑多作者合并后封面定位（v2.1.5 workKey 去 artist 的联动）----

@@ -503,7 +503,7 @@ class PlayerViewModel @JvmOverloads constructor(
     private fun enterAlbumWithRecord(album: AlbumSummary) {
         val workId = album.workId
         if (workId <= 0L) return
-        if (!shouldRestartOnEnter("work:$workId", PlaybackController.state.value.isPlaying)) return
+        if (!shouldRestartForWork(workId)) return
         saveCurrentPlaybackProgress()
         viewModelScope.launch {
             val all = withContext(Dispatchers.IO) { albumStore.allSongs(workId) }
@@ -595,7 +595,7 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     /**
-     * v2.1.5：解析当前播放队列所属的作品 id（封面点击/进度保存共用的定位逻辑）。
+     * v2.1.7：解析当前播放队列所属的作品 id（封面点击/进度保存共用的定位逻辑）。
      * - ownerId = "work:<id>"（作品级队列，主页专辑播放）→ 直接取
      * - ownerId = entryId（条目级队列，网盘 enterFolderWithRecord）或 null（搜索/单曲 playItems）
      *   → 从当前播放曲目 uri 反查所属作品（与 saveWorkProgress 同一反查路径）
@@ -605,6 +605,20 @@ class PlayerViewModel @JvmOverloads constructor(
             return ownerId.removePrefix("work:").toLongOrNull()
         }
         return currentPath?.let { workStore.workIdForUri(it) }
+    }
+
+    /**
+     * v2.1.7：进入作品视图时是否需要重启队列（作品级判定，替代旧的 shouldRestartOnEnter("work:")）。
+     * 正在播放同一作品且队列就绪 → false（保持播放不暂停）；否则 → true（加载该作品记录并就绪）。
+     * 旧实现调 shouldRestartOnEnter("work:$workId")，但该方法内部把 work: 前缀反查为 entryId，
+     * 与 "work:<id>" 比较永远不等 → 永远重启 → 点击正在播放的专辑封面会暂停。
+     */
+    internal fun shouldRestartForWork(workId: Long): Boolean {
+        val currentWorkId = resolveCurrentWorkId(
+            PlaybackController.currentQueueOwnerId,
+            PlaybackController.state.value.currentItem?.path
+        )
+        return !(currentWorkId == workId && PlaybackController.queueReady)
     }
 
     /** 播放作品队列（点击作品内歌曲 → 以该曲为起点整专播放，db 数据入作品进度） */
