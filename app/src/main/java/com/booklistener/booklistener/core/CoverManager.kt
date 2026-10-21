@@ -43,18 +43,20 @@ class CoverManager(
 
     /** 用 MediaMetadataRetriever 提取音频内嵌封面，写入 cacheDir/covers/{id}.jpg 返回 file:// uri */
     private fun extractEmbeddedCover(audioUriStr: String): String? {
+        // v2.1.14：CUE 虚拟轨 uri（整轨#track_xxx）→ 先解析出整轨 uri，封面在整轨文件上
+        val realUriStr = VirtualTrackUri.parse(audioUriStr)?.first ?: audioUriStr
         return runCatching {
             val retriever = MediaMetadataRetriever()
             var released = false
             try {
                 val fd = app.contentResolver
-                    .openAssetFileDescriptor(Uri.parse(audioUriStr), "r")
+                    .openAssetFileDescriptor(Uri.parse(realUriStr), "r")
                     ?: return null
                 retriever.setDataSource(fd.fileDescriptor)
                 val art = retriever.embeddedPicture ?: return null
                 val coverDir = CacheDirs.coverCacheDir(app)
                 coverDir.mkdirs()
-                val file = File(coverDir, sanitize(coverDir, audioUriStr) + ".jpg")
+                val file = File(coverDir, sanitize(coverDir, realUriStr) + ".jpg")
                 file.writeBytes(art)
                 released = true
                 retriever.release()

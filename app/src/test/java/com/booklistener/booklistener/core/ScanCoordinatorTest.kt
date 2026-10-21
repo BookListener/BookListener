@@ -46,7 +46,7 @@ class ScanCoordinatorTest {
         isDir: Boolean = false
     ) = SourceFile(
         name = name, path = path, relativePath = relativePath,
-        isDirectory = isDir, sizeBytes = 100L
+        isDirectory = isDir, sizeBytes = 1048576L  // 1MB，避免被过小文件过滤
     )
 
     @Before
@@ -74,7 +74,7 @@ class ScanCoordinatorTest {
         val source = FakeSource(listOf(file("01.flac")))
         val coord = ScanCoordinator(
             source = source,
-            tagReader = { TagResolver.AudioTags("标题", "歌手", "专辑", 1, 1, 1000L) },
+            tagReader = { TagResolver.AudioTags("标题", "歌手", "专辑", 1, 1, 180000L) },
             cueTextReader = { null },
             indexStore = indexStore
         )
@@ -167,5 +167,41 @@ class ScanCoordinatorTest {
         val rows = dao.getEntryIndex(entryId)
         assertEquals(1, rows.size)
         assertFalse(rows[0].displayName == "subdir")
+    }
+
+    @Test
+    fun `tiny audio files are skipped by size`() = runBlocking {
+        // 50KB 音频文件 < 100KB 阈值 → 跳过
+        val tiny = SourceFile(
+            name = "ringtone.mp3", path = "content://doc/ringtone.mp3",
+            relativePath = "", isDirectory = false, sizeBytes = 50L * 1024L
+        )
+        val normal = file("01.flac")
+        val source = FakeSource(listOf(tiny, normal))
+        val coord = ScanCoordinator(
+            source = source,
+            tagReader = { TagResolver.AudioTags("标题", "歌手", "专辑", 1, 1, 180000L) },
+            cueTextReader = { null },
+            indexStore = indexStore
+        )
+        coord.scan(entryId)
+        val rows = dao.getEntryIndex(entryId)
+        assertEquals(1, rows.size)
+        assertEquals("标题", rows[0].displayName)
+    }
+
+    @Test
+    fun `short duration audio files are skipped`() = runBlocking {
+        // 5 秒音频 < 10 秒阈值 → 跳过
+        val source = FakeSource(listOf(file("short.mp3")))
+        val coord = ScanCoordinator(
+            source = source,
+            tagReader = { TagResolver.AudioTags("短音效", null, null, null, null, 5000L) },
+            cueTextReader = { null },
+            indexStore = indexStore
+        )
+        coord.scan(entryId)
+        val rows = dao.getEntryIndex(entryId)
+        assertEquals(0, rows.size)
     }
 }

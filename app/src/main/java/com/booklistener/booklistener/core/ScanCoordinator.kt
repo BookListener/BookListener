@@ -17,6 +17,12 @@ class ScanCoordinator(
     private val indexStore: EntryIndexStore
 ) {
 
+    companion object {
+        // v2.1.14：跳过过小的音频文件（铃声/通知音/系统音效）
+        const val MIN_AUDIO_SIZE_BYTES = 100L * 1024L   // 100 KB
+        const val MIN_AUDIO_DURATION_MS = 10L * 1000L    // 10 秒
+    }
+
     /**
      * 全量扫描并写索引。
      * @param entryId 条目标识（写索引的 key；本地 SAF tree uri / 网盘 "webdav://..." ）
@@ -47,8 +53,18 @@ class ScanCoordinator(
                     }
                 }
                 AudioExt.isAudio(file.name) -> {
+                    // v2.1.14：跳过过小的音频文件（铃声/通知音/系统音效），不入库
+                    val size = file.sizeBytes
+                    if (size != null && size in 1..<MIN_AUDIO_SIZE_BYTES) {
+                        continue
+                    }
                     // 音频：读标签；失败用文件名兜底，记 error
                     val tags = runCatching { tagReader(file) }.getOrNull()
+                    // v2.1.14：跳过播放时间过短的音频（标签解析出时长后判断）
+                    val dur = tags?.durationMs
+                    if (dur != null && dur in 1..<MIN_AUDIO_DURATION_MS) {
+                        continue
+                    }
                     indexed += if (tags != null) {
                         IndexedFile(
                             displayName = tags.title?.takeIf { it.isNotBlank() }
