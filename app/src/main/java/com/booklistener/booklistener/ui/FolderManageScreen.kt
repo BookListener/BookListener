@@ -572,7 +572,9 @@ private fun FolderManageRow(
             subtitle = {
                 Text(
                     text = when {
-                        entry.isLocal -> entry.uri
+                        // v2.1.11：本地 SAF uri 显示可读路径（内部存储/...）
+                        entry.isLocal ->
+                            com.booklistener.core.folderReadablePath(android.net.Uri.parse(entry.uri))
                         // v1.6.30：网盘条目副标题显示文件夹路径（不再重复目录名/账号）
                         entry.sourceType == com.booklistener.core.SourceType.WEBDAV ->
                             runCatching { java.net.URI(entry.uri).path.orEmpty() }
