@@ -179,7 +179,7 @@ class DirectoryScreenFolderViewTest {
     @Test
     fun openSavedEntry_webDav_showSheetFalse_entersFolderViewWithoutSheet() {
         val vm = newViewModel()
-        vm.openSavedEntry(webDavEntry(), showSheet = false)
+        vm.openSavedEntry(webDavEntry())
 
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
@@ -194,7 +194,7 @@ class DirectoryScreenFolderViewTest {
     @Test
     fun backButtonClick_exitsFolderView() {
         val vm = newViewModel()
-        vm.openSavedEntry(webDavEntry(), showSheet = false)
+        vm.openSavedEntry(webDavEntry())
         composeRule.setContent { DirectoryScreen(vm) }
         composeRule.waitUntil(timeoutMillis = 30_000) {
             shadowOf(Looper.getMainLooper()).idle()
@@ -214,7 +214,7 @@ class DirectoryScreenFolderViewTest {
     @Test
     fun systemBack_closesFolderView() {
         val vm = newViewModel()
-        vm.openSavedEntry(webDavEntry(), showSheet = false)
+        vm.openSavedEntry(webDavEntry())
         composeRule.setContent { DirectoryScreen(vm) }
         composeRule.waitUntil(timeoutMillis = 30_000) {
             shadowOf(Looper.getMainLooper()).idle()

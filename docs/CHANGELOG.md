@@ -3,6 +3,14 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.9（2026-10）清理：文件夹管理与播放解耦 + 遗留代码删除
+- 删除 openEntryView 中的 enterFolderWithRecord 自动播放：文件夹管理进入目录只展示文件列表，不触发任何播放（落实"文件夹管理与播放无关"原则）。
+- 删除 enterFolderWithRecord 函数（条目级队列 ownerId=entryId 形态消失，播放队列只剩 work:<id> 和 null 两种）。
+- 删除 openEntryAlbum 死代码（已 @Deprecated 无调用点，取条目下第一个作品会跳错专辑）。
+- playItems 新增 _currentAlbum 设置：从起始曲目 uri 反查 workId → 查作品信息 → 构造 AlbumSummary，播放时详情面板/封面有专辑上下文（落实"播放只和专辑相关"原则）。
+- openSavedEntry 去掉 showSheet 参数（进入目录不再弹播放详情）。
+- 测试更新：DirectoryScreenFolderViewTest 去掉 showSheet=false 调用；全量 296 用例通过。
+- SPECS.md 更新：播放队列形态从三种改为两种，遗留问题清单同步。
 ## v2.1.8（2026-10）修复：封面点击进入正在播放的专辑会暂停
 - 根因：enterAlbumWithRecord 调 shouldRestartOnEnter("work:$workId")，但该方法内部把 work: 前缀反查为 entryId，
   与 "work:<id>" 比较永远不等 → 永远返回 true → 每次 openAlbum 都 prepareFolder(autoPlay=false) → 暂停。

@@ -543,30 +543,6 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     /**
-     * 打开来源条目的作品视图（查 works 表，不重扫）。
-     * @deprecated v2.1.5 起封面点击统一走 [openCurrentWorkAlbum]（按正在播放的作品定位），
-     *             本方法取条目下第一个作品，多专辑文件夹会跳错专辑；保留仅作历史参考。
-     */
-    @Deprecated("Use openCurrentWorkAlbum() instead")
-    fun openEntryAlbum(entry: SavedEntry) {
-        val works = runBlocking { appDb.dao().getWorksByEntry(entry.id) }
-        val first = works.firstOrNull() ?: return
-        val summary = AlbumSummary(
-            workId = first.id,
-            album = first.title,
-            entryId = entry.id,
-            artist = first.albumArtist ?: entry.artist,
-            songCount = first.songCount,
-            totalDurationMs = first.totalDurationMs,
-            albumCountInEntry = works.size.coerceAtLeast(1),
-            coverUri = coverManager.resolveAlbumCover(
-                entry.coverUri, works.size.coerceAtLeast(1), null
-            )
-        )
-        openAlbum(summary)
-    }
-
-    /**
      * v2.1.5：打开正在播放的作品视图（封面点击用）。
      * 统一所有播放路径（作品级/条目级/无主队列）的封面点击，避免取条目下第一个作品。
      */
@@ -758,12 +734,40 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    /** 播放目录（作为队列）：逐个解析真实播放 Uri 后入队播放 */
+    /**
+     * 播放目录（作为队列）：逐个解析真实播放 Uri 后入队播放。
+     * v2.1.9：从起始曲目反查所属作品并设置 _currentAlbum（播放只和专辑相关，
+     * 详情面板/封面需要专辑上下文；未入库的外部文件反查不到则保持 null）。
+     */
     fun playItems(items: List<AudioItem>, startIndex: Int = 0) {
         if (items.isEmpty()) return
         MediaPlayService.start(getApplication())
+        val safeIndex = startIndex.coerceIn(0, items.lastIndex)
         viewModelScope.launch {
-            PlaybackController.setQueue(resolveAll(items), startIndex.coerceIn(0, items.lastIndex))
+            // 设置当前专辑上下文（从起始曲目 uri 反查作品）
+            items.getOrNull(safeIndex)?.path?.let { path ->
+                val wholeUri = com.booklistener.core.VirtualTrackUri.parse(path)?.first ?: path
+                workStore.workIdForUri(wholeUri)?.let { workId ->
+                    val work = withContext(Dispatchers.IO) { appDb.dao().getWorkById(workId) }
+                    if (work != null) {
+                        val entryId = withContext(Dispatchers.IO) { appDb.dao().getEntryIdByWorkId(workId) }
+                        val albumCount = entryId?.let {
+                            withContext(Dispatchers.IO) { appDb.dao().getWorksByEntry(it).size }
+                        }?.coerceAtLeast(1) ?: 1
+                        _currentAlbum.value = AlbumSummary(
+                            workId = work.id,
+                            album = work.title,
+                            entryId = entryId ?: "",
+                            artist = work.albumArtist,
+                            songCount = work.songCount,
+                            totalDurationMs = work.totalDurationMs,
+                            albumCountInEntry = albumCount,
+                            coverUri = work.coverUri
+                        )
+                    }
+                }
+            }
+            PlaybackController.setQueue(resolveAll(items), safeIndex)
         }
     }
 
@@ -800,11 +804,15 @@ class PlayerViewModel @JvmOverloads constructor(
      * 保存进度 → 固化基础状态 → 进入条目视图 → IO 加载 → 按播放层队列所属判定是否恢复队列
      * （同条目播放中不打断）→ 就绪不自动播放 → 可选项：自动弹详情 / 扫描后处理（索引/封面）。
      */
+    /**
+     * 进入文件夹管理的目录视图：仅加载并展示文件列表，不触发任何播放。
+     * v2.1.9：删除 enterFolderWithRecord 自动播放——文件夹管理与播放无关，
+     * 进入目录只展示内容文件列表，播放只从专辑/搜索入口发起。
+     */
     private fun openEntryView(
         entryId: String,
         entryUri: Uri,
         emptyMessageRes: Int,
-        showSheet: Boolean,
         loadItems: suspend () -> List<AudioItem>,
         afterLoad: (List<AudioItem>) -> Unit = {}
     ) {
@@ -822,16 +830,6 @@ class PlayerViewModel @JvmOverloads constructor(
             }
             _folderItems.value = items
             withContext(Dispatchers.IO) { afterLoad(items) }
-            if (items.isNotEmpty()) {
-                // 正在播放的同一个文件夹再次进入：仅展示列表，不重新 prepare（保持播放不暂停）。
-                // 判定基于播放层队列所属（currentQueueOwnerId），而非易清空的 _currentFolderUri。
-                if (shouldRestartOnEnter(entryId, PlaybackController.state.value.isPlaying)) {
-                    // 恢复该文件夹的播放记录：定位到记录曲目/位置，不自动播放
-                    enterFolderWithRecord(entryUri, items)
-                    // 切换文件夹后自动弹出播放详情（展示就绪状态），但不直接开始播放
-                    if (showSheet) _requestPlayerSheet.value = true
-                }
-            }
             _eventMsg.value = if (items.isEmpty()) getString(emptyMessageRes)
             else getString(MessageCatalog.MSG_FOUND, items.size)
         }
@@ -1082,9 +1080,9 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    fun openSavedEntry(entry: SavedEntry, showSheet: Boolean = true) {
+    fun openSavedEntry(entry: SavedEntry) {
         if (entry.isLocal) {
-            scanFolder(Uri.parse(entry.uri), showSheet = showSheet)
+            scanFolder(Uri.parse(entry.uri))
             return
         }
         if (entry.sourceType == SourceType.WEBDAV) {
@@ -1096,7 +1094,6 @@ class PlayerViewModel @JvmOverloads constructor(
             entryId = entry.id,
             entryUri = Uri.parse(entry.id),
             emptyMessageRes = MessageCatalog.EMPTY_DIR_AUDIO,
-            showSheet = showSheet,
             loadItems = {
                 when (entry.sourceType) {
                     // 网盘目录会变化：每次进入直接 PROPFIND（子目录实时可见），同时写索引供专辑聚合
@@ -1345,30 +1342,6 @@ class PlayerViewModel @JvmOverloads constructor(
     /** 消费弹层请求（由 MainScreen 在弹出后调用复位） */
     fun consumePlayerSheetRequest() {
         _requestPlayerSheet.value = false
-    }
-
-    /** 加载条目记录并就绪（不播）；点播放后从记录位置续播（v4.0：恢复该条目最近播放的作品进度） */
-    private fun enterFolderWithRecord(folderUri: Uri, items: List<AudioItem>) {
-        val entryId = folderUri.toString()
-        val record = workStore.loadMostRecentByEntry(entryId)
-        val (startIndex, startPos) = FolderProgressLogic.resolveStart(items, record)
-        lastSavedIndex = startIndex
-        lastSavedUri = items.getOrNull(startIndex)?.path
-        val entry = savedEntryById(entryId)
-        // v1.6.22：修复"无封面专辑串用其他专辑图"（老问题回归）。
-        // 文件夹视图进入的封面规则与专辑入口共用 resolveAlbumCover：
-        // 单专辑文件夹 → 文件夹封面；多专辑文件夹 → 记录定位曲目的内嵌封面（解析不到返回 null，绝不串图）
-        val cover = entry?.let { e ->
-            coverManager.resolveAlbumCover(
-                e.coverUri, coverManager.albumCountOf(items), items.getOrNull(startIndex)?.path
-            )
-        }
-        MediaPlayService.start(getApplication())
-        viewModelScope.launch {
-            PlaybackController.prepareFolder(
-                resolveAll(items, coverUri = cover), startIndex, startPos, entryId
-            )
-        }
     }
 
     /** 按当前曲目保存作品进度（v4.0：锚点 = 曲目 uri 反查 workId + 内容引用） */

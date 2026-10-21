@@ -1,7 +1,7 @@
 # BookListener 关键规格记忆
 
 > 本文件记录项目核心业务规则与概念边界，开发前必须先读。任何与本文件冲突的实现都是 bug。
-> 最后更新：v2.1.8
+> 最后更新：v2.1.9
 
 ---
 
@@ -30,15 +30,16 @@
 
 ## 二、播放队列与作品定位
 
-### 1. 播放队列 ownerId 三种形态
+### 1. 播放队列 ownerId 两种形态
 | 形态 | 产生场景 | 作品定位方式 |
 |---|---|---|
 | `"work:<workId>"` | 专辑播放（enterAlbumWithRecord / playAlbumFrom / resumePlaybackOfEntry） | 直接解析 workId |
-| `entryId` | 网盘条目进入（enterFolderWithRecord）——**遗留路径，与"播放只和专辑相关"原则冲突，待清理** | 从当前曲目 uri 反查 workId |
-| `null` | 搜索/单曲播放（playItems） | 从当前曲目 uri 反查 workId |
+| `null` | 搜索/单曲播放（playItems） | 从当前播放曲目 uri 反查 workId |
+
+v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）——文件夹管理与播放无关，进入目录只展示文件列表不播放。`playItems` 会从起始曲目反查作品并设置 `_currentAlbum`。
 
 ### 2. 作品定位统一函数
-- `PlayerViewModel.resolveCurrentWorkId(ownerId, currentPath)`：统一三种形态的作品定位。
+- `PlayerViewModel.resolveCurrentWorkId(ownerId, currentPath)`：统一两种形态的作品定位。
   - `work:` 前缀 → 直接取 workId
   - 其余 → `workStore.workIdForUri(currentPath)` 反查
 - `PlayerViewModel.shouldRestartForWork(workId)`：进入专辑时是否重启队列。
@@ -153,7 +154,5 @@
 
 ## 九、已知遗留问题（待清理）
 
-1. `enterFolderWithRecord`（网盘条目进入播放整个文件夹）与"播放只和专辑相关"原则冲突，待评估是否移除或改造为作品级播放。
-2. `playItems`（搜索/单曲播放）ownerId=null，进度靠 uri 反查作品，功能正常但队列归属语义不统一。
-3. `_currentAlbum` 在 `playItems`/`enterFolderWithRecord` 时不设置——按"播放只和专辑相关"原则，播放时应有专辑上下文，待确认是否修复。
-4. `openEntryAlbum` 已 `@Deprecated` 无调用点，待删除。
+1. `playItems`（搜索/单曲播放）ownerId=null，进度靠 uri 反查作品，功能正常但队列归属语义不统一。搜索单曲播放时用户就是想播这一首，ownerId=null 合理，暂不改造。
+2. FFmpeg 集成（APE/DSF/DFF 解码）：架构路线已定，未落代码，待用户拍板。
