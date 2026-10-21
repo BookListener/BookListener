@@ -56,5 +56,8 @@ data class EntryIndexEntity(
     val workId: Long? = null,      // 指向 works.id（扫描后回填），替代查询时 GROUP BY 聚合
     val sortRank: Int? = null,     // 条目内展示序下标（AudioSortKey.byName），专辑内 ORDER BY sortRank
     val sizeBytes: Long? = null,   // 二期内容指纹用；本期仅落库
-    val albumArtist: String? = null // 参与作品键（当前解析无 albumArtist 概念，暂空，key 用 artist 兜底）
+    val albumArtist: String? = null, // 参与作品键（当前解析无 albumArtist 概念，暂空，key 用 artist 兜底）
+    // v2.2.0：设置侧链路重构
+    val relativePath: String? = null, // 相对顶层文件夹的路径（子文件夹平铺显示/网盘导航筛选）
+    val error: String? = null         // 单文件解析失败原因（null=正常；非空时文件行显示错误图标）
 )

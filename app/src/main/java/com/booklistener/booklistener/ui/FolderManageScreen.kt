@@ -568,6 +568,7 @@ private fun FolderManageRow(
             entry = entry,
             titleStyle = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
+            showCover = false,
             subtitle = {
                 Text(
                     text = when {
@@ -623,10 +624,37 @@ private fun ManageFileRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Text(
-                text = file.durationMs?.let { formatDuration(it) } ?: stringResource(R.string.common_unknown_duration),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            // v2.2.0：文件级错误信息直接显示在失败文件行
+            if (file.error != null) {
+                Text(
+                    text = file.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                // v2.2.0：文件行标注相对路径（子文件夹文件），与时长组合
+                val sub = listOfNotNull(
+                    file.relativePath?.takeIf { it.isNotBlank() },
+                    file.durationMs?.let { formatDuration(it) }
+                        ?: stringResource(R.string.common_unknown_duration)
+                ).joinToString(" · ")
+                Text(
+                    text = sub,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (file.error != null) {
+            Icon(
+                imageVector = AppIcons.Info,
+                contentDescription = file.error,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(22.dp)
             )
         }
         if (onClick != null) {

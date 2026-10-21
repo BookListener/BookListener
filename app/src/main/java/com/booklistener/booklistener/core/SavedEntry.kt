@@ -141,7 +141,10 @@ data class IndexedFile(
     val rawName: String? = null,
     // v4.0：作品实体化辅助字段（不入库，扫描时由 saveEntryIndexWithWorks 派生写入）
     val albumArtist: String? = null,
-    val sizeBytes: Long? = null
+    val sizeBytes: Long? = null,
+    // v2.2.0：设置侧链路重构
+    val relativePath: String? = null,
+    val error: String? = null
 ) {
     fun toEntity(entryId: String, workId: Long? = null, sortRank: Int? = null): EntryIndexEntity = EntryIndexEntity(
         entryId = entryId,
@@ -156,7 +159,9 @@ data class IndexedFile(
         workId = workId,
         sortRank = sortRank,
         sizeBytes = sizeBytes,
-        albumArtist = albumArtist
+        albumArtist = albumArtist,
+        relativePath = relativePath,
+        error = error
     )
 
     companion object {
@@ -170,7 +175,9 @@ data class IndexedFile(
             durationMs = e.durationMs,
             rawName = e.rawName,
             albumArtist = e.albumArtist,
-            sizeBytes = e.sizeBytes
+            sizeBytes = e.sizeBytes,
+            relativePath = e.relativePath,
+            error = e.error
         )
     }
 }

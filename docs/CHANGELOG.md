@@ -3,6 +3,16 @@
 > 项目早期名为 Simple Cloud Player（`com.simple.musicplayer`），2026-10 起更名 **BookListener**、包名 `com.booklistener`。
 > 变更按版本倒序排列。
 
+## v2.1.10（2026-10）重构：设置侧链路统一（来源抽象 + 扫描协调器）
+- 数据层：entry_index 增加 relativePath/error 两列，AppDatabase 升级 v6（MIGRATION_5_6），DAO 增加 Flow 查询。
+- 来源统一抽象：新增 Source 接口与 SourceFile，LocalSource（SAF 递归）/ WebDavSource（PROPFIND 递归），只列目录不做标签/索引。
+- 新增 ScanCoordinator 扫描协调器：统一调度列目录→标签解析→CUE 收集→写索引→作品聚合；ScanCoordinatorFactory 区分本地/网盘。
+- 降级：单文件标签失败文件名兜底+error 记录+错误图标；CUE 失败保持可见显示原因；网盘列目录失败回退索引。
+- 封面规则：文件夹不设封面；专辑封面只从当前目录提取，不跨子文件夹。
+- 内容文件列表平铺显示所有文件（含子文件夹，标注相对路径），非音频文件也入库；刷新按钮统一走协调器。
+- 删除 ViewModel 中不再使用的 FolderScanner 实例；全量单测通过，新增 ScanCoordinatorTest/Migration56Test。
+- 归档 openspec：2026-10-21-settings-source-refactor。
+
 ## v2.1.9（2026-10）清理：文件夹管理与播放解耦 + 遗留代码删除
 - 删除 openEntryView 中的 enterFolderWithRecord 自动播放：文件夹管理进入目录只展示文件列表，不触发任何播放（落实"文件夹管理与播放无关"原则）。
 - 删除 enterFolderWithRecord 函数（条目级队列 ownerId=entryId 形态消失，播放队列只剩 work:<id> 和 null 两种）。

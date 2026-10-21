@@ -78,11 +78,15 @@ fun EntrySummaryRow(
     titleStyle: TextStyle,
     modifier: Modifier = Modifier,
     subtitle: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null
+    trailing: (@Composable () -> Unit)? = null,
+    showCover: Boolean = true
 ) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        CoverImage(coverUri = entry.coverUri, displayName = entry.displayName, size = 56.dp)
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+        // v2.2.0：文件夹不设封面（Q14），showCover=false 时跳过封面
+        if (showCover) {
+            CoverImage(coverUri = entry.coverUri, displayName = entry.displayName, size = 56.dp)
+        }
+        Column(modifier = Modifier.weight(1f).padding(start = if (showCover) 12.dp else 0.dp)) {
             entry.artist?.let { artist ->
                 Text(
                     text = artist,

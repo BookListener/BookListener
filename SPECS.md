@@ -1,7 +1,7 @@
 # BookListener 关键规格记忆
 
 > 本文件记录项目核心业务规则与概念边界，开发前必须先读。任何与本文件冲突的实现都是 bug。
-> 最后更新：v2.1.9
+> 最后更新：v2.1.10
 
 ---
 
@@ -70,6 +70,41 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - `entry_index`：条目下的原始文件索引（含虚拟轨行，UI 层需过滤）
 - `cue_sheets`：CUE 整轨解析结果
 - `saved_entries`：已添加的文件夹/网盘条目
+
+### 4. 数据库版本（v2.1.10 = v6）
+- v6 起 `entry_index` 增加 `relativePath`（相对路径，子文件夹文件）与 `error`（文件级错误原因）两列。
+- 迁移链：MIGRATION_1_2 → 2_3 → 3_4 → 4_5 → 5_6。
+
+---
+
+## 四、设置侧链路架构（v2.1.10 重构）
+
+### 1. 来源统一抽象
+- `Source` 接口：`type` + `listFiles(rootUri)`，只负责列目录，**不做标签解析/索引写入**。
+- `LocalSource`：SAF 递归列目录（maxDepth=10 防符号链接），记录相对路径。
+- `WebDavSource`：递归 PROPFIND（Depth:1 逐层），返回所有文件（含非音频），记录相对路径。
+- `SourceFile`：来源无关的文件描述（name/path/relativePath/isDirectory/sizeBytes）。
+
+### 2. 扫描协调器
+- `ScanCoordinator.scan(entryId, rootUri)`：统一调度"列目录→标签解析→CUE 收集→写索引→作品聚合"。
+- `ScanCoordinatorFactory`：`forLocal()` / `forWebDav()`，差异只在 Source 与读取器。
+- **禁止**在 ViewModel 中直接调用 FolderScanner 列目录或分散写索引；扫描一律走协调器。
+
+### 3. 降级规则
+- 单文件标签解析失败：文件名兜底显示，`error` 字段记录原因，文件行右侧错误图标，归入未知专辑。
+- CUE 解析/读取失败：.cue 保持可见，点击显示失败原因，不生成虚拟轨、不吸收整轨。
+- 整个目录无法读取：页面顶部显示整体错误（不做文件级标记）。
+- 网盘实时列目录失败：回退已索引数据，顶部提示条区分实时/缓存。
+
+### 4. 封面规则
+- **文件夹不设封面**：文件夹管理条目行不显示封面（`EntrySummaryRow(showCover=false)`）。
+- 专辑封面只从该专辑所在**当前目录**提取，**不跨子文件夹**找封面。
+- 多专辑文件夹中每个专辑独立从本目录首曲提取内嵌封面。
+
+### 5. 内容文件列表
+- 平铺显示所有文件（含子文件夹，通过 relativePath 标注），不做子文件夹导航。
+- 非音频文件也入库（忠实显示）。
+- 刷新按钮统一"实时列目录→更新索引→刷新显示"，本地/网盘一致。
 
 ---
 

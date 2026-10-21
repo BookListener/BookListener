@@ -108,6 +108,38 @@ interface AppDao {
     @Query("SELECT * FROM entry_index WHERE entryId = :entryId ORDER BY sortRank ASC")
     suspend fun getEntryIndex(entryId: String): List<EntryIndexEntity>
 
+    /** 按条目观察（UI 内容文件列表用） */
+    @Query("SELECT * FROM entry_index WHERE entryId = :entryId ORDER BY sortRank ASC")
+    fun observeEntryIndex(entryId: String): Flow<List<EntryIndexEntity>>
+
+    /**
+     * 网盘子目录导航：按相对路径精确筛选某目录下的文件。
+     * relativePath 为目录相对路径（根目录为 ""）；只返回该目录直属文件（不含更深子目录）。
+     */
+    @Query(
+        """
+        SELECT * FROM entry_index
+        WHERE entryId = :entryId
+          AND (relativePath IS NULL OR relativePath = :dirPath)
+        ORDER BY sortRank ASC
+        """
+    )
+    suspend fun getEntryIndexByDir(entryId: String, dirPath: String): List<EntryIndexEntity>
+
+    @Query(
+        """
+        SELECT * FROM entry_index
+        WHERE entryId = :entryId
+          AND (relativePath IS NULL OR relativePath = :dirPath)
+        ORDER BY sortRank ASC
+        """
+    )
+    fun observeEntryIndexByDir(entryId: String, dirPath: String): Flow<List<EntryIndexEntity>>
+
+    /** 列出该条目下所有子目录（从 relativePath 提取，用于网盘导航） */
+    @Query("SELECT DISTINCT relativePath FROM entry_index WHERE entryId = :entryId AND relativePath IS NOT NULL")
+    suspend fun getSubDirs(entryId: String): List<String>
+
     @Query("DELETE FROM entry_index WHERE entryId = :entryId")
     suspend fun deleteEntryIndex(entryId: String)
 

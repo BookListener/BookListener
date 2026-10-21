@@ -22,7 +22,7 @@ import com.booklistener.core.WorkBackfill
         WorkProgressEntity::class,
         CueSheetEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -325,6 +325,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `relativePath` TEXT")
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `error` TEXT")
+            }
+        }
+
         /** 迁移回填用行（entry_index JOIN saved_entry） */
         private data class Row(
             val entryId: String,
@@ -343,7 +350,7 @@ abstract class AppDatabase : RoomDatabase() {
                     ctx.applicationContext,
                     AppDatabase::class.java,
                     "music_db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
                 INSTANCE = ins
                 ins
             }

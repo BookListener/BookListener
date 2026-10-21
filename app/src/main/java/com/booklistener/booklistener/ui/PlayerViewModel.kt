@@ -17,6 +17,7 @@ import com.booklistener.core.CoverManager
 import com.booklistener.core.CoverScanner
 import com.booklistener.core.CueTextDecoder
 import com.booklistener.core.EntryIndexStore
+import com.booklistener.core.ScanCoordinatorFactory
 import com.booklistener.core.FolderEntry
 import com.booklistener.core.FolderProgressLogic
 import com.booklistener.core.WorkStore
@@ -327,16 +328,8 @@ class PlayerViewModel @JvmOverloads constructor(
         abA != null && abB != null && abB > abA && positionMs >= abB
 
     // ---- 文件夹浏览（SAF OpenDocumentTree）----
-    // v1.6.0：扫描注入真实标签解析（title/artist/track/disc → 显示名与排序）
+    // v2.2.0：扫描统一走 ScanCoordinator（scanFactory），不再持有 FolderScanner 实例
     private val tagResolver = TagResolver(app)
-    private val folderScanner = FolderScanner(
-        ::queryFolderChildren,
-        tagResolver = { uri, name ->
-            tagResolver.resolve(android.net.Uri.parse(uri))
-        },
-        // v5.0：读 .cue 文本（SAF ContentResolver；失败返回 null，该 cue 不参与解析）
-        readText = { uri -> readSafText(uri) }
-    )
     private val coverManager = CoverManager(app, CoverScanner(::queryFolderChildren))
     private val _folderItems = MutableStateFlow<List<AudioItem>>(emptyList())
     val folderItems: StateFlow<List<AudioItem>> = _folderItems.asStateFlow()
@@ -354,6 +347,9 @@ class PlayerViewModel @JvmOverloads constructor(
     private val appDb = database ?: com.booklistener.db.AppDatabase.getInstance(app)
     private val entryStore = SavedEntryStore(appDb.dao())
     private val indexStore = EntryIndexStore(appDb.dao())
+    private val scanFactory = ScanCoordinatorFactory(
+        app, repo.credentialStore, indexStore
+    )
     // v1.6.28：加载时过滤旧的"网盘根条目"（自动固化、uri 非完整 URL）——
     // 网盘改为只通过文件夹管理固化具体文件夹；账号凭证保留在 CredentialStore。
     // v1.6.30：存量网盘条目若把账号邮箱写进了 artist（旧固化逻辑），启动时清掉。
@@ -841,15 +837,14 @@ class PlayerViewModel @JvmOverloads constructor(
         // 同步固化基础条目（保证 UI 与兼容 API 立即可见），异步加载后原位补充封面/文件数
         saveFolder(treeUri)
         viewModelScope.launch {
-            val items = withContext(Dispatchers.IO) {
-                loadFromIndex(treeUri.toString(), SourceType.LOCAL) ?: run {
-                    val scanned = folderScanner.scan(treeUri.toString())
-                    // v5.0：cue 虚拟分轨——扫描时收集 .cue 候选参与解析/吸收
-                    val cues = folderScanner.scanCues(treeUri.toString())
-                    indexStore.save(treeUri.toString(), scanned.map { it.toIndexedFile() }, cues)
-                    scanned
+            withContext(Dispatchers.IO) {
+                // v2.2.0：扫描统一走 ScanCoordinator（列目录→标签→CUE→写索引）；
+                // 已有索引（重复添加）不重复扫描。
+                if (loadFromIndex(treeUri.toString(), SourceType.LOCAL) == null) {
+                    scanFactory.forLocal().scan(treeUri.toString())
                 }
             }
+            val items = loadFromIndex(treeUri.toString(), SourceType.LOCAL).orEmpty()
             val entry = buildLocalEntry(treeUri, items, _savedEntries.value.firstOrNull { it.id == treeUri.toString() })
             setEntries(entryStore.replace(_savedEntries.value, entry))
             _eventMsg.value = getString(MessageCatalog.MSG_ADDED, entry.displayName)
@@ -1068,13 +1063,13 @@ class PlayerViewModel @JvmOverloads constructor(
     /** WebDAV 文件夹条目 id（v1.6.28）：完整目录 URL 去 scheme 前缀，账号下多个文件夹各自独立 */
     fun webDavFolderEntryId(folderUrl: String): String = "webdav://" + folderUrl
 
-    /** 固化/进入前预扫：PROPFIND 一次写索引（含播放进度补录所需的时长字段），完成后刷新曲目分区 */
+    /** 固化/进入前预扫：扫描协调器全量列目录写索引（含 CUE/时长），完成后刷新曲目分区 */
     private fun prefillWebDavIndex(folderUrl: String, entry: SavedEntry) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                val (_, list) = repo.listWebDavDirEntries(folderUrl).getOrThrow()
-                val cues = repo.listWebDavCueFiles(folderUrl).getOrDefault(emptyList())
-                indexStore.save(entry.id, list.map { it.toIndexedFile() }, cues)
+            try {
+                scanFactory.forWebDav().scan(entryId = entry.id, rootUri = folderUrl)
+            } catch (_: Exception) {
+                // 扫描失败：保留已索引数据，不阻塞固化
             }
             withContext(Dispatchers.Main) { refreshAlbums() }
         }
@@ -1466,32 +1461,27 @@ class PlayerViewModel @JvmOverloads constructor(
      */
     fun refreshEntry(entry: SavedEntry) {
         viewModelScope.launch {
-            val (items, cues) = withContext(Dispatchers.IO) {
-                runCatching {
+            // v2.2.0：刷新统一走 ScanCoordinator（实时列目录→更新索引），本地/网盘一致
+            withContext(Dispatchers.IO) {
+                try {
                     if (entry.isLocal) {
-                        val scanned = folderScanner.scan(entry.uri)
-                        val scannedCues = folderScanner.scanCues(entry.uri)
-                        scanned to scannedCues
+                        scanFactory.forLocal().scan(entry.id)
                     } else if (entry.sourceType == SourceType.WEBDAV) {
-                        val list = repo.listWebDavDirEntries(entry.uri).getOrThrow().second
-                        val cueFiles = repo.listWebDavCueFiles(entry.uri).getOrDefault(emptyList())
-                        list to cueFiles
-                    } else {
-                        repo.listDirectory(entry.sourceType, entry.uri).getOrThrow() to emptyList()
+                        scanFactory.forWebDav().scan(entryId = entry.id, rootUri = entry.uri)
                     }
-                }.getOrElse { e ->
+                } catch (e: Exception) {
                     AppLog.e("refresh entry failed: ${entry.id}", e)
-                    emptyList<AudioItem>() to emptyList()
                 }
             }
-            indexStore.save(entry.id, items.map { it.toIndexedFile() }, cues)
             if (entry.isLocal) {
+                val items = indexStore.loadEntry(entry.id).map { it.toAudioItem(SourceType.LOCAL) }
                 val newEntry = buildLocalEntry(Uri.parse(entry.uri), items, prev = entry)
                 setEntries(entryStore.replace(_savedEntries.value, newEntry))
             }
             refreshAlbums()
             loadManageFiles(entry.id)
-            _eventMsg.value = getString(MessageCatalog.MSG_REFRESHED, items.size)
+            val count = indexStore.loadEntry(entry.id).size
+            _eventMsg.value = getString(MessageCatalog.MSG_REFRESHED, count)
         }
     }
 
