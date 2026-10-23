@@ -83,41 +83,45 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
-            Column(modifier = Modifier.padding(top = 8.dp)) {
-                listOf(0, 15, 30, 45, 60).forEach { minutes ->
-                    val selected = globalMinutes == minutes
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                viewModel.setGlobalSleepMinutes(minutes)
-                                showGlobalSleep = false
-                            }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = when (minutes) {
-                                0 -> stringResource(R.string.common_off)
-                                else -> stringResource(R.string.common_minutes, minutes)
-                            },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (selected) {
+            SettingsContentCard {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    listOf(0, 15, 30, 45, 60).forEachIndexed { index, minutes ->
+                        val selected = globalMinutes == minutes
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setGlobalSleepMinutes(minutes)
+                                    showGlobalSleep = false
+                                }
+                                .padding(vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = stringResource(R.string.settings_timer_current),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
+                                text = when (minutes) {
+                                    0 -> stringResource(R.string.common_off)
+                                    else -> stringResource(R.string.common_minutes, minutes)
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.weight(1f)
                             )
+                            if (selected) {
+                                Text(
+                                    text = stringResource(R.string.settings_timer_current),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        if (index != listOf(0, 15, 30, 45, 60).lastIndex) {
+                            HorizontalDivider()
                         }
                     }
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
@@ -160,42 +164,44 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = 4.dp)
                 )
             }
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_cache_full),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_cache_full_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+            SettingsContentCard {
+                Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.settings_cache_full),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = stringResource(R.string.settings_cache_full_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = fullFileCache,
+                            onCheckedChange = { viewModel.setFullFileCacheEnabled(it) }
                         )
                     }
-                    Switch(
-                        checked = fullFileCache,
-                        onCheckedChange = { viewModel.setFullFileCacheEnabled(it) }
+                    Text(
+                        text = stringResource(R.string.settings_cache_limit),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
-                }
-                Text(
-                    text = stringResource(R.string.settings_cache_limit),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                Button(
-                    onClick = {
-                        scope.launch {
-                            viewModel.clearCache()
-                        }
-                    },
-                    modifier = Modifier.padding(top = 12.dp)
-                ) {
-                    Text(stringResource(R.string.settings_cache_clear_all))
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                viewModel.clearCache()
+                            }
+                        },
+                        modifier = Modifier.padding(top = 12.dp)
+                    ) {
+                        Text(stringResource(R.string.settings_cache_clear_all))
+                    }
                 }
             }
         }
@@ -223,16 +229,20 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = 4.dp)
                 )
             }
-            Text(
-                text = "BookListener v${currentVersionName()}",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-            Text(
-                text = stringResource(R.string.settings_about_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            SettingsContentCard {
+                Column(modifier = Modifier.padding(vertical = 16.dp)) {
+                    Text(
+                        text = "BookListener v${currentVersionName()}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_about_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            }
         }
         return
     }
@@ -271,48 +281,49 @@ fun SettingsScreen(
             )
 
             // ---- 区块一：外观模式（白天/黑夜/自动） ----
-            Column(modifier = Modifier.padding(top = 8.dp)) {
-                Text(
-                    text = stringResource(R.string.appearance_mode_title),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-                Text(
-                    text = stringResource(R.string.appearance_mode_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                val modeOptions = listOf(
-                    AppearanceMode.LIGHT to stringResource(R.string.appearance_light),
-                    AppearanceMode.DARK to stringResource(R.string.appearance_dark),
-                    AppearanceMode.FOLLOW_SYSTEM to stringResource(R.string.appearance_auto)
-                )
-                SettingsTriSelector(
-                    options = listOf(
-                        TriOption(AppIcons.Sun, modeOptions[0].second),
-                        TriOption(AppIcons.Moon, modeOptions[1].second),
-                        TriOption(AppIcons.AutoLoop, modeOptions[2].second)
-                    ),
-                    selectedIndex = modeOptions.indexOfFirst { it.first == appearanceMode }.coerceAtLeast(0),
-                    onSelect = { index ->
-                        viewModel.setAppearanceMode(modeOptions[index].first)
-                    }
-                )
+            SettingsContentCard {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        text = stringResource(R.string.appearance_mode_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.appearance_mode_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val modeOptions = listOf(
+                        AppearanceMode.LIGHT to stringResource(R.string.appearance_light),
+                        AppearanceMode.DARK to stringResource(R.string.appearance_dark),
+                        AppearanceMode.FOLLOW_SYSTEM to stringResource(R.string.appearance_auto)
+                    )
+                    SettingsTriSelector(
+                        options = listOf(
+                            TriOption(AppIcons.Sun, modeOptions[0].second),
+                            TriOption(AppIcons.Moon, modeOptions[1].second),
+                            TriOption(AppIcons.AutoLoop, modeOptions[2].second)
+                        ),
+                        selectedIndex = modeOptions.indexOfFirst { it.first == appearanceMode }.coerceAtLeast(0),
+                        onSelect = { index ->
+                            viewModel.setAppearanceMode(modeOptions[index].first)
+                        }
+                    )
+                }
             }
 
             // ---- 区块二：玻璃效果（沿用两开关，逻辑零改动） ----
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    text = stringResource(R.string.settings_glass_title),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            SettingsContentCard {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_glass_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -341,45 +352,48 @@ fun SettingsScreen(
                     }
                 }
             }
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             // ---- 区块三：语言（沿用三态，逻辑零改动） ----
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    text = stringResource(R.string.settings_language_title),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-                val langOptions = listOf(
-                    "" to stringResource(R.string.language_follow_system),
-                    "zh" to stringResource(R.string.language_zh),
-                    "en" to stringResource(R.string.language_en)
-                )
-                langOptions.forEach { (tag, label) ->
-                    val selected = currentTag == tag
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                AppCompatDelegate.setApplicationLocales(
-                                    if (tag.isEmpty()) LocaleListCompat.getEmptyLocaleList()
-                                    else LocaleListCompat.forLanguageTags(tag)
-                                )
-                            }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        RadioButton(selected = selected, onClick = null)
+            SettingsContentCard {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_language_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                    val langOptions = listOf(
+                        "" to stringResource(R.string.language_follow_system),
+                        "zh" to stringResource(R.string.language_zh),
+                        "en" to stringResource(R.string.language_en)
+                    )
+                    langOptions.forEachIndexed { index, (tag, label) ->
+                        val selected = currentTag == tag
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    AppCompatDelegate.setApplicationLocales(
+                                        if (tag.isEmpty()) LocaleListCompat.getEmptyLocaleList()
+                                        else LocaleListCompat.forLanguageTags(tag)
+                                    )
+                                }
+                                .padding(vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (selected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            RadioButton(selected = selected, onClick = null)
+                        }
+                        if (index != langOptions.lastIndex) {
+                            HorizontalDivider()
+                        }
                     }
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
@@ -461,6 +475,16 @@ private fun SettingsGroupCard(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 6.dp)
     )
+    SettingsContentCard(content = content)
+}
+
+/**
+ * 子页内容卡片：无分区标题，surfaceContainer 圆角卡片承载子页配置项（v2.1.21 设置子页统一）。
+ */
+@Composable
+private fun SettingsContentCard(
+    content: @Composable () -> Unit
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer

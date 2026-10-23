@@ -17,6 +17,8 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -110,40 +112,48 @@ fun CloudConfigScreen(
                     modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp)
                 )
             } else {
-                LazyColumn {
-                    items(accounts, key = { it.normalizedUrl }) { cred ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.startEditWebDavForm(cred)
-                                    selected = cred
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    LazyColumn {
+                        items(accounts, key = { it.normalizedUrl }) { cred ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.startEditWebDavForm(cred)
+                                        selected = cred
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = cred.host,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = "${cred.username} · ${cred.baseUrl}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
                                 }
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = cred.host,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 1
-                                )
-                                Text(
-                                    text = "${cred.username} · ${cred.baseUrl}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
+                                IconButton(onClick = { pendingDelete = cred.normalizedUrl }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = stringResource(R.string.nav_delete) + " ${cred.host}",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
-                            IconButton(onClick = { pendingDelete = cred.normalizedUrl }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Delete,
-                                    contentDescription = stringResource(R.string.nav_delete) + " ${cred.host}",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         }
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 }
             }

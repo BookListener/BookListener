@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -442,17 +444,25 @@ fun FolderManageScreen(
                 // v2.1.4：内容文件列表忠实显示"原始文件"——过滤虚拟轨行（rawName 形如 "整轨.cue#1"），
                 // .cue 文件本身照常显示，虚拟轨仅在该 cue 行点击后的弹层中展示
                 val sourceFiles = files.filterNot { com.booklistener.core.VirtualTrackUri.parse(it.uri) != null }
-                LazyColumn {
-                    items(sourceFiles, key = { it.uri }) { file ->
-                        ManageFileRow(
-                            file = file,
-                            // v5.0：仅 .cue 行可点击（打开该 cue 的虚拟轨列表，纯浏览不播放）；常规行无点击
-                            onClick = if (isCueFileRow(file)) {
-                                { viewModel.openVirtualTracks(file.uri, file.rawName ?: file.displayName) }
-                            } else null
-                        )
-                        // v2.0.12：文件列表行间格线（同设置页/账号列表风格）
-                        HorizontalDivider()
+                Card(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    LazyColumn {
+                        items(sourceFiles, key = { it.uri }) { file ->
+                            ManageFileRow(
+                                file = file,
+                                // v5.0：仅 .cue 行可点击（打开该 cue 的虚拟轨列表，纯浏览不播放）；常规行无点击
+                                onClick = if (isCueFileRow(file)) {
+                                    { viewModel.openVirtualTracks(file.uri, file.rawName ?: file.displayName) }
+                                } else null
+                            )
+                            // v2.0.12：文件列表行间格线（同设置页/账号列表风格）
+                            HorizontalDivider()
+                        }
                     }
                 }
             }
@@ -532,15 +542,23 @@ fun FolderManageScreen(
                 textAlign = TextAlign.Center
             )
         } else {
-            LazyColumn {
-                items(savedEntries, key = { it.id }) { entry ->
-                    FolderManageRow(
-                        entry = entry,
-                        onOpen = { selectedEntry = entry },
-                        onDelete = { pendingDelete = entry }
-                    )
-                    // v2.0.12：管理列表行间格线（同设置页/账号列表风格）
-                    HorizontalDivider()
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                LazyColumn {
+                    items(savedEntries, key = { it.id }) { entry ->
+                        FolderManageRow(
+                            entry = entry,
+                            onOpen = { selectedEntry = entry },
+                            onDelete = { pendingDelete = entry }
+                        )
+                        // v2.0.12：管理列表行间格线（同设置页/账号列表风格）
+                        HorizontalDivider()
+                    }
                 }
             }
         }
