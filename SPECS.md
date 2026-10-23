@@ -146,6 +146,10 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - 主页仅列举配置项（图标+文字+右箭头，点击进入子页），**不放置任何开关**。
 - 子页用返回箭头+标题+说明+配置项结构（同缓存子页）。
 - 新增子项必须保持设计统一。
+- **主题子页（v2.1.19）**：设置主页仅保留"主题"一个入口（含外观/玻璃/语言三区块），移除原"玻璃效果""语言"独立入口；子页自上而下为 外观模式 / 玻璃效果 / 语言 三区块，区块间用 HorizontalDivider 分隔。
+- **外观模式**：白天/黑夜/自动 三选一（RadioButton），默认自动；切档走 `AppCompatDelegate.setDefaultNightMode`（DayNight 重建换肤），持久化到 prefs，冷启动恢复；手动明暗下 Material You 动态色仍生效。
+- **玻璃效果**：沿用 `glassActionBar`/`glassPlayerPanel` 两开关，逻辑零改动。
+- **语言**：沿用三态（跟随系统/中文/英文），逻辑零改动。
 
 ### 6. 液态玻璃
 - backdrop 应用于主页底部动作条、搜索框、弹窗。
@@ -191,3 +195,23 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 1. `playItems`（搜索/单曲播放）ownerId=null，进度靠 uri 反查作品，功能正常但队列归属语义不统一。搜索单曲播放时用户就是想播这一首，ownerId=null 合理，暂不改造。
 2. FFmpeg 集成（APE/DSF/DFF 解码）：架构路线已定，未落代码，待用户拍板。
+
+---
+
+## 十、测试规范（v2.1.17 确立）
+
+### 1. 测试分层原则
+- **业务流程测试（flow/）**：从业务操作入口进入（`ScanCoordinator.scan`、`PlayerViewModel`），覆盖完整链路，断言数据库/UI 产物。这是测试的主体。
+- **契约测试（core/、ui/、player/、source/）**：验证数据层 Store、UI 交互、播放器、来源解析的契约。入口可偏低，但必须验证可观察产物，不测纯函数。
+- **迁移测试（migration/）**：数据库 schema 演进验证，必须保留，不适用业务流程原则。
+
+### 2. 禁止事项
+- 不写纯函数单测（如直接调 `workKey()`、`CueParser.parse()`、`VirtualTrackUri.parse()`）。这些方法的行为由业务流程测试间接覆盖。
+- 不断言方法返回值，只断言过程产物（数据库行、UI 状态、文件）。
+- 不为覆盖率写测试。
+
+### 3. flow/ 目录场景清单
+- `ScanFlowTest`：普通音频/无tag/非媒体/过小过短/隐藏文件夹/排序/重扫/tag失败
+- `ScanCueFlowTest`：CUE整轨吸收/中文编码/混合目录/FILE不匹配/多CUE/无TITLE/读取失败/重扫稳定
+- `PlaybackFlowTest`：进度保存/多专辑进度独立/重扫workId稳定
+- `AlbumFlowTest`：同专辑多作者合并/跨文件夹合并/无tag兜底/多专辑独立/专辑名归一化

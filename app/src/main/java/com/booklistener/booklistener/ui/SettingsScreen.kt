@@ -48,8 +48,7 @@ fun SettingsScreen(
     var showFolderManage by remember { mutableStateOf(false) }
     var showGlobalSleep by remember { mutableStateOf(false) }
     var showCache by remember { mutableStateOf(false) }
-    var showGlass by remember { mutableStateOf(false) }
-    var showLanguage by remember { mutableStateOf(false) }
+    var showTheme by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -235,113 +234,135 @@ fun SettingsScreen(
         return
     }
 
-    if (showGlass) {
-        // v2.0.11：毛玻璃特效子页（设计统一：开关收进内部菜单，主页仅列举配置项，结构与缓存子页同构）
-        // 系统返回键：毛玻璃特效 → 设置主页
-        BackHandler(onBack = { showGlass = false })
+    if (showTheme) {
+        // v2.1.19：主题子页（设计统一：返回箭头 + 标题 + 说明 + 分区块配置）。
+        // 单页三区块：外观模式（白天/黑夜/自动）/ 玻璃效果 / 语言，区块间 HorizontalDivider。
+        BackHandler(onBack = { showTheme = false })
         val glassActionBar by viewModel.glassActionBar.collectAsStateWithLifecycle()
         val glassPlayerPanel by viewModel.glassPlayerPanel.collectAsStateWithLifecycle()
+        val appearanceMode by viewModel.appearanceMode.collectAsStateWithLifecycle()
+        val currentTag = remember { AppCompatDelegate.getApplicationLocales().toLanguageTags() }
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { showGlass = false }) {
+                IconButton(onClick = { showTheme = false }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = stringResource(R.string.nav_back),
                         modifier = Modifier.size(28.dp)
                     )
                 }
+                Text(
+                    text = stringResource(R.string.settings_theme_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_theme_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+
+            // ---- 区块一：外观模式（白天/黑夜/自动） ----
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                Text(
+                    text = stringResource(R.string.appearance_mode_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                Text(
+                    text = stringResource(R.string.appearance_mode_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                val modeOptions = listOf(
+                    AppearanceMode.LIGHT to stringResource(R.string.appearance_light),
+                    AppearanceMode.DARK to stringResource(R.string.appearance_dark),
+                    AppearanceMode.FOLLOW_SYSTEM to stringResource(R.string.appearance_auto)
+                )
+                modeOptions.forEach { (mode, label) ->
+                    val selected = appearanceMode == mode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.setAppearanceMode(mode) }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        RadioButton(selected = selected, onClick = null)
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
+            }
+
+            // ---- 区块二：玻璃效果（沿用两开关，逻辑零改动） ----
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(
                     text = stringResource(R.string.settings_glass_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 4.dp)
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
-            }
-            Text(
-                text = stringResource(R.string.settings_glass_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.settings_glass_action_bar), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            text = stringResource(R.string.settings_glass_action_bar_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.settings_glass_action_bar), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = stringResource(R.string.settings_glass_action_bar_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = glassActionBar, onCheckedChange = { viewModel.setGlassActionBar(it) })
                     }
-                    Switch(
-                        checked = glassActionBar,
-                        onCheckedChange = { viewModel.setGlassActionBar(it) }
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.settings_glass_player_panel), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            text = stringResource(R.string.settings_glass_player_panel_desc),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.settings_glass_player_panel), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = stringResource(R.string.settings_glass_player_panel_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(checked = glassPlayerPanel, onCheckedChange = { viewModel.setGlassPlayerPanel(it) })
                     }
-                    Switch(
-                        checked = glassPlayerPanel,
-                        onCheckedChange = { viewModel.setGlassPlayerPanel(it) }
-                    )
                 }
             }
-        }
-        return
-    }
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-    if (showLanguage) {
-        // v2.0.14：语言子页（设计统一：返回箭头 + 标题 + 说明 + 单选行，同全局定时子页结构；
-        // 语言属列举项，开关类配置（毛玻璃组件）仍收在各自子页内，主页不放开关）
-        BackHandler(onBack = { showLanguage = false })
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { showLanguage = false }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = stringResource(R.string.nav_back),
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+            // ---- 区块三：语言（沿用三态，逻辑零改动） ----
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(
                     text = stringResource(R.string.settings_language_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 4.dp)
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                 )
-            }
-            Text(
-                text = stringResource(R.string.settings_language_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-            // 当前语言 tag："" 跟随系统 / "zh" 简体中文 / "en" English（AppCompatDelegate 自动持久化）
-            val currentTag = remember { AppCompatDelegate.getApplicationLocales().toLanguageTags() }
-            val options = listOf(
-                "" to stringResource(R.string.language_follow_system),
-                "zh" to stringResource(R.string.language_zh),
-                "en" to stringResource(R.string.language_en)
-            )
-            Column(modifier = Modifier.padding(top = 8.dp)) {
-                options.forEach { (tag, label) ->
+                val langOptions = listOf(
+                    "" to stringResource(R.string.language_follow_system),
+                    "zh" to stringResource(R.string.language_zh),
+                    "en" to stringResource(R.string.language_en)
+                )
+                langOptions.forEach { (tag, label) ->
                     val selected = currentTag == tag
                     Row(
                         modifier = Modifier
@@ -489,56 +510,29 @@ fun SettingsScreen(
         }
         HorizontalDivider()
 
-        // v2.0.14：语言入口（设计统一：主页仅列举配置项，同缓存/毛玻璃模式）
+        // v2.1.19：主题入口（设计统一：主页仅列举配置项，外观/玻璃/语言收进子页）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { showLanguage = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppIcons.Language,
-                contentDescription = stringResource(R.string.settings_language_row)
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_language_row), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = stringResource(R.string.settings_language_row_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_language_row)
-            )
-        }
-        HorizontalDivider()
-
-        // v2.0.11：毛玻璃特效入口（设计统一：主页仅列举配置项，开关收进子页，同缓存模式）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showGlass = true }
+                .clickable { showTheme = true }
                 .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = AppIcons.Palette,
-                contentDescription = stringResource(R.string.settings_glass_row)
+                contentDescription = stringResource(R.string.settings_theme_row)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_glass_row), style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_theme_row), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = stringResource(R.string.settings_glass_row_desc),
+                    text = stringResource(R.string.settings_theme_row_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_glass_row)
+                contentDescription = stringResource(R.string.settings_theme_row)
             )
         }
         HorizontalDivider()

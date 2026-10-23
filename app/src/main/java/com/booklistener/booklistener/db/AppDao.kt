@@ -348,10 +348,15 @@ interface AppDao {
         }
         val ranks = WorkBackfill.assignSortRank(files).toMap()
         val rows = files.map { f ->
-            val key = WorkBackfill.workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
+            // 非媒体文件（cue/图片/种子/文本）不属于任何作品，workId=null；
+            // 它们仍入库（内容文件列表显示），但不参与专辑/曲目聚合。
+            val workId = if (WorkBackfill.isPlayableMedia(f)) {
+                val key = WorkBackfill.workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
+                workIdByKey[key]
+            } else null
             f.toEntity(
                 entryId = entryId,
-                workId = workIdByKey.getValue(key),
+                workId = workId,
                 sortRank = ranks.getValue(f.uri)
             )
         }

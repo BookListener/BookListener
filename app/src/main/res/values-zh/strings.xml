@@ -59,6 +59,15 @@
     <string name="language_follow_system">跟随系统</string>
     <string name="language_zh">简体中文</string>
     <string name="language_en">English</string>
+    <string name="settings_theme_row">主题</string>
+    <string name="settings_theme_row_desc">外观、玻璃效果与语言</string>
+    <string name="settings_theme_title">主题</string>
+    <string name="settings_theme_desc">自定义外观模式、玻璃效果与界面语言</string>
+    <string name="appearance_mode_title">外观模式</string>
+    <string name="appearance_mode_desc">选择浅色、深色或跟随系统</string>
+    <string name="appearance_light">白天</string>
+    <string name="appearance_dark">黑夜</string>
+    <string name="appearance_auto">自动</string>
 
     <!-- 文件夹管理 -->
     <string name="folder_add_title">添加内容</string>

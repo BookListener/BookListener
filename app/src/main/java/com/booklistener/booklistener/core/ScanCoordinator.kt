@@ -32,8 +32,13 @@ class ScanCoordinator(
      */
     suspend fun scan(entryId: String, rootUri: String = entryId) {
         val sourceFiles = source.listFiles(rootUri)
-        // v2.1.15：过滤目录 + 隐藏文件（. 开头）；CUE/封面图片不受音频大小/时长过滤影响
-        val files = sourceFiles.filterNot { it.isDirectory || it.name.startsWith(".") }
+        // v2.1.15：过滤目录 + 隐藏文件（. 开头，含文件名和 relativePath 各路径段）；
+        // CUE/封面图片不受音频大小/时长过滤影响
+        val files = sourceFiles.filterNot { f ->
+            f.isDirectory ||
+                f.name.startsWith(".") ||
+                f.relativePath.split('/').any { it.startsWith(".") }
+        }
 
         val indexed = mutableListOf<IndexedFile>()
         val cueCandidates = mutableListOf<CueIndexer.CueCandidate>()

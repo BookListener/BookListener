@@ -59,7 +59,8 @@ class LanguageSubpageTest {
     fun languageRow_opensSubpage_withThreeOptions() {
         val vm = newViewModel()
         composeRule.setContent { SettingsScreen(vm) }
-        composeRule.onNodeWithText("Language").performClick()
+        // v2.1.19：语言入口已收敛进"主题"子页，主页只保留"Theme"入口
+        composeRule.onNodeWithText("Theme").performClick()
         composeRule.onNodeWithText("Follow system").assertExists()
         composeRule.onNodeWithText("简体中文").assertExists()
         composeRule.onNodeWithText("English").assertExists()
@@ -69,7 +70,7 @@ class LanguageSubpageTest {
     fun defaultSelection_isFollowSystem() {
         val vm = newViewModel()
         composeRule.setContent { SettingsScreen(vm) }
-        composeRule.onNodeWithText("Language").performClick()
+        composeRule.onNodeWithText("Theme").performClick()
         // 默认跟随系统：AppCompatDelegate 初始 locale 为空
         assertEquals("", AppCompatDelegate.getApplicationLocales().toLanguageTags())
     }
@@ -80,7 +81,7 @@ class LanguageSubpageTest {
         // 注入生效由真机验收覆盖；此处验证 UI 点击路径无异常、可连续切换。
         val vm = newViewModel()
         composeRule.setContent { SettingsScreen(vm) }
-        composeRule.onNodeWithText("Language").performClick()
+        composeRule.onNodeWithText("Theme").performClick()
         composeRule.onNodeWithText("English").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Follow system").performClick()
@@ -94,7 +95,7 @@ class LanguageSubpageTest {
         // 同 selectEnglish：Robolectric 限制下验证点击路径，注入生效由真机验收
         val vm = newViewModel()
         composeRule.setContent { SettingsScreen(vm) }
-        composeRule.onNodeWithText("Language").performClick()
+        composeRule.onNodeWithText("Theme").performClick()
         composeRule.onNodeWithText("简体中文").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("English").performClick()
@@ -105,7 +106,7 @@ class LanguageSubpageTest {
     fun selectFollowSystem_clearsLocales() {
         val vm = newViewModel()
         composeRule.setContent { SettingsScreen(vm) }
-        composeRule.onNodeWithText("Language").performClick()
+        composeRule.onNodeWithText("Theme").performClick()
         composeRule.onNodeWithText("English").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Follow system").performClick()

@@ -137,7 +137,7 @@ abstract class AppDatabase : RoomDatabase() {
             private fun backfillWorks(db: SupportSQLiteDatabase) {
                 val rows = mutableListOf<Row>()
                 db.query(
-                    "SELECT i.entryId, i.uri, i.album, i.artist, i.durationMs, " +
+                    "SELECT i.entryId, i.uri, i.album, i.artist, i.durationMs, i.rawName, " +
                         "s.displayName, s.sourceType, s.lastPlayedAt " +
                         "FROM entry_index i JOIN saved_entry s ON s.id = i.entryId"
                 ).use { c ->
@@ -146,6 +146,7 @@ abstract class AppDatabase : RoomDatabase() {
                     val aIdx = c.getColumnIndex("album")
                     val arIdx = c.getColumnIndex("artist")
                     val dIdx = c.getColumnIndex("durationMs")
+                    val rIdx = c.getColumnIndex("rawName")
                     val nIdx = c.getColumnIndex("displayName")
                     val tIdx = c.getColumnIndex("sourceType")
                     val pIdx = c.getColumnIndex("lastPlayedAt")
@@ -156,6 +157,7 @@ abstract class AppDatabase : RoomDatabase() {
                             album = c.getString(aIdx),
                             artist = c.getString(arIdx),
                             durationMs = if (c.isNull(dIdx)) null else c.getLong(dIdx),
+                            rawName = if (c.isNull(rIdx)) null else c.getString(rIdx),
                             folderName = c.getString(nIdx),
                             sourceType = c.getString(tIdx),
                             lastPlayedAt = c.getLong(pIdx)
@@ -172,7 +174,8 @@ abstract class AppDatabase : RoomDatabase() {
                             uri = it.uri,
                             album = it.album,
                             artist = it.artist,
-                            durationMs = it.durationMs
+                            durationMs = it.durationMs,
+                            rawName = it.rawName
                         )
                     }
                     WorkBackfill.buildWorks(
@@ -339,6 +342,7 @@ abstract class AppDatabase : RoomDatabase() {
             val album: String?,
             val artist: String?,
             val durationMs: Long?,
+            val rawName: String?,
             val folderName: String,
             val sourceType: String,
             val lastPlayedAt: Long

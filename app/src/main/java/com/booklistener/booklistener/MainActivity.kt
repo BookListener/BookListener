@@ -32,6 +32,9 @@ class MainActivity : AppCompatActivity() {
             com.booklistener.db.AppDatabase.getInstance(applicationContext)
         )
 
+        // v2.1.19：冷启动恢复外观模式（白天/黑夜/自动），在 setContent 前应用避免首帧闪
+        ViewModelProvider(this)[PlayerViewModel::class.java].applyAppearanceMode()
+
         setContent {
             AppTheme {
                 Surface(

@@ -59,6 +59,15 @@
     <string name="language_follow_system">Follow system</string>
     <string name="language_zh">简体中文</string>
     <string name="language_en">English</string>
+    <string name="settings_theme_row">Theme</string>
+    <string name="settings_theme_row_desc">Appearance, glass effects and language</string>
+    <string name="settings_theme_title">Theme</string>
+    <string name="settings_theme_desc">Customize the appearance mode, glass effects and UI language</string>
+    <string name="appearance_mode_title">Appearance mode</string>
+    <string name="appearance_mode_desc">Choose light, dark or follow the system</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
+    <string name="appearance_auto">Auto</string>
 
     <!-- 文件夹管理 -->
     <string name="folder_add_title">Add content</string>

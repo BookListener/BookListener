@@ -41,8 +41,23 @@ object WorkBackfill {
         s?.trim()?.replace(Regex("\\s+"), " ")?.lowercase() ?: ""
 
     /**
+     * 可播放媒体判定（作品聚合的唯一入口）：
+     * - CUE 虚拟轨：uri 含 "#track_"（VirtualTrackUri），无论整轨是什么格式都算媒体——
+     *   它是 CUE 声明的曲目，封面/播放由整轨承担。
+     * - 普通音频：扩展名在 [AudioExt.SUPPORTED] 内（当前解码栈 MediaCodec 可播的格式）。
+     * CUE 文件本身、图片、种子、文本等非媒体文件返回 false——它们仍入库（内容文件列表
+     * 忠实显示），但不参与作品聚合，不产生"文件夹名"专辑。
+     */
+    fun isPlayableMedia(f: IndexedFile): Boolean {
+        if (VirtualTrackUri.isVirtual(f.uri)) return true
+        return AudioExt.isAudio(f.rawName ?: f.uri)
+    }
+
+    /**
      * 按作品键聚合文件清单 → 作品实体列表（songCount / totalDurationMs 由聚合计算；
      * lastPlayedAt 由调用方传入——扫描置 0（upsert 不更新该字段），迁移回填传 MAX(条目 lastPlayedAt)）。
+     *
+     * 仅聚合 [isPlayableMedia] 文件；非媒体文件（cue/图片/种子/文本）不参与聚合。
      */
     fun buildWorks(
         files: List<IndexedFile>,
@@ -53,6 +68,7 @@ object WorkBackfill {
     ): List<WorkEntity> {
         val byKey = LinkedHashMap<String, MutableList<IndexedFile>>()
         files.forEach { f ->
+            if (!isPlayableMedia(f)) return@forEach
             val key = workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
             byKey.getOrPut(key) { mutableListOf() }.add(f)
         }

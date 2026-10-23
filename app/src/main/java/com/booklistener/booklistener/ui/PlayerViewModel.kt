@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.booklistener.R
@@ -62,6 +63,18 @@ import java.io.File
 
 /** v1.6.7 一次性定时模式（详情页定时弹窗选中态） */
 enum class SleepTimerMode { OFF, END_OF_TRACK, MINUTES }
+
+/** v2.1.19 外观模式三态（白天/黑夜/自动） */
+enum class AppearanceMode(val nightMode: Int) {
+    FOLLOW_SYSTEM(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM),
+    LIGHT(AppCompatDelegate.MODE_NIGHT_NO),
+    DARK(AppCompatDelegate.MODE_NIGHT_YES);
+
+    companion object {
+        fun fromName(name: String?): AppearanceMode =
+            entries.firstOrNull { it.name == name } ?: FOLLOW_SYSTEM
+    }
+}
 
 /** v1.6.25 WebDAV 账号编辑表单状态（配置页账号管理） */
 data class WebDavFormState(
@@ -159,6 +172,21 @@ class PlayerViewModel @JvmOverloads constructor(
     fun setGlassPlayerPanel(enabled: Boolean) {
         _glassPlayerPanel.value = enabled
         prefs.edit().putBoolean(KEY_GLASS_PLAYER_PANEL, enabled).commit()
+    }
+
+    // ---- v2.1.19 外观模式三态（白天/黑夜/自动），持久化，切档走 AppCompatDelegate 重建换肤 ----
+    private val _appearanceMode = MutableStateFlow(AppearanceMode.fromName(prefs.getString(KEY_APPEARANCE_MODE, null)))
+    val appearanceMode: StateFlow<AppearanceMode> = _appearanceMode.asStateFlow()
+
+    fun setAppearanceMode(mode: AppearanceMode) {
+        _appearanceMode.value = mode
+        prefs.edit().putString(KEY_APPEARANCE_MODE, mode.name).commit()
+        AppCompatDelegate.setDefaultNightMode(mode.nightMode)
+    }
+
+    /** 冷启动恢复：MainActivity onCreate 调用，应用持久化的明暗档位 */
+    fun applyAppearanceMode() {
+        AppCompatDelegate.setDefaultNightMode(_appearanceMode.value.nightMode)
     }
 
     private val _albumTitleMode = MutableStateFlow(prefs.getBoolean(KEY_ALBUM_TITLE_MODE, false))
@@ -635,6 +663,7 @@ class PlayerViewModel @JvmOverloads constructor(
         // v2.0.10：毛玻璃特效组件级开关（默认开启）
         private const val KEY_GLASS_ACTION_BAR = "glass_action_bar"
         private const val KEY_GLASS_PLAYER_PANEL = "glass_player_panel"
+        private const val KEY_APPEARANCE_MODE = "appearance_mode"
     }
 
     init {
@@ -665,13 +694,18 @@ class PlayerViewModel @JvmOverloads constructor(
                     markCurrentWorkPlayed(path)
                 }
                 // v1.7.0：时长补录（网盘或扫描未知时长 → 播放器拿到实际时长后回写 db）
-                if (st.durationMs > 0L && st.currentItem != null && st.currentItem.durationMs == null) {
+                // v2.1.18：跳过虚拟轨（#track_）——末轨 durationMs 设计为 null（播到文件尾），
+                // 播放器返回的是整轨裁剪窗口时长，回写会导致末轨显示为全专辑时长。
+                if (st.durationMs > 0L && st.currentItem != null && st.currentItem.durationMs == null
+                    && !st.currentItem.path.contains("#track_")
+                ) {
                     val path = st.currentItem.path
                     val entryId = runBlocking { appDb.dao().getEntryIdByUri(path) }
                     if (entryId != null) indexStore.updateDurationMs(entryId, path, st.durationMs)
                 }
-                // v1.6.7：全局定时关闭——每次开始播放重置倒计时
-                if (st.isPlaying && !lastIsPlaying && _globalSleepMinutes.value > 0) {
+                // v1.6.7：全局定时关闭——手动开始播放时重置倒计时；自动切歌不重置。
+                // v2.1.18：用 lastQueueIndex 区分——idx 未变才是手动播放，idx 变了是自动切歌。
+                if (st.isPlaying && !lastIsPlaying && _globalSleepMinutes.value > 0 && idx == lastQueueIndex) {
                     startGlobalSleepTimer(_globalSleepMinutes.value)
                 }
                 lastIsPlaying = st.isPlaying
