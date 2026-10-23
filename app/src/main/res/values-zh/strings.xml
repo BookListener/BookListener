@@ -41,6 +41,9 @@
     <string name="settings_glass_action_bar_desc">主页底部动作条的液态玻璃效果（模糊+折射）</string>
     <string name="settings_glass_player_panel">播放详情面板玻璃</string>
     <string name="settings_glass_player_panel_desc">播放详情面板的液态玻璃效果（模糊+折射）</string>
+    <string name="settings_group_source">资料源</string>
+    <string name="settings_group_playback">播放与外观</string>
+    <string name="settings_group_about">关于</string>
     <string name="settings_folders_row">文件夹管理</string>
     <string name="settings_folders_row_desc">管理已添加的播放文件夹与网盘内容</string>
     <string name="settings_cloud_row">网盘配置</string>

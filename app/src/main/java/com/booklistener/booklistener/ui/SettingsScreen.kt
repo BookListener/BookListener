@@ -18,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -286,26 +289,17 @@ fun SettingsScreen(
                     AppearanceMode.DARK to stringResource(R.string.appearance_dark),
                     AppearanceMode.FOLLOW_SYSTEM to stringResource(R.string.appearance_auto)
                 )
-                modeOptions.forEach { (mode, label) ->
-                    val selected = appearanceMode == mode
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { viewModel.setAppearanceMode(mode) }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = if (selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        RadioButton(selected = selected, onClick = null)
+                SettingsTriSelector(
+                    options = listOf(
+                        TriOption(AppIcons.Sun, modeOptions[0].second),
+                        TriOption(AppIcons.Moon, modeOptions[1].second),
+                        TriOption(AppIcons.AutoLoop, modeOptions[2].second)
+                    ),
+                    selectedIndex = modeOptions.indexOfFirst { it.first == appearanceMode }.coerceAtLeast(0),
+                    onSelect = { index ->
+                        viewModel.setAppearanceMode(modeOptions[index].first)
                     }
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                }
+                )
             }
 
             // ---- 区块二：玻璃效果（沿用两开关，逻辑零改动） ----
@@ -397,172 +391,137 @@ fun SettingsScreen(
             .fillMaxWidth()
             .padding(16.dp)
     ) {
-        // 文件夹管理（顶层入口：点开列举 + 删除，右上角"+"添加）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showFolderManage = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppIcons.Folder,
-                contentDescription = stringResource(R.string.settings_folders_row)
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_folders_row), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = stringResource(R.string.settings_folders_row_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_folders_row)
-            )
-        }
-        HorizontalDivider()
-
-        // 网盘配置（仅 WebDAV）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showCloud = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppIcons.Cloud,
-                contentDescription = stringResource(R.string.settings_cloud_row)
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_cloud_row), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = stringResource(R.string.settings_cloud_row_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_cloud_row)
-            )
-        }
-        HorizontalDivider()
-
-        // v1.6.7：定时关闭（全局）——每次开始播放倒计时，到点暂停；一次性定时优先
+        // v1.6.7：全局睡眠定时分钟（主页显示当前值）
         val globalMinutes by viewModel.globalSleepMinutes.collectAsStateWithLifecycle()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showGlobalSleep = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppIcons.Timer,
-                contentDescription = stringResource(R.string.settings_timer_row)
+
+        // ---- 资料源 ----
+        SettingsGroupCard(title = stringResource(R.string.settings_group_source)) {
+            SettingsNavRow(
+                icon = AppIcons.Folder,
+                title = stringResource(R.string.settings_folders_row),
+                desc = stringResource(R.string.settings_folders_row_desc),
+                onClick = { showFolderManage = true }
             )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_timer_title), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = if (globalMinutes <= 0) {
-                        stringResource(R.string.settings_timer_row_off)
-                    } else {
-                        stringResource(R.string.settings_timer_row_on, globalMinutes)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_timer_row)
+            SettingsNavRow(
+                icon = AppIcons.Cloud,
+                title = stringResource(R.string.settings_cloud_row),
+                desc = stringResource(R.string.settings_cloud_row_desc),
+                onClick = { showCloud = true }
             )
         }
-        HorizontalDivider()
 
-        // 缓存管理（图标+文字行，点开子页）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showCache = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppIcons.Storage,
-                contentDescription = stringResource(R.string.settings_cache_row)
+        // ---- 播放与外观 ----
+        SettingsGroupCard(title = stringResource(R.string.settings_group_playback)) {
+            SettingsNavRow(
+                icon = AppIcons.Timer,
+                title = stringResource(R.string.settings_timer_title),
+                desc = {
+                    if (globalMinutes <= 0) stringResource(R.string.settings_timer_row_off)
+                    else stringResource(R.string.settings_timer_row_on, globalMinutes)
+                },
+                onClick = { showGlobalSleep = true }
             )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_cache_row), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = stringResource(R.string.settings_cache_row_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_cache_row)
+            SettingsNavRow(
+                icon = AppIcons.Palette,
+                title = stringResource(R.string.settings_theme_row),
+                desc = stringResource(R.string.settings_theme_row_desc),
+                onClick = { showTheme = true }
+            )
+            SettingsNavRow(
+                icon = AppIcons.Storage,
+                title = stringResource(R.string.settings_cache_row),
+                desc = stringResource(R.string.settings_cache_row_desc),
+                onClick = { showCache = true }
             )
         }
-        HorizontalDivider()
 
-        // v2.1.19：主题入口（设计统一：主页仅列举配置项，外观/玻璃/语言收进子页）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showTheme = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppIcons.Palette,
-                contentDescription = stringResource(R.string.settings_theme_row)
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_theme_row), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = stringResource(R.string.settings_theme_row_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_theme_row)
-            )
-        }
-        HorizontalDivider()
-
-        // 关于（图标+文字行，点开子页）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showAbout = true }
-                .padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppIcons.Info,
-                contentDescription = stringResource(R.string.settings_about_row)
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(stringResource(R.string.settings_about_row), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = stringResource(R.string.settings_about_row_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.settings_about_row)
+        // ---- 关于 ----
+        SettingsGroupCard(title = stringResource(R.string.settings_group_about)) {
+            SettingsNavRow(
+                icon = AppIcons.Info,
+                title = stringResource(R.string.settings_about_row),
+                desc = stringResource(R.string.settings_about_row_desc),
+                onClick = { showAbout = true }
             )
         }
     }
+}
+
+/**
+ * 分组卡片：分区标题 + surfaceContainer 圆角卡片，卡片内为设置入口行。
+ */
+@Composable
+private fun SettingsGroupCard(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 6.dp)
+    )
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            content()
+        }
+    }
+}
+
+/**
+ * 设置入口行：左侧线性图标 + 主文字 + 副说明 + 右箭头，行间细分隔线（最后一行除外）。
+ */
+@Composable
+private fun SettingsNavRow(
+    icon: ImageVector,
+    title: String,
+    desc: String,
+    onClick: () -> Unit
+) {
+    SettingsNavRow(icon = icon, title = title, desc = { desc }, onClick = onClick)
+}
+
+/**
+ * 设置入口行（desc 支持动态计算，如睡眠定时显示当前分钟数）。
+ */
+@Composable
+private fun SettingsNavRow(
+    icon: ImageVector,
+    title: String,
+    desc: @Composable () -> String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = title,
+            tint = MaterialTheme.colorScheme.onSurface
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = desc(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = title
+        )
+    }
+    HorizontalDivider()
 }
 
 /** 读取当前安装版本名（用于确认是否为最新构建，避免新旧包混淆） */

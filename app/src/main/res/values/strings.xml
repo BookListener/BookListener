@@ -41,6 +41,9 @@
     <string name="settings_glass_action_bar_desc">Liquid glass for the home action bar (blur + refraction)</string>
     <string name="settings_glass_player_panel">Player panel glass</string>
     <string name="settings_glass_player_panel_desc">Liquid glass for the player panel (blur + refraction)</string>
+    <string name="settings_group_source">Sources</string>
+    <string name="settings_group_playback">Playback &amp; appearance</string>
+    <string name="settings_group_about">About</string>
     <string name="settings_folders_row">Folders</string>
     <string name="settings_folders_row_desc">Manage added playback folders and cloud content</string>
     <string name="settings_cloud_row">WebDAV accounts</string>
