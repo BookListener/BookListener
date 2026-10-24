@@ -37,9 +37,18 @@ class AlbumStore(private val dao: AppDao) {
         dao.worksOfNeverPlayed(PAGE_SIZE, page * PAGE_SIZE).map { it.toSummary() }
     }
 
-    /** 作品内歌曲：按 sortRank 排序 + 分页下推 SQL（v4.0，替代内存排序） */
+    /**
+     * 作品内歌曲：按 sortRank 排序 + 分页下推 SQL。
+     * @deprecated v2.1.22：专辑曲目改一次全量查询、UI/播放队列多消费方复用，分页不再用于运行路径。
+     */
+    @Deprecated("v2.1.22 起专辑曲目一次全量查询，不再分页")
     fun songs(workId: Long, page: Int): List<IndexedFile> = blockingRun {
         dao.albumSongsByWork(workId, PAGE_SIZE, page * PAGE_SIZE).map { IndexedFile.fromEntity(it) }
+    }
+
+    /** v2.1.22：取作品第一首歌曲（封面懒解析用，单行查询，避免全量） */
+    fun firstSong(workId: Long): IndexedFile? = blockingRun {
+        dao.albumSongsByWork(workId, 1, 0).map { IndexedFile.fromEntity(it) }.firstOrNull()
     }
 
     /** 作品内全部歌曲（按 sortRank 排序，供播放队列与"总数/总时长"） */

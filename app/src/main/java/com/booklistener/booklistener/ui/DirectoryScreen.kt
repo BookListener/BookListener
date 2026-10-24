@@ -105,7 +105,6 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
     val neverAlbums by viewModel.neverAlbums.collectAsStateWithLifecycle()
     val currentAlbum by viewModel.currentAlbum.collectAsStateWithLifecycle()
     val albumSongs by viewModel.albumSongs.collectAsStateWithLifecycle()
-    val albumSongsEnded by viewModel.albumSongsEnded.collectAsStateWithLifecycle()
     val albumsEnded by viewModel.albumsEnded.collectAsStateWithLifecycle()
 
     // v1.7.0：进入曲目界面刷新专辑分区（db 加载）；扫描完成/增删条目后随 savedEntries 变化补刷
@@ -184,26 +183,8 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 10.dp))
                         }
                     }
-                    if (!albumSongsEnded) {
-                        item(key = "album_songs_loading") {
-                            Text(
-                                text = stringResource(R.string.dir_loading_more),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
-                            )
-                        }
-                    }
                 }
-                // 滑底加载下一页
-                LaunchedEffect(songListState, albumSongs.size) {
-                    snapshotFlow {
-                        val last = songListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                        last to songListState.layoutInfo.totalItemsCount
-                    }.distinctUntilChanged().collect { (last, total) ->
-                        if (total > 0 && last >= total - 4) viewModel.loadAlbumSongsMore()
-                    }
-                }
+                // v2.1.22：专辑曲目一次全量查询（LazyColumn 惰性渲染），移除滑底分页加载
             }
             return
         }
@@ -930,8 +911,8 @@ private fun Long.formatSize(): String {
 /**
  * 列表进入视图时定位到正在播放条目（置顶）——专辑视图与条目视图共用同一段定位代码。
  * - sessionKey：视图进入会话标识（专辑 entryId / 条目 uri），组合重建即重新定位（杀后台恢复进入也覆盖）；
- * - itemCount/playingIndex：随分页增长重试——首帧条目在深分页（playingIndex=-1）时先不定位，
- *   分页加载后再补定位，保证"已到底/深分页"也能置顶；
+ * - itemCount/playingIndex：v2.1.22 专辑曲目一次全量加载，playingIndex 首帧即可定位；条目视图深分页时
+ *   仍可随加载重试，保证"已到底/深分页"也能置顶；
  * - 定位成功后本次会话不再强制跳转（用户后续滚动/切歌不打断）。
  */
 @Composable

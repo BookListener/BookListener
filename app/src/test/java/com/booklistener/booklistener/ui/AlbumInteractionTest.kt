@@ -145,4 +145,18 @@ class AlbumInteractionTest {
         assertEquals("正在播放同一作品不应重建队列（保持播放）", "work:$workId", PlaybackController.currentQueueOwnerId)
         assertTrue("点击专辑必弹正在播放页（v2.0.7 bugfix），正在播放同一作品也弹", vm.requestPlayerSheet.value)
     }
+
+    /** v2.1.22：进入专辑一次全量查询——albumSongs 直接全量（=全部曲目），无分页残留 */
+    @Test
+    fun openAlbum_loadsAllSongsInOneQuery() {
+        val vm = newViewModel()
+        vm.openAlbum(recentAlbum())
+        awaitTrue("openAlbum 后 albumSongs 应为全量曲目") {
+            vm.albumSongs.value.size == 2
+        }
+        assertEquals("albumSongs 全部为同一作品曲目", 2, vm.albumSongs.value.size)
+        assertEquals("曲目顺序按 sortRank（第1章在前）", "第1章", vm.albumSongs.value[0].displayName)
+        // 队列与列表同源：ownerId 仍指向该作品（openAlbum 复用同一份数据构建队列）
+        awaitQueueOwner("work:$workId")
+    }
 }

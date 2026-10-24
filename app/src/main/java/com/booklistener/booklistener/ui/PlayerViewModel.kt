@@ -427,10 +427,6 @@ class PlayerViewModel @JvmOverloads constructor(
     val currentAlbum: StateFlow<AlbumSummary?> = _currentAlbum.asStateFlow()
     private val _albumSongs = MutableStateFlow<List<IndexedFile>>(emptyList())
     val albumSongs: StateFlow<List<IndexedFile>> = _albumSongs.asStateFlow()
-    private val _albumSongsEnded = MutableStateFlow(false)
-    val albumSongsEnded: StateFlow<Boolean> = _albumSongsEnded.asStateFlow()
-    private var songPage = 0
-    private var songsLoading = false
 
     /** 重置并加载专辑两区首页（进入曲目 tab / 数据变更后调用） */
     fun refreshAlbums() {
@@ -481,10 +477,11 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     /**
-     * 打开专辑：从 db 加载歌曲（不重扫、不自动播放），进入专辑视图。
-     * 同时恢复"切换播放记录"行为：目标非当前正在播放队列时，暂停当前并切换为该专辑
-     * 的独立播放记录（就绪不自动播放），并弹出播放详情；正在播放同一专辑则保持不打断。
-     * 封面沿用来源条目 coverUri；专辑内歌曲全量排序后内存分页（100/页）。
+     * 打开专辑（v2.1.22 单次查询重构）：一次全量查询同一份数据，
+     * 供 UI 列表展示（LazyColumn 惰性渲染）与播放队列构建复用。
+     * 目标非当前正在播放队列时，暂停当前并切换为该专辑的独立播放记录
+     * （就绪不自动播放），并弹出播放详情；正在播放同一专辑则保持不打断。
+     * 封面读 works.coverUri（零查询），缺失才 LIMIT 1 提取。
      */
     fun openAlbum(album: AlbumSummary) {
         // 搜索构造的摘要 workId=0：按 (条目, 专辑名) 反查补全
@@ -494,76 +491,53 @@ class PlayerViewModel @JvmOverloads constructor(
         }
         if (effective.workId <= 0L) return
         _currentAlbum.value = effective
-        songPage = 0
-        _albumSongsEnded.value = false
-        _albumSongs.value = emptyList()
         _inFolderView.value = true
         _currentFolderUri.value = Uri.parse(effective.entryId)
-        loadAlbumSongsMore()
-        resolveCurrentAlbumCover(effective)
-        enterAlbumWithRecord(effective)
+        viewModelScope.launch {
+            // 唯一 1 次数据库读取：全量歌曲，UI 与播放队列共用
+            val all = withContext(Dispatchers.IO) { albumStore.allSongs(effective.workId) }
+            _albumSongs.value = all
+            resolveCurrentAlbumCover(effective, all)
+            enterAlbumWithRecord(effective, all)
+        }
         // v2.0.7 bugfix：弹窗请求独立于队列重载——点击专辑必弹"正在播放页"。
-        // 原实现把 _requestPlayerSheet 放在 enterAlbumWithRecord 的"重载队列"分支尾部，
-        // 点击正在播放的专辑时 shouldRestartOnEnter=false 提前 return，弹窗永不触发。
         // 语义：正在播放专辑不变→保持播放并弹详情；非正在播放→暂停并读取该专辑进度后弹详情。
         _requestPlayerSheet.value = true
     }
 
-    /** 懒解析当前专辑封面（单专辑用文件夹图/多专辑用专辑内首曲内嵌封面，无则 null 占位） */
-    private fun resolveCurrentAlbumCover(album: AlbumSummary) {
+    /** 懒解析当前专辑封面（coverUri 已入库则零查询；缺失取第一首 LIMIT 1，无则 null 占位） */
+    private fun resolveCurrentAlbumCover(album: AlbumSummary, all: List<IndexedFile>) {
         if (album.coverUri != null) return
         val entry = savedEntryById(album.entryId) ?: return
-        viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { albumStore.allSongs(album.workId) }
-            if (all.isEmpty()) return@launch
-            val cover = coverManager.resolveAlbumCover(
-                entry.coverUri, album.albumCountInEntry, all.first().uri
-            )
+        val firstUri = all.firstOrNull()?.uri
+            ?: runBlocking { albumStore.firstSong(album.workId)?.uri }
+        if (firstUri == null) return
+        val cover = coverManager.resolveAlbumCover(entry.coverUri, album.albumCountInEntry, firstUri)
+        if (cover != null) {
             _currentAlbum.value = _currentAlbum.value?.copy(coverUri = cover)
         }
     }
 
-    /** 切换播放上下文到目标作品记录（db 全量歌曲，就绪不自动播放；正在播放同一作品则不打断） */
-    private fun enterAlbumWithRecord(album: AlbumSummary) {
+    /**
+     * 切换播放上下文到目标作品记录（复用 openAlbum 已加载的全量歌曲，就绪不自动播放；
+     * 正在播放同一作品则不打断）。v2.1.22 起不再二次查询数据库。
+     */
+    private suspend fun enterAlbumWithRecord(album: AlbumSummary, all: List<IndexedFile>) {
         val workId = album.workId
         if (workId <= 0L) return
         if (!shouldRestartForWork(workId)) return
         saveCurrentPlaybackProgress()
-        viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { albumStore.allSongs(workId) }
-            if (all.isEmpty()) return@launch
-            val entry = savedEntryById(album.entryId)
-            val sourceType = entry?.sourceType ?: SourceType.LOCAL
-            val items = all.map { it.toAudioItem(sourceType) }
-            val record = workStore.load(workId)
-            val (startIndex, startPos) = FolderProgressLogic.resolveStart(items, record)
-            lastSavedIndex = startIndex
-            lastSavedUri = items.getOrNull(startIndex)?.path
-            val cover = entry?.let { coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri) }
-            MediaPlayService.start(getApplication())
-            PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:$workId")
-            // v2.0.7：弹窗请求已上移 openAlbum（点击专辑必弹），此处不再重复触发
-        }
-    }
-
-    /** 专辑歌曲滑动加载下一页 */
-    fun loadAlbumSongsMore() {
-        val album = _currentAlbum.value ?: return
-        if (songsLoading || _albumSongsEnded.value) return
-        songsLoading = true
-        viewModelScope.launch {
-            val pageItems = withContext(Dispatchers.IO) {
-                albumStore.songs(album.workId, songPage)
-            }
-            if (pageItems.isEmpty()) {
-                _albumSongsEnded.value = true
-            } else {
-                _albumSongs.value = _albumSongs.value + pageItems
-                songPage++
-                _albumSongsEnded.value = pageItems.size < AlbumStore.PAGE_SIZE
-            }
-            songsLoading = false
-        }
+        if (all.isEmpty()) return
+        val entry = savedEntryById(album.entryId)
+        val sourceType = entry?.sourceType ?: SourceType.LOCAL
+        val items = all.map { it.toAudioItem(sourceType) }
+        val record = workStore.load(workId)
+        val (startIndex, startPos) = FolderProgressLogic.resolveStart(items, record)
+        lastSavedIndex = startIndex
+        lastSavedUri = items.getOrNull(startIndex)?.path
+        val cover = entry?.let { coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri) }
+        MediaPlayService.start(getApplication())
+        PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:$workId")
     }
 
     /**
@@ -627,9 +601,12 @@ class PlayerViewModel @JvmOverloads constructor(
         if (workId <= 0L) return
         // 播放专辑时同步当前播放上下文（详情页/正在播放卡/通知封面定位）
         _currentAlbum.value = album
-        resolveCurrentAlbumCover(album)
         viewModelScope.launch {
-            val all = withContext(Dispatchers.IO) { albumStore.allSongs(workId) }
+            // v2.1.22：优先复用 openAlbum 已加载的全量歌曲（零查询）；未加载（如搜索直达）才回退一次查询
+            var all = _albumSongs.value
+            if (all.isEmpty()) {
+                all = withContext(Dispatchers.IO) { albumStore.allSongs(workId) }
+            }
             if (all.isEmpty()) return@launch
             val sourceType = savedEntryById(album.entryId)?.sourceType ?: SourceType.LOCAL
             val items = all.map { it.toAudioItem(sourceType) }

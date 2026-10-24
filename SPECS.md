@@ -75,6 +75,13 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - v6 起 `entry_index` 增加 `relativePath`（相对路径，子文件夹文件）与 `error`（文件级错误原因）两列。
 - 迁移链：MIGRATION_1_2 → 2_3 → 3_4 → 4_5 → 5_6。
 
+### 5. 专辑曲目加载（v2.1.22 起）
+- **进入专辑只查数据库，且一次全量查询、多消费方复用**：`openAlbum` 调用 `allSongs(workId)` 一次（sortRank 排序），同一份数据供 UI 列表（LazyColumn 惰性渲染）与播放队列构建复用。
+- **不做分页**：专辑曲目量级（百级）未达分页阈值，分页 + 全量并存会引入重复查询；播放队列必须全量（ExoPlayer 机制），列表全量持有由 LazyColumn 惰性渲染兜底。
+- 播放队列构建（`enterAlbumWithRecord`/`playAlbumFrom`）**复用已加载的 `_albumSongs`，禁止二次 `allSongs`**；搜索直达等未加载场景才回退一次查询。
+- 封面：优先读 `works.coverUri`（零查询）；缺失时仅 `firstSong(workId)`（`LIMIT 1`）提取，禁止全量。
+- 旧分页接口 `AlbumStore.songs(page)` 已废弃，不得用于运行路径。
+
 ---
 
 ## 四、设置侧链路架构（v2.1.10 重构）
