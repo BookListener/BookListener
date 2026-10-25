@@ -278,10 +278,10 @@ fun MainScreen(
                     }
                     .padding(vertical = 8.dp)
             ) {
-                // 底部"正在播放"封面：播放上下文专辑封面优先（单专辑文件夹图/多专辑内嵌），无则渐变占位
-                // v2.1.2：队列所属为作品级时经专辑来源条目兜底（内存版，组合期不查库）
+                // 底部"正在播放"封面：统一取源（队列封面→当前专辑→条目封面），无则渐变占位
+                // v2.1.25：队列封面生命周期独立，退出专辑视图/进入专辑列表后不丢
                 val ownerEntry = playerViewModel.queueEntryForDisplay()
-                val coverUri = playerViewModel.currentAlbum.value?.coverUri ?: ownerEntry?.coverUri
+                val coverUri = playerViewModel.currentPlaybackCover()
                 val displayName = playbackState.currentItem?.displayName
                     ?: ownerEntry?.displayName ?: ""
                 // v1.6.8：正在播放时封面缓慢旋转（8s/圈，线性）；暂停时不转
@@ -362,9 +362,9 @@ fun MainScreen(
         PlayerDetailSheet(
             viewModel = playerViewModel,
             state = playbackState,
-            // v2.1.2：队列所属为作品级时经专辑来源条目兜底（内存版）
+            // v2.1.25：详情封面统一取源（队列封面→当前专辑→条目封面），进入/退出专辑后不丢
             entry = playerViewModel.queueEntryForDisplay(),
-            albumCoverUri = playerViewModel.currentAlbum.value?.coverUri,
+            albumCoverUri = playerViewModel.currentPlaybackCover(),
             // v2.0.10：播放详情面板玻璃开关——关闭时传 null，面板走 surfaceContainerLow 纯色回退分支
             backdrop = if (glassPlayerPanel) backdrop else null,
             visible = sheetPanelVisible,

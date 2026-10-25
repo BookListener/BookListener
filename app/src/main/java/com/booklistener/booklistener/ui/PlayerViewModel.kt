@@ -425,6 +425,11 @@ class PlayerViewModel @JvmOverloads constructor(
     /** 当前打开的专辑（专辑视图标题 + 歌曲列表，db 加载不重扫） */
     private val _currentAlbum = MutableStateFlow<AlbumSummary?>(null)
     val currentAlbum: StateFlow<AlbumSummary?> = _currentAlbum.asStateFlow()
+
+    /** v2.1.25：播放队列封面（作品封面优先，队列构建时设置）。生命周期=播放队列，
+     *  不随 _currentAlbum 清空（exitAlbumView）丢失——动作条/详情封面统一取源的第一优先级。 */
+    private val _queueCoverUri = MutableStateFlow<String?>(null)
+    val queueCoverUri: StateFlow<String?> = _queueCoverUri.asStateFlow()
     private val _albumSongs = MutableStateFlow<List<IndexedFile>>(emptyList())
     val albumSongs: StateFlow<List<IndexedFile>> = _albumSongs.asStateFlow()
 
@@ -539,6 +544,7 @@ class PlayerViewModel @JvmOverloads constructor(
         val cover = album.coverUri ?: entry?.let {
             coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri)
         }
+        _queueCoverUri.value = cover
         MediaPlayService.start(getApplication())
         PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:$workId")
     }
@@ -564,7 +570,8 @@ class PlayerViewModel @JvmOverloads constructor(
             songCount = work.songCount,
             totalDurationMs = work.totalDurationMs,
             albumCountInEntry = worksInEntry.size.coerceAtLeast(1),
-            coverUri = coverManager.resolveAlbumCover(
+            // v2.1.25：封面取作品封面（works.coverUri，与专辑列表同源），缺失才回退条目封面解析
+            coverUri = work.coverUri ?: coverManager.resolveAlbumCover(
                 entry.coverUri, worksInEntry.size.coerceAtLeast(1), null
             )
         )
@@ -618,6 +625,7 @@ class PlayerViewModel @JvmOverloads constructor(
             val cover = album.coverUri ?: entry?.let {
                 coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri)
             }
+            _queueCoverUri.value = cover
             MediaPlayService.start(getApplication())
             PlaybackController.setQueue(
                 resolveAll(items, coverUri = cover),
@@ -777,6 +785,7 @@ class PlayerViewModel @JvmOverloads constructor(
                             albumCountInEntry = albumCount,
                             coverUri = work.coverUri
                         )
+                        _queueCoverUri.value = work.coverUri
                     }
                 }
             }
@@ -921,6 +930,16 @@ class PlayerViewModel @JvmOverloads constructor(
         }
         return _currentAlbum.value?.entryId?.let { savedEntryById(it) }
     }
+
+    /**
+     * v2.1.25：封面显示统一取源（全 App 动作条/详情/通知定位共用）：
+     * 播放队列封面 → 当前专辑封面 → 条目封面。
+     * 保证"正在播放进入专辑列表/上滑动作条/退出专辑视图"后封面不丢、与专辑列表同源。
+     */
+    fun currentPlaybackCover(): String? =
+        _queueCoverUri.value
+            ?: _currentAlbum.value?.coverUri
+            ?: queueEntryForDisplay()?.coverUri
 
     /** 按条目 id 查找已添加条目（播放层队列所属 → 定位到对应文件夹） */
     fun savedEntryById(id: String): SavedEntry? =
@@ -1269,6 +1288,7 @@ class PlayerViewModel @JvmOverloads constructor(
             val albumCount = runBlocking { appDb.dao().getWorksByEntry(entryId) }.size.coerceAtLeast(1)
             // v2.1.24：队列封面 = 作品封面优先（works.coverUri，与专辑列表/通知栏同源），缺失回退条目封面
             val cover = work.coverUri ?: coverManager.resolveAlbumCover(entry.coverUri, albumCount, all.firstOrNull()?.uri)
+            _queueCoverUri.value = cover
             MediaPlayService.start(getApplication())
             PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:${work.id}")
             refreshAlbums()

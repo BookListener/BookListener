@@ -163,6 +163,58 @@ class AlbumInteractionTest {
     }
 
     /**
+     * v2.1.25：动作条封面点击（openCurrentWorkAlbum）进入专辑列表——
+     * 封面取作品封面（works.coverUri），嵌套场景不再因条目封面 null 丢失（此前的污染路径）。
+     */
+    @Test
+    fun openCurrentWorkAlbum_usesWorkCover() {
+        runBlocking {
+            db.dao().updateWorkCoverByKey(
+                "local:哈利·波特与魔法石", "content://cover/album.jpg", System.currentTimeMillis()
+            )
+        }
+        val probe = ExoPlayer.Builder(ApplicationProvider.getApplicationContext()).build()
+        PlaybackController.attach(probe)
+        val vm = newViewModel()
+        // 先建立作品级播放队列（ownerId="work:..."）
+        vm.openAlbum(recentAlbum().copy(coverUri = "content://cover/album.jpg"))
+        awaitQueueOwner("work:$workId")
+        // 动作条封面点击 → 进入专辑列表
+        vm.openCurrentWorkAlbum()
+        awaitTrue("openCurrentWorkAlbum 后当前专辑封面应为作品封面") {
+            vm.currentAlbum.value?.coverUri == "content://cover/album.jpg"
+        }
+        assertEquals("统一取源应为作品封面", "content://cover/album.jpg", vm.currentPlaybackCover())
+        PlaybackController.detach(probe)
+        probe.release()
+    }
+
+    /**
+     * v2.1.25：退出专辑视图后动作条封面保留——队列封面生命周期独立于 _currentAlbum，
+     * 不再因 exitAlbumView 清空当前专辑而回退条目封面（嵌套场景 null → 丢封面）。
+     */
+    @Test
+    fun exitAlbumView_keepsQueueCover() {
+        runBlocking {
+            db.dao().updateWorkCoverByKey(
+                "local:哈利·波特与魔法石", "content://cover/album.jpg", System.currentTimeMillis()
+            )
+        }
+        val probe = ExoPlayer.Builder(ApplicationProvider.getApplicationContext()).build()
+        PlaybackController.attach(probe)
+        val vm = newViewModel()
+        vm.openAlbum(recentAlbum().copy(coverUri = "content://cover/album.jpg"))
+        awaitQueueOwner("work:$workId")
+        vm.exitAlbumView()
+        assertTrue("退出专辑视图后当前专辑应为空", vm.currentAlbum.value == null)
+        awaitTrue("退出专辑视图后动作条封面仍为队列封面") {
+            vm.currentPlaybackCover() == "content://cover/album.jpg"
+        }
+        PlaybackController.detach(probe)
+        probe.release()
+    }
+
+    /**
      * v2.1.24：通知栏/锁屏封面与专辑列表同源——播放队列 artwork 应为作品封面（works.coverUri），
      * 而不是条目封面（嵌套场景条目封面为 null，是此前通知无封面的根因）。
      */
