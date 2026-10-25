@@ -117,6 +117,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - **v2.1.23 作品封面入库（works.coverUri）**：扫描时为每个作品解析封面并写入 works 表（专辑列表零 IO 显示）——专辑全部文件在同一目录（含扫描根）时，优先用该目录内封面图片（常见命名 cover/folder/front/AlbumArt\* → 任意图片，复用 `CoverScanner.PREFERRED_NAMES`）；无目录图片或**专辑跨子文件夹**（不查目录图片，防串图）→ 回退首曲内嵌封面。目录定位基于 `relativePath`，复用扫描文件列表，零额外 IO，本地与 WebDAV 统一生效。
 - **v2.1.24 播放队列封面同源**：通知栏/锁屏封面（MediaItem artworkUri）与专辑列表同源——播放队列构建时**作品封面优先**（`album.coverUri`/`work.coverUri`），缺失才回退条目封面（`resolveAlbumCover`）。禁止只走条目封面（嵌套场景条目封面为 null 会导致通知无封面）。
 - **v2.1.25 封面显示统一取源**：动作条/播放详情/封面点击入口一律 `currentPlaybackCover()`——**播放队列封面（_queueCoverUri，生命周期=播放队列）→ 当前专辑封面（_currentAlbum.coverUri）→ 条目封面（entry.coverUri）**。`openCurrentWorkAlbum`（动作条封面点击进入专辑列表）必须用 `work.coverUri` 优先，禁止绕回条目封面解析导致嵌套场景丢失；`exitAlbumView` 清空当前专辑后动作条封面仍取队列封面，不丢。
+- **v2.1.26 封面存储目录持久化**：内嵌封面提取产物 MUST 写入 `filesDir/covers`（`CacheDirs.coverFilesDir`，与数据库同清理边界：清缓存不清、清数据/卸载连库一起删，消除"缓存清了库还在"的悬空）。`cacheDir/covers` 仅供 `CoverDirMigration` 读取旧产物：复制→改库（`migrateCoverCachePrefix` REPLACE 前缀改写）→删旧目录，prefs 幂等标记，任一步失败不删旧目录不悬空；`audio_cache` 留在 cacheDir 不动。
 
 ### 5. 内容文件列表
 - 平铺显示所有文件（含子文件夹，通过 relativePath 标注），不做子文件夹导航。

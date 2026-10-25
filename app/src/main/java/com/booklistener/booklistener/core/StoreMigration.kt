@@ -1,6 +1,8 @@
 package com.booklistener.core
 
+import android.content.Context
 import android.content.SharedPreferences
+import com.booklistener.db.AppDao
 import com.booklistener.db.AppDatabase
 import org.json.JSONArray
 
@@ -153,5 +155,45 @@ object StoreMigration {
     private fun readJsonArray(prefs: SharedPreferences, key: String): JSONArray? {
         val raw = prefs.getString(key, null) ?: return null
         return runCatching { JSONArray(raw) }.getOrNull()
+    }
+}
+
+/**
+ * v2.1.26 封面目录迁移：内嵌封面提取产物从 cacheDir/covers（易失）移入 filesDir/covers（持久）。
+ * works.coverUri 持久引用封面文件，必须与数据库同清理边界——清缓存不清、清数据/卸载连库一起删，
+ * 消除"缓存清了库还在"导致的封面路径悬空。
+ * - **幂等**：prefs 标记（store_migration 同 prefs 文件）；
+ * - **失败安全**：先复制 → 改库（前缀改写）→ 删旧目录。复制/改库任一失败都不删旧目录，
+ *   旧 uri 仍指向旧位置可正常显示，不产生悬空；下次启动（标记未置）自动重试。
+ */
+object CoverDirMigration {
+
+    private const val FLAG = "cover_dir_migration_v1_done"
+
+    fun run(context: Context, db: AppDatabase) {
+        val prefs = context.getSharedPreferences("saved_folders", Context.MODE_PRIVATE)
+        if (prefs.getBoolean(FLAG, false)) return
+        val done = kotlinx.coroutines.runBlocking { migrate(context, db.dao()) }
+        if (done) prefs.edit().putBoolean(FLAG, true).apply()
+    }
+
+    /** @return true=迁移完成（置标记）；false=无需迁移或失败（不置标记，下次重试） */
+    private suspend fun migrate(context: Context, dao: AppDao): Boolean {
+        val src = CacheDirs.coverCacheDir(context)
+        val dst = CacheDirs.coverFilesDir(context)
+        val files = src.listFiles()?.filter { it.isFile } ?: emptyList()
+        if (files.isEmpty()) return true // 无旧产物，无需迁移
+        val ok = dst.mkdirs() || dst.isDirectory
+        if (!ok) return false
+        var copied = 0
+        for (f in files) {
+            val target = java.io.File(dst, f.name)
+            if (runCatching { f.copyTo(target, overwrite = true) }.isSuccess && target.exists()) copied++
+        }
+        if (copied != files.size) return false // 有文件复制失败：保留旧目录，避免悬空
+        // 全部复制成功 → 改写库前缀；改库失败则不删旧目录（旧文件仍在，显示不受影响）
+        if (runCatching { dao.migrateCoverCachePrefix() }.isFailure) return false
+        runCatching { src.deleteRecursively() }
+        return true
     }
 }

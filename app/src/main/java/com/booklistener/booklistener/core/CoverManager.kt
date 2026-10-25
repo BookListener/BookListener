@@ -44,7 +44,7 @@ class CoverManager(
     /** 条目文件集合的专辑数判定（v1.6.22）：无 tag 的 null 视为同组；空集合返回 0 */
     fun albumCountOf(items: List<AudioItem>): Int = items.map { it.album }.distinct().size
 
-    /** 用 MediaMetadataRetriever 提取音频内嵌封面，写入 cacheDir/covers/{id}.jpg 返回 file:// uri */
+    /** 用 MediaMetadataRetriever 提取音频内嵌封面，写入 filesDir/covers/{id}.jpg 返回 file:// uri */
     private fun extractEmbeddedCover(audioUriStr: String): String? {
         // v2.1.14：CUE 虚拟轨 uri（整轨#track_xxx）→ 先解析出整轨 uri，封面在整轨文件上
         val realUriStr = VirtualTrackUri.parse(audioUriStr)?.first ?: audioUriStr
@@ -57,7 +57,9 @@ class CoverManager(
                     ?: return null
                 retriever.setDataSource(fd.fileDescriptor)
                 val art = retriever.embeddedPicture ?: return null
-                val coverDir = CacheDirs.coverCacheDir(app)
+                // v2.1.26：提取产物写入 filesDir/covers（持久层，与 works.coverUri 同生命周期，
+                // 清缓存不清、清数据/卸载连库一起删，消除"缓存清了库还在"的悬空窗口）
+                val coverDir = CacheDirs.coverFilesDir(app)
                 coverDir.mkdirs()
                 val file = File(coverDir, sanitize(coverDir, realUriStr) + ".jpg")
                 file.writeBytes(art)

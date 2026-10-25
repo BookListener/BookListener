@@ -12,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import com.booklistener.core.CrashLogger
+import com.booklistener.core.CoverDirMigration
 import com.booklistener.core.StoreMigration
 import com.booklistener.ui.MainScreen
 import com.booklistener.ui.PlayerViewModel
@@ -31,6 +32,8 @@ class MainActivity : AppCompatActivity() {
             getSharedPreferences("saved_folders", MODE_PRIVATE),
             com.booklistener.db.AppDatabase.getInstance(applicationContext)
         )
+        // v2.1.26：封面目录迁移 cache/covers → files/covers（幂等；works.coverUri 与数据库同生命周期）
+        CoverDirMigration.run(applicationContext, com.booklistener.db.AppDatabase.getInstance(applicationContext))
 
         // v2.1.19：冷启动恢复外观模式（白天/黑夜/自动），在 setContent 前应用避免首帧闪
         ViewModelProvider(this)[PlayerViewModel::class.java].applyAppearanceMode()

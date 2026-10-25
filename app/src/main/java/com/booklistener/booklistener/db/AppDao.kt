@@ -236,6 +236,10 @@ interface AppDao {
     @Query("UPDATE works SET coverUri = :coverUri, updatedAt = :updatedAt WHERE key = :key")
     suspend fun updateWorkCoverByKey(key: String, coverUri: String?, updatedAt: Long)
 
+    /** v2.1.26：封面目录迁移——works.coverUri 前缀从易失 cache/covers 改写为持久 files/covers */
+    @Query("UPDATE works SET coverUri = REPLACE(coverUri, '/cache/covers/', '/files/covers/') WHERE coverUri LIKE '%/cache/covers/%'")
+    suspend fun migrateCoverCachePrefix()
+
     @Query("DELETE FROM work_progress WHERE workId NOT IN (SELECT id FROM works)")
     suspend fun deleteOrphanWorkProgress()
 
