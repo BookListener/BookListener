@@ -34,4 +34,7 @@ object MessageCatalog {
     // v5.0（spec: cue-virtual-tracks）：虚拟轨浏览弹层
     val CUE_VIRTUAL_TRACKS = R.string.cue_virtual_tracks
     val CUE_NO_TRACKS = R.string.cue_no_tracks
+
+    // v2.2.1：系列分组头计数（「共 N 张」/ "N albums"）
+    val SERIES_COUNT = R.string.series_count
 }

@@ -228,7 +228,7 @@ class AlbumInteractionTest {
         }
         // 从 AlbumStore（真实入口）取摘要：coverUri 应为作品封面
         val summary = runBlocking {
-            (AlbumStore(db.dao()).notPlayed(0) + AlbumStore(db.dao()).recentPlayed(0))
+            (AlbumStore(db.dao()).notPlayed() + AlbumStore(db.dao()).recentPlayed())
                 .first { it.album == "哈利·波特与魔法石" }
         }
         assertEquals("作品封面已入库并可读", "content://cover/album.jpg", summary.coverUri)

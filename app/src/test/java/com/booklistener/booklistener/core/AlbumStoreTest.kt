@@ -84,7 +84,7 @@ class AlbumStoreTest {
     @Test
     fun notPlayed_containsAllWorksInitially() {
         // 全部未 touchPlayed → 2 个作品（专辑甲 / 文件夹A 兜底 / 文件夹B 兜底 = 3 个）
-        val rows = store.notPlayed(0)
+        val rows = store.notPlayed()
         assertEquals(3, rows.size)
         val albumA = rows.first { it.album == "专辑甲" }
         assertEquals(2, albumA.songCount)
@@ -96,10 +96,10 @@ class AlbumStoreTest {
     fun recentPlayed_afterTouchMovesWorkToPlayedPartition() {
         val workId = runBlocking { dao.getWorkIdByUri("uri://a1") }!!
         runBlocking { dao.touchWorkPlayed(workId, System.currentTimeMillis()) }
-        val recent = store.recentPlayed(0)
+        val recent = store.recentPlayed()
         assertEquals(1, recent.size)
         assertEquals("专辑甲", recent[0].album)
-        val never = store.notPlayed(0)
+        val never = store.notPlayed()
         assertEquals(2, never.size)
     }
 
@@ -116,18 +116,11 @@ class AlbumStoreTest {
                 )
             )
         }
-        val rows = store.notPlayed(0)
+        val rows = store.notPlayed()
         val albumA = rows.first { it.album == "专辑甲" }
         assertEquals(3, albumA.songCount)        // 2 + 1
         assertEquals(160_000L, albumA.totalDurationMs) // 150 + 10
         assertEquals(2, albumA.albumCountInEntry)      // 覆盖两个条目
-    }
-
-    @Test
-    fun paging_offsetsEmptyPage() {
-        // 未播放 3 行：第 1 页（100/页）已含全部，第 2 页为空
-        assertEquals(3, store.notPlayed(0).size)
-        assertEquals(0, store.notPlayed(1).size)
     }
 
     @Test

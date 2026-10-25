@@ -257,7 +257,7 @@ class DirectoryScreenFolderViewTest {
         // 协程会占用 Main 队列；waitUntil 每轮先推进 Main 调度再判条件
         composeRule.waitUntil(timeoutMillis = 30_000) {
             shadowOf(Looper.getMainLooper()).idle()
-            vm.neverAlbums.value.isNotEmpty() || vm.recentAlbums.value.isNotEmpty()
+            vm.neverItems.value.isNotEmpty() || vm.recentItems.value.isNotEmpty()
         }
         composeRule.onNodeWithText("Not played yet").assertExists()
         composeRule.onNodeWithText("Download").assertExists()

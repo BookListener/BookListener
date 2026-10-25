@@ -114,6 +114,7 @@
     <string name="dir_recent">Recently played</string>
     <string name="dir_not_played">Not played yet</string>
     <string name="dir_song_count">%1$d tracks · total %2$s</string>
+    <string name="series_count">%1$d albums</string>
     <string name="dir_source_local">Local file</string>
     <string name="dir_source_cloud">Cloud file</string>
 

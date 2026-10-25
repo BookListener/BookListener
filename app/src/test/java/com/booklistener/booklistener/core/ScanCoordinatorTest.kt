@@ -152,7 +152,7 @@ class ScanCoordinatorTest {
         assertNull("非媒体文件 workId 必须为 null", rows[0].workId)
         // 专辑列表为空：不产生"文件夹名"专辑
         val albumStore = AlbumStore(dao)
-        val albums = albumStore.notPlayed(0) + albumStore.recentPlayed(0)
+        val albums = albumStore.notPlayed() + albumStore.recentPlayed()
         assertTrue("非媒体文件不应产生任何专辑", albums.isEmpty())
     }
 
@@ -201,7 +201,7 @@ class ScanCoordinatorTest {
 
         // 专辑列表：只有 CUE专辑 一个作品，非媒体文件不产生"文件夹名"专辑
         val albumStore = AlbumStore(dao)
-        val albums = albumStore.notPlayed(0) + albumStore.recentPlayed(0)
+        val albums = albumStore.notPlayed() + albumStore.recentPlayed()
         assertEquals("只能聚合出一个 CUE 专辑", 1, albums.size)
         assertEquals("CUE专辑", albums[0].album)
         // 该专辑只有 2 首虚拟轨（不含任何非媒体文件）

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -52,6 +53,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +63,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.booklistener.core.AlbumSummary
+import com.booklistener.core.HomeAlbumItem
 import com.booklistener.core.AudioItemFactory
 import com.booklistener.core.MessageCatalog
 import com.booklistener.core.AudioItem
@@ -101,11 +104,10 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
-    val recentAlbums by viewModel.recentAlbums.collectAsStateWithLifecycle()
-    val neverAlbums by viewModel.neverAlbums.collectAsStateWithLifecycle()
+    val recentItems by viewModel.recentItems.collectAsStateWithLifecycle()
+    val neverItems by viewModel.neverItems.collectAsStateWithLifecycle()
     val currentAlbum by viewModel.currentAlbum.collectAsStateWithLifecycle()
     val albumSongs by viewModel.albumSongs.collectAsStateWithLifecycle()
-    val albumsEnded by viewModel.albumsEnded.collectAsStateWithLifecycle()
 
     // v1.7.0：进入曲目界面刷新专辑分区（db 加载）；扫描完成/增删条目后随 savedEntries 变化补刷
     LaunchedEffect(Unit) { viewModel.refreshAlbums() }
@@ -356,8 +358,8 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
             return
         }
 
-        // 主界面专辑层两区（v1.7.0：按专辑聚合，db 分页加载；分区沿用条目级 lastPlayedAt）
-        if (savedEntries.isEmpty() && recentAlbums.isEmpty() && neverAlbums.isEmpty()) {
+        // 主界面专辑层两区（v2.2.1：按专辑聚合 + 系列内联分组，全量加载内存排序，移除翻页）
+        if (savedEntries.isEmpty() && recentItems.isEmpty() && neverItems.isEmpty()) {
             Text(
                 text = stringResource(MessageCatalog.EMPTY_HOME),
                 modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp),
@@ -370,85 +372,180 @@ fun DirectoryScreen(viewModel: PlayerViewModel) {
         val listState = rememberLazyListState()
         // v2.1.5：底部留白（内容 padding）——最后一行不被底部播放控制栏遮挡，且可滚动到完全可见
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 88.dp)) {
-            if (recentAlbums.isNotEmpty()) {
+            if (recentItems.isNotEmpty()) {
                 item(key = "header_recent") { SectionHeader(stringResource(R.string.dir_recent)) }
-                recentAlbums.forEachIndexed { i, album ->
-                    // v2.1.2：key 用 workId（works 主键唯一）——同条目下不同作品 title 撞名时
-                    // （cue 虚拟轨作品 + 普通 flac 作品同专辑名）旧 key "entryId_album" 会重复 → LazyColumn 崩溃
-                    item(key = "album_${album.workId}") {
-                        val albumMeta = stringResource(
-                            R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)
+                albumPartition(
+                    items = recentItems,
+                    isLastPartitionItem = true,
+                    savedEntries = savedEntries,
+                    currentFolderUri = currentFolderUri,
+                    playbackState = playbackState,
+                    onOpenAlbum = viewModel::openAlbum,
+                    onTogglePlayPause = viewModel::togglePlayPause,
+                    onLongPressAlbum = { album, meta ->
+                        pendingNameDetail = NameDetail(
+                            primary = album.album,
+                            secondary = album.artist,
+                            meta = meta
                         )
-                        val entry = savedEntries.firstOrNull { it.id == album.entryId }
-                        if (entry != null && isCurrentEntry(entry, currentFolderUri, playbackState)) {
-                            CurrentAlbumCard(
+                    },
+                    onToggleSeries = viewModel::toggleSeries
+                )
+                item(key = "divider") { HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp)) }
+            }
+            item(key = "header_not") { SectionHeader(stringResource(R.string.dir_not_played)) }
+            albumPartition(
+                items = neverItems,
+                isLastPartitionItem = false,
+                savedEntries = savedEntries,
+                currentFolderUri = currentFolderUri,
+                playbackState = playbackState,
+                onOpenAlbum = viewModel::openAlbum,
+                onTogglePlayPause = viewModel::togglePlayPause,
+                onLongPressAlbum = { album, meta ->
+                    pendingNameDetail = NameDetail(
+                        primary = album.album,
+                        secondary = album.artist,
+                        meta = meta
+                    )
+                },
+                onToggleSeries = viewModel::toggleSeries
+            )
+        }
+    }
+}
+
+/** v2.2.1：分区内条目渲染——系列分组头（默认收起，点击收展）+ 组内专辑行 / 普通专辑行 */
+private fun LazyListScope.albumPartition(
+    items: List<HomeAlbumItem>,
+    isLastPartitionItem: Boolean,
+    savedEntries: List<SavedEntry>,
+    currentFolderUri: android.net.Uri?,
+    playbackState: PlaybackState,
+    onOpenAlbum: (AlbumSummary) -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onLongPressAlbum: (AlbumSummary, String) -> Unit,
+    onToggleSeries: (String) -> Unit
+) {
+    items.forEachIndexed { index, item ->
+        when (item) {
+            is HomeAlbumItem.SeriesGroup -> {
+                val expanded = item.albums.isNotEmpty()
+                item(key = "series_${item.key}") {
+                    SeriesHeader(
+                        name = item.name,
+                        count = item.albumCount,
+                        expanded = expanded,
+                        onClick = { onToggleSeries(item.key) }
+                    )
+                }
+                if (expanded) {
+                    item.albums.forEachIndexed { ai, album ->
+                        item(key = "album_${album.workId}") {
+                            AlbumPartitionRow(
                                 album = album,
-                                entry = entry,
-                                state = playbackState,
-                                onToggle = viewModel::togglePlayPause,
-                                onClick = { viewModel.openAlbum(album) }
-                            )
-                        } else {
-                            AlbumRow(
-                                album = album,
-                                entry = entry,
-                                onClick = { viewModel.openAlbum(album) },
-                                onLongClick = {
-                                    pendingNameDetail = NameDetail(
-                                        primary = album.album,
-                                        secondary = album.artist,
-                                        meta = albumMeta
-                                    )
-                                },
-                                // v2.0.1：最近播放最后一个不要行间细线（其后紧接分区线+「尚未播放」标题）
-                                showDivider = i < recentAlbums.size - 1
+                                savedEntries = savedEntries,
+                                currentFolderUri = currentFolderUri,
+                                playbackState = playbackState,
+                                onOpenAlbum = onOpenAlbum,
+                                onTogglePlayPause = onTogglePlayPause,
+                                onLongPressAlbum = onLongPressAlbum,
+                                // v2.0.1 语义延续：分区最后一个可见行不画行间细线（其后接分区线）
+                                showDivider = !(isLastPartitionItem && index == items.lastIndex && ai == item.albums.lastIndex)
                             )
                         }
                     }
                 }
-                item(key = "divider") { HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp)) }
             }
-            item(key = "header_not") { SectionHeader(stringResource(R.string.dir_not_played)) }
-            neverAlbums.forEach { album ->
-                item(key = "album_${album.workId}") {
-                    val albumMeta = stringResource(
-                        R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)
-                    )
-                    AlbumRow(
-                        album = album,
-                        entry = savedEntries.firstOrNull { it.id == album.entryId },
-                        onClick = { viewModel.openAlbum(album) },
-                        onLongClick = {
-                            pendingNameDetail = NameDetail(
-                                primary = album.album,
-                                secondary = album.artist,
-                                meta = albumMeta
-                            )
-                        }
+            is HomeAlbumItem.Plain -> {
+                item(key = "album_${item.album.workId}") {
+                    AlbumPartitionRow(
+                        album = item.album,
+                        savedEntries = savedEntries,
+                        currentFolderUri = currentFolderUri,
+                        playbackState = playbackState,
+                        onOpenAlbum = onOpenAlbum,
+                        onTogglePlayPause = onTogglePlayPause,
+                        onLongPressAlbum = onLongPressAlbum,
+                        showDivider = !(isLastPartitionItem && index == items.lastIndex)
                     )
                 }
-            }
-            if (!albumsEnded) {
-                item(key = "albums_loading") {
-                    Text(
-                        text = stringResource(R.string.dir_loading_more),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
-                    )
-                }
-            }
-        }
-        // 滑底翻页：两区共用同一 LazyColumn，触底加载下一页
-        LaunchedEffect(listState, recentAlbums.size, neverAlbums.size) {
-            snapshotFlow {
-                val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                last to listState.layoutInfo.totalItemsCount
-            }.distinctUntilChanged().collect { (last, total) ->
-                if (total > 0 && last >= total - 4) viewModel.loadAlbumsMore()
             }
         }
     }
+}
+
+/** 分区内专辑行：当前播放条目卡片 / 普通专辑行（含折叠的单专辑系列，副标题显示系列名） */
+@Composable
+private fun AlbumPartitionRow(
+    album: AlbumSummary,
+    savedEntries: List<SavedEntry>,
+    currentFolderUri: android.net.Uri?,
+    playbackState: PlaybackState,
+    onOpenAlbum: (AlbumSummary) -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onLongPressAlbum: (AlbumSummary, String) -> Unit,
+    showDivider: Boolean
+) {
+    val albumMeta = stringResource(
+        R.string.dir_song_count, album.songCount, formatDuration(album.totalDurationMs)
+    )
+    val entry = savedEntries.firstOrNull { it.id == album.entryId }
+    if (entry != null && isCurrentEntry(entry, currentFolderUri, playbackState)) {
+        CurrentAlbumCard(
+            album = album,
+            entry = entry,
+            state = playbackState,
+            onToggle = onTogglePlayPause,
+            onClick = { onOpenAlbum(album) }
+        )
+    } else {
+        AlbumRow(
+            album = album,
+            entry = entry,
+            onClick = { onOpenAlbum(album) },
+            onLongClick = { onLongPressAlbum(album, albumMeta) },
+            showDivider = showDivider
+        )
+    }
+}
+
+/** v2.2.1：系列分组头——纯文字「系列名 + 共 N 张」+ 收展箭头，点击整行收展（默认收起） */
+@Composable
+private fun SeriesHeader(name: String, count: Int, expanded: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = stringResource(MessageCatalog.SERIES_COUNT, count),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+        Icon(
+            imageVector = AppIcons.ExpandMore,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .size(20.dp)
+                .padding(start = 4.dp)
+                .rotate(if (expanded) 180f else 0f)
+        )
+    }
+    // v2.2.1：分组头下标准格线（§六.3：horizontal 10dp），与分区线/专辑行细线分层
+    HorizontalDivider(modifier = Modifier.padding(horizontal = 10.dp))
 }
 
 private fun entryDisplayName(id: String, entries: List<SavedEntry>): String =

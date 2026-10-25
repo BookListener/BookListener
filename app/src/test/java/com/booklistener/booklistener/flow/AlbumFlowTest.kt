@@ -83,7 +83,7 @@ class AlbumFlowTest {
         albumStore = AlbumStore(dao)
     }
 
-    private fun allAlbums() = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+    private fun allAlbums() = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
 
     // ---- 场景1：同专辑多作者合并为一个专辑 ----
 

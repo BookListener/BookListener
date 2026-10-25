@@ -114,6 +114,7 @@
     <string name="dir_recent">最近播放</string>
     <string name="dir_not_played">尚未播放</string>
     <string name="dir_song_count">%1$d 首 · 总时长 %2$s</string>
+    <string name="series_count">共 %1$d 张</string>
     <string name="dir_source_local">本地文件</string>
     <string name="dir_source_cloud">网盘文件</string>
 

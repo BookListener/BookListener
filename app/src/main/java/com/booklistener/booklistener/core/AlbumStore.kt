@@ -7,8 +7,8 @@ import com.booklistener.db.EntryIndexEntity
  * v4.0 作品层：曲目界面按作品（works）聚合 + 作品内歌曲列表，全部从 Room 查询（不重新扫描）。
  * - 作品 = 一等实体：tag 优先跨文件夹合并；无 tag/网盘按 (条目, 文件夹名) 独立
  * - 分区：works.lastPlayedAt > 0 为已播放（作品级"播放过"语义），新→旧
- * - 分页：LIMIT/OFFSET（两处列表均 ≤100 条/页，滑动加载下一页）
- * - 作品内排序：sortRank 落库（扫描时按 AudioSortKey.byName 排序写下标），SQL 直接 ORDER BY + 分页下推
+ * - v2.2.1：全量加载（移除运行路径分页），系列分组/交错排序由 HomeAlbumGrouping 在内存完成
+ * - 作品内排序：sortRank 落库（扫描时按 AudioSortKey.byName 排序写下标），SQL 直接 ORDER BY
  */
 data class AlbumSummary(
     val workId: Long,           // 作品 id（播放/进度/歌曲列表定位）
@@ -18,23 +18,39 @@ data class AlbumSummary(
     val songCount: Int,         // 作品歌曲数（works 缓存，免 JOIN 聚合）
     val totalDurationMs: Long,  // 作品总时长（works 缓存）
     val albumCountInEntry: Int = 1, // 作品覆盖的来源条目数（1=单条目→文件夹封面；>1=跨条目→内嵌封面）
-    val coverUri: String?       // 作品封面（查询时置空，由调用方按规则解析填充）
+    val coverUri: String?,      // 作品封面（查询时置空，由调用方按规则解析填充）
+    // v2.2.1：系列分组字段（works 首曲值）+ 分区定位用播放时间
+    val series: String? = null,
+    val seriesNumber: String? = null,
+    val lastPlayedAt: Long = 0L
 )
 
 class AlbumStore(private val dao: AppDao) {
 
     companion object {
+        /** 仅 @Deprecated songs() 契约测试用；运行路径 v2.2.1 起全量加载 */
         const val PAGE_SIZE = 100
     }
 
-    /** 已播放分区：作品播放过（works.lastPlayedAt>0），新→旧 */
-    fun recentPlayed(page: Int): List<AlbumSummary> = blockingRun {
-        dao.worksOfPlayed(PAGE_SIZE, page * PAGE_SIZE).map { it.toSummary() }
+    /**
+     * 原始作品级分区（不含系列归属语义）：已播放作品（works.lastPlayedAt>0），新→旧。
+     * 契约测试用；主页系列感知分区请走 [allWorks] + HomeAlbumGrouping.partitionAlbums。
+     */
+    fun recentPlayed(): List<AlbumSummary> = blockingRun {
+        dao.worksOfPlayed().map { it.toSummary() }
     }
 
-    /** 尚未播放分区：作品未播放过，按来源条目顺序稳定排序 */
-    fun notPlayed(page: Int): List<AlbumSummary> = blockingRun {
-        dao.worksOfNeverPlayed(PAGE_SIZE, page * PAGE_SIZE).map { it.toSummary() }
+    /**
+     * 原始作品级分区（不含系列归属语义）：尚未播放作品。
+     * 契约测试用；主页系列感知分区请走 [allWorks] + HomeAlbumGrouping.partitionAlbums。
+     */
+    fun notPlayed(): List<AlbumSummary> = blockingRun {
+        dao.worksOfNeverPlayed().map { it.toSummary() }
+    }
+
+    /** v2.2.1：主页全量作品（供系列感知分区 + 分组），一次查询 */
+    fun allWorks(): List<AlbumSummary> = blockingRun {
+        dao.allWorks().map { it.toSummary() }
     }
 
     /**
@@ -71,7 +87,10 @@ data class AlbumRow(
     val songCount: Int,
     val totalDurationMs: Long,
     val albumCountInEntry: Int,
-    val coverUri: String?
+    val coverUri: String?,
+    val series: String? = null,
+    val seriesNumber: String? = null,
+    val lastPlayedAt: Long = 0L
 )
 
 fun AlbumRow.toSummary(): AlbumSummary = AlbumSummary(
@@ -82,7 +101,10 @@ fun AlbumRow.toSummary(): AlbumSummary = AlbumSummary(
     songCount = songCount,
     totalDurationMs = totalDurationMs,
     albumCountInEntry = albumCountInEntry,
-    coverUri = coverUri
+    coverUri = coverUri,
+    series = series,
+    seriesNumber = seriesNumber,
+    lastPlayedAt = lastPlayedAt
 )
 
 /** 作品内歌曲行（Room 映射到实体） */

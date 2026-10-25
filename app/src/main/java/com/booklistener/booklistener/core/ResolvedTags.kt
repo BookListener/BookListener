@@ -43,18 +43,20 @@ data class ResolvedTags(
                 entries = entries
             )
 
-        /** 基础字段便捷构造（测试注入/旧 AudioTags 语义迁移） */
+        /** 基础字段便捷构造（测试注入/旧 AudioTags 语义迁移）；v2.2.1 增 series/seriesNumber 可选参 */
         fun basic(
             title: String?,
             artist: String?,
             album: String?,
             track: Int?,
             disc: Int?,
-            durationMs: Long?
+            durationMs: Long?,
+            series: String? = null,
+            seriesNumber: String? = null
         ): ResolvedTags = ResolvedTags(
             title = title, artist = artist, album = album, track = track, disc = disc,
             durationMs = durationMs, albumArtist = null, genre = null, year = null,
-            composer = null, series = null, seriesNumber = null, mediaType = null,
+            composer = null, series = series, seriesNumber = seriesNumber, mediaType = null,
             encoder = null, entries = emptyList()
         )
     }

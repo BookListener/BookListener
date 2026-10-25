@@ -105,7 +105,7 @@ class ScanFlowTest {
         val rows = runBlocking { dao.getEntryIndex(entryId) }
         assertEquals(3, rows.size)
         // works：聚合出 1 个专辑
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("测试专辑", albums[0].album)
         assertEquals(3, albums[0].songCount)
@@ -119,7 +119,7 @@ class ScanFlowTest {
             listOf(file("unknown.mp3")),
             tagReader = { null }
         )
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("扫描测试文件夹", albums[0].album)
         assertEquals(1, albums[0].songCount)
@@ -141,7 +141,7 @@ class ScanFlowTest {
         assertTrue(nonMedia.isNotEmpty())
         nonMedia.forEach { assertNull("非媒体文件 workId 必须为 null", it.workId) }
         // 专辑：只有 1 个（音频），非媒体不产生文件夹名专辑
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals(1, albums[0].songCount)
     }
@@ -258,7 +258,7 @@ class ScanFlowTest {
             ),
             coverExtractor = { "$it#embedded" }
         )
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("专辑文件同子文件夹时，作品封面应为该目录 folder.jpg", "content://doc/folder.jpg", albums[0].coverUri)
     }
@@ -270,7 +270,7 @@ class ScanFlowTest {
             listOf(file("01.mp3"), file("02.mp3"), file("cover.jpg")),
             coverExtractor = { "$it#embedded" }
         )
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("content://doc/cover.jpg", albums[0].coverUri)
     }
@@ -287,7 +287,7 @@ class ScanFlowTest {
             ),
             coverExtractor = { "$it#embedded" }
         )
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("跨目录专辑不得串用任一目录图片，应回退首曲内嵌封面", "content://doc/a.mp3#embedded", albums[0].coverUri)
     }
@@ -299,7 +299,7 @@ class ScanFlowTest {
             listOf(file("01.mp3", relativePath = "B"), file("02.mp3", relativePath = "B")),
             coverExtractor = { "$it#embedded" }
         )
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("content://doc/01.mp3#embedded", albums[0].coverUri)
     }

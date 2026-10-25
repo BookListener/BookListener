@@ -11,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import com.booklistener.R
 import com.booklistener.core.AlbumStore
 import com.booklistener.core.AlbumSummary
+import com.booklistener.core.HomeAlbumGrouping
+import com.booklistener.core.HomeAlbumItem
 import com.booklistener.core.toAudioItem
 import com.booklistener.core.AppLog
 import com.booklistener.core.AudioItem
@@ -408,17 +410,17 @@ class PlayerViewModel @JvmOverloads constructor(
     private val _currentFolderUri = MutableStateFlow<Uri?>(null)
     val currentFolderUri: StateFlow<Uri?> = _currentFolderUri.asStateFlow()
 
-    // ---- v1.7.0 专辑层（曲目界面：按专辑聚合，db 分页）----
+    // ---- v1.7.0 专辑层（曲目界面：按专辑聚合；v2.2.1 全量加载 + 系列分组，移除分页）----
     private val albumStore = AlbumStore(appDb.dao())
-    private val _recentAlbums = MutableStateFlow<List<AlbumSummary>>(emptyList())
-    val recentAlbums: StateFlow<List<AlbumSummary>> = _recentAlbums.asStateFlow()
-    private val _neverAlbums = MutableStateFlow<List<AlbumSummary>>(emptyList())
-    val neverAlbums: StateFlow<List<AlbumSummary>> = _neverAlbums.asStateFlow()
-    private val _albumsEnded = MutableStateFlow(false)
-    val albumsEnded: StateFlow<Boolean> = _albumsEnded.asStateFlow()
-    private var recentPage = 0
-    private var neverPage = 0
-    private var albumsLoading = false
+    private val _recentItems = MutableStateFlow<List<HomeAlbumItem>>(emptyList())
+    val recentItems: StateFlow<List<HomeAlbumItem>> = _recentItems.asStateFlow()
+    private val _neverItems = MutableStateFlow<List<HomeAlbumItem>>(emptyList())
+    val neverItems: StateFlow<List<HomeAlbumItem>> = _neverItems.asStateFlow()
+    /** v2.2.1 系列分组头收展状态（会话级，默认收起；key=归一化系列名） */
+    private val _expandedSeries = MutableStateFlow<Set<String>>(emptySet())
+    val expandedSeries: StateFlow<Set<String>> = _expandedSeries.asStateFlow()
+    private var recentSource: List<AlbumSummary> = emptyList()
+    private var neverSource: List<AlbumSummary> = emptyList()
 
     /** 当前打开的专辑（专辑视图标题 + 歌曲列表，db 加载不重扫） */
     private val _currentAlbum = MutableStateFlow<AlbumSummary?>(null)
@@ -431,51 +433,36 @@ class PlayerViewModel @JvmOverloads constructor(
     private val _albumSongs = MutableStateFlow<List<IndexedFile>>(emptyList())
     val albumSongs: StateFlow<List<IndexedFile>> = _albumSongs.asStateFlow()
 
-    /** 重置并加载专辑两区首页（进入曲目 tab / 数据变更后调用） */
+    /** 重置并全量加载专辑两区（进入曲目 tab / 数据变更后调用）：
+     *  全量作品 → 系列感知分区（系列不跨分区）→ 分区内分组 → 按收展状态过滤可见专辑 */
     fun refreshAlbums() {
-        recentPage = 0
-        neverPage = 0
-        _albumsEnded.value = false
-        _recentAlbums.value = emptyList()
-        _neverAlbums.value = emptyList()
-        loadAlbumsMore()
+        _recentItems.value = emptyList()
+        _neverItems.value = emptyList()
+        viewModelScope.launch {
+            val all = withContext(Dispatchers.IO) { albumStore.allWorks() }
+            val (r, n) = HomeAlbumGrouping.partitionAlbums(all)
+            recentSource = r
+            neverSource = n
+            _recentItems.value = buildVisibleItems(recentSource, played = true)
+            _neverItems.value = buildVisibleItems(neverSource, played = false)
+        }
     }
 
-    /** 分区滑动加载：已播放（新→旧）与未播放首页同时加载；触底后翻页 */
-    fun loadAlbumsMore() {
-        if (albumsLoading || _albumsEnded.value) return
-        albumsLoading = true
-        viewModelScope.launch {
-            // 首页两区并行；后续翻页只翻已播放区（未播放区通常总量小，同样支持翻页）
-            if (recentPage == 0 && neverPage == 0) {
-                val r = withContext(Dispatchers.IO) { albumStore.recentPlayed(0) }
-                val n = withContext(Dispatchers.IO) { albumStore.notPlayed(0) }
-                _recentAlbums.value = r
-                _neverAlbums.value = n
-                recentPage = 1
-                neverPage = 1
-                _albumsEnded.value = r.size < AlbumStore.PAGE_SIZE && n.size < AlbumStore.PAGE_SIZE
-                albumsLoading = false
-            } else if (recentPage <= neverPage || true) {
-                val next = withContext(Dispatchers.IO) { albumStore.recentPlayed(recentPage) }
-                if (next.isEmpty()) {
-                    _albumsEnded.value = true
-                } else {
-                    _recentAlbums.value = _recentAlbums.value + next
-                    recentPage++
-                    _albumsEnded.value = next.size < AlbumStore.PAGE_SIZE
-                }
-                albumsLoading = false
-            } else {
-                val next = withContext(Dispatchers.IO) { albumStore.notPlayed(neverPage) }
-                if (next.isEmpty()) {
-                    _albumsEnded.value = true
-                } else {
-                    _neverAlbums.value = _neverAlbums.value + next
-                    neverPage++
-                }
-                albumsLoading = false
-            }
+    /** 点击系列分组头：翻转收展状态并重建可见条目（会话级记忆，不落盘） */
+    fun toggleSeries(key: String) {
+        val next = _expandedSeries.value.toMutableSet().apply { if (!add(key)) remove(key) }
+        _expandedSeries.value = next
+        _recentItems.value = buildVisibleItems(recentSource, played = true)
+        _neverItems.value = buildVisibleItems(neverSource, played = false)
+    }
+
+    /** 分组 → 按收展集合过滤可见专辑（组头保留，收起时组内专辑隐藏） */
+    private fun buildVisibleItems(source: List<AlbumSummary>, played: Boolean): List<HomeAlbumItem> {
+        val expanded = _expandedSeries.value
+        return HomeAlbumGrouping.buildPartitionItems(source, played).map { item ->
+            if (item is HomeAlbumItem.SeriesGroup && item.key !in expanded) {
+                item.copy(albums = emptyList())
+            } else item
         }
     }
 

@@ -113,7 +113,7 @@ class WorkStoreTest {
     fun touchPlayed_drivesRecentPartition() {
         val workId = store.workIdForUri("uri://a1")!!
         store.touchPlayed(workId, System.currentTimeMillis())
-        val recent = albumStore.recentPlayed(0)
+        val recent = albumStore.recentPlayed()
         assertEquals(1, recent.size)
         assertEquals("专辑甲", recent[0].album)
     }

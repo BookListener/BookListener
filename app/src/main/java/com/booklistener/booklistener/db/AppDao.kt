@@ -424,7 +424,8 @@ interface AppDao {
     // ---- v4.0：专辑聚合（曲目界面，改走作品实体）----
 
     /**
-     * 已播放作品：works.lastPlayedAt > 0，按播放时间新→旧。
+     * 已播放作品：works.lastPlayedAt > 0，按播放时间新→旧（v2.2.1：全量加载，
+     * 分组/交错排序在内存完成，移除分页）。
      * entryId = 作品内来源条目（MIN(s.id)，跨条目合并取首条目；本地合并场景 sourceType 相同）；
      * albumCountInEntry = 作品覆盖的条目数（单条目=1 → 文件夹封面；跨条目 → 内嵌封面）。
      */
@@ -434,20 +435,22 @@ interface AppDao {
                COALESCE(w.albumArtist, MIN(s.artist)) AS artist,
                w.songCount AS songCount, w.totalDurationMs AS totalDurationMs,
                COUNT(DISTINCT s.id) AS albumCountInEntry,
-               w.coverUri AS coverUri
+               w.coverUri AS coverUri,
+               w.series AS series, w.seriesNumber AS seriesNumber,
+               w.lastPlayedAt AS lastPlayedAt
         FROM works w
         JOIN entry_index i ON i.workId = w.id
         JOIN saved_entry s ON s.id = i.entryId
         WHERE w.lastPlayedAt > 0
         GROUP BY w.id
         ORDER BY w.lastPlayedAt DESC, w.title COLLATE NOCASE ASC
-        LIMIT :limit OFFSET :offset
         """
     )
-    suspend fun worksOfPlayed(limit: Int, offset: Int): List<com.booklistener.core.AlbumRow>
+    suspend fun worksOfPlayed(): List<com.booklistener.core.AlbumRow>
 
     /**
-     * 尚未播放作品：works.lastPlayedAt <= 0，按来源条目保存顺序（MIN(s.sortOrder)）稳定排序。
+     * 尚未播放作品：works.lastPlayedAt <= 0，按来源条目保存顺序（MIN(s.sortOrder)）稳定排序
+     * （v2.2.1：全量加载，分组/交错排序在内存完成，移除分页）。
      */
     @Query(
         """
@@ -455,17 +458,41 @@ interface AppDao {
                COALESCE(w.albumArtist, MIN(s.artist)) AS artist,
                w.songCount AS songCount, w.totalDurationMs AS totalDurationMs,
                COUNT(DISTINCT s.id) AS albumCountInEntry,
-               w.coverUri AS coverUri
+               w.coverUri AS coverUri,
+               w.series AS series, w.seriesNumber AS seriesNumber,
+               w.lastPlayedAt AS lastPlayedAt
         FROM works w
         JOIN entry_index i ON i.workId = w.id
         JOIN saved_entry s ON s.id = i.entryId
         WHERE w.lastPlayedAt <= 0
         GROUP BY w.id
         ORDER BY MIN(s.sortOrder) ASC, w.title COLLATE NOCASE ASC
-        LIMIT :limit OFFSET :offset
         """
     )
-    suspend fun worksOfNeverPlayed(limit: Int, offset: Int): List<com.booklistener.core.AlbumRow>
+    suspend fun worksOfNeverPlayed(): List<com.booklistener.core.AlbumRow>
+
+    /**
+     * v2.2.1：主页全量作品（不按播放状态过滤）——系列感知分区（SPECS §十三.2：
+     * 系列内任一专辑播放过 → 整系列归已播放分区）无法在 SQL 按作品级 lastPlayedAt 完成，
+     * 需全量加载后在 HomeAlbumGrouping 按系列归属划分。
+     */
+    @Query(
+        """
+        SELECT w.id AS workId, w.title AS album, MIN(s.id) AS entryId,
+               COALESCE(w.albumArtist, MIN(s.artist)) AS artist,
+               w.songCount AS songCount, w.totalDurationMs AS totalDurationMs,
+               COUNT(DISTINCT s.id) AS albumCountInEntry,
+               w.coverUri AS coverUri,
+               w.series AS series, w.seriesNumber AS seriesNumber,
+               w.lastPlayedAt AS lastPlayedAt
+        FROM works w
+        JOIN entry_index i ON i.workId = w.id
+        JOIN saved_entry s ON s.id = i.entryId
+        GROUP BY w.id
+        ORDER BY w.lastPlayedAt DESC, w.title COLLATE NOCASE ASC
+        """
+    )
+    suspend fun allWorks(): List<com.booklistener.core.AlbumRow>
 
     /** 专辑内歌曲（作品）：按 sortRank 排序 + 分页下推 SQL（v4.0，替代内存排序） */
     @Query(

@@ -110,7 +110,7 @@ class ScanCueFlowTest {
         // 整轨不入库
         assertFalse(rows.any { it.uri == "content://doc/整轨.flac" })
         // 专辑聚合：1 个 CUE 专辑
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("某某专辑", albums[0].album)
         assertEquals(2, albums[0].songCount)
@@ -134,7 +134,7 @@ class ScanCueFlowTest {
         val virtual = rows.filter { it.uri.contains("#track_") }
         assertEquals(1, virtual.size)
         assertEquals("爱在西元前", virtual[0].displayName)
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals("范特西", albums[0].album)
     }
 
@@ -158,7 +158,7 @@ class ScanCueFlowTest {
         val standalone = rows.filter { it.uri == "content://doc/独立歌.flac" }
         assertEquals(2, virtual.size)
         assertEquals(1, standalone.size)
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(2, albums.size)
         val albumNames = albums.map { it.album }.toSet()
         assertTrue(albumNames.contains("某某专辑"))
@@ -201,7 +201,7 @@ class ScanCueFlowTest {
         // 4 虚拟轨（2 专辑 × 2 轨）+ 2 CUE 文件 = 6
         val virtual = rows.filter { it.uri.contains("#track_") }
         assertEquals(4, virtual.size)
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(2, albums.size)
     }
 
@@ -217,7 +217,7 @@ class ScanCueFlowTest {
                 INDEX 01 00:00:00
         """.trimIndent()
         scan(listOf(file("整轨.flac"), file("整轨.cue")), cueTextReader = { noTitleCue })
-        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        val albums = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
         assertEquals(1, albums.size)
         assertEquals("CUE测试文件夹", albums[0].album)  // 文件夹名兜底
     }
