@@ -105,26 +105,52 @@ class ScanCoordinator(
         indexStore.save(entryId, sorted, cueCandidates)
 
         // v2.1.15：扫描后为每个作品提取首曲内嵌封面入库（专辑列表零 IO 显示封面）
+        // v2.1.23：目录图片封面——专辑全部文件在同一目录时优先用该目录的图片，
+        // 无目录图片或跨目录专辑回退首曲内嵌封面（防跨目录串图）。
         coverExtractor?.let { extractor ->
             val folderName = indexStore.getFolderName(entryId) ?: entryId
             // 按 workKey 分组，取每组第一首音频 uri（排序后第一首即 disc/track 最前）
             val firstAudioByKey = LinkedHashMap<String, String>()
+            // v2.1.23：同一作品的文件目录集合（relativePath 目录部分，根目录=""）
+            val dirsByKey = LinkedHashMap<String, MutableSet<String>>()
             for (f in sorted) {
                 if (!AudioExt.isAudio(f.rawName ?: f.uri)) continue
-                // 虚拟轨也计入（封面在整轨上，extractor 内部解析）
+                // 虚拟轨也计入（封面在整轨上，extractor 内部解析；虚拟轨与整轨同目录，不影响目录判定）
                 val key = WorkBackfill.workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
                 if (!firstAudioByKey.containsKey(key)) {
                     firstAudioByKey[key] = f.uri
                 }
+                dirsByKey.getOrPut(key) { mutableSetOf() } += f.relativePath ?: ""
             }
+            // 目录图片优先（仅当作品全部文件在同一目录），否则首曲内嵌
             val covers = mutableMapOf<String, String>()
             for ((key, audioUri) in firstAudioByKey) {
-                runCatching { extractor(audioUri) }.getOrNull()?.let { covers[key] = it }
+                val dirs = dirsByKey[key].orEmpty()
+                val dirCover = if (dirs.size == 1) findDirCover(files, dirs.first()) else null
+                val cover = dirCover ?: runCatching { extractor(audioUri) }.getOrNull()
+                cover?.let { covers[key] = it }
             }
             if (covers.isNotEmpty()) {
                 indexStore.updateWorkCovers(covers)
             }
         }
+    }
+
+    /**
+     * v2.1.23：在扫描文件列表的指定目录（relativePath 精确匹配）内查找封面图片。
+     * 优先级与 CoverScanner.findCover 一致：常见命名（cover/folder/front/AlbumArt*）→ 任意图片。
+     * 基于已扫描的文件列表，零额外 IO；本地与 WebDAV 统一生效。
+     */
+    private fun findDirCover(files: List<SourceFile>, dir: String): String? {
+        val inDir = files.filter { it.relativePath == dir }
+        for (f in inDir) {
+            val name = f.name.lowercase()
+            if (name in CoverScanner.PREFERRED_NAMES) return f.path
+        }
+        for (f in inDir) {
+            if (CoverScanner.isImage(f.name.lowercase())) return f.path
+        }
+        return null
     }
 
     private fun SourceFile.toIndexedFile(error: String?): IndexedFile = IndexedFile(

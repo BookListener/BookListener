@@ -60,13 +60,15 @@ class ScanFlowTest {
         tagReader: suspend (SourceFile) -> TagResolver.AudioTags? = {
             TagResolver.AudioTags(it.name.substringBeforeLast('.'), "歌手", "测试专辑", 1, 1, 180_000L)
         },
-        cueTextReader: suspend (SourceFile) -> String? = { null }
+        cueTextReader: suspend (SourceFile) -> String? = { null },
+        coverExtractor: (suspend (String) -> String?)? = null
     ) {
         val coord = ScanCoordinator(
             source = FakeSource(files),
             tagReader = tagReader,
             cueTextReader = cueTextReader,
-            indexStore = indexStore
+            indexStore = indexStore,
+            coverExtractor = coverExtractor
         )
         runBlocking { coord.scan(entryId) }
     }
@@ -241,5 +243,64 @@ class ScanFlowTest {
         val rows = runBlocking { dao.getEntryIndex(entryId) }
         assertEquals(1, rows.size)
         assertFalse(rows.any { it.displayName == "subdir" })
+    }
+
+    // ---- 场景10：目录图片封面（v2.1.23） ----
+
+    /** v2.1.23：专辑全部文件在同一子文件夹 → 该子文件夹内目录图片作作品封面 */
+    @Test
+    fun `嵌套子文件夹内专辑 目录图片作封面`() {
+        scan(
+            listOf(
+                file("01.mp3", relativePath = "B/C1"),
+                file("02.mp3", relativePath = "B/C1"),
+                file("folder.jpg", relativePath = "B/C1")
+            ),
+            coverExtractor = { "$it#embedded" }
+        )
+        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        assertEquals(1, albums.size)
+        assertEquals("专辑文件同子文件夹时，作品封面应为该目录 folder.jpg", "content://doc/folder.jpg", albums[0].coverUri)
+    }
+
+    /** v2.1.23：专辑文件在扫描根（relativePath=""）→ 根目录图片作封面（现状回归） */
+    @Test
+    fun `根目录专辑 根目录图片作封面`() {
+        scan(
+            listOf(file("01.mp3"), file("02.mp3"), file("cover.jpg")),
+            coverExtractor = { "$it#embedded" }
+        )
+        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        assertEquals(1, albums.size)
+        assertEquals("content://doc/cover.jpg", albums[0].coverUri)
+    }
+
+    /** v2.1.23：专辑跨子文件夹 → 不取任何目录图片，回退首曲内嵌封面（防串图） */
+    @Test
+    fun `跨子文件夹专辑 不使用目录图片回退内嵌封面`() {
+        scan(
+            listOf(
+                file("a.mp3", relativePath = "B"),
+                file("b.mp3", relativePath = "C"),
+                file("folder.jpg", relativePath = "B"),
+                file("front.jpg", relativePath = "C")
+            ),
+            coverExtractor = { "$it#embedded" }
+        )
+        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        assertEquals(1, albums.size)
+        assertEquals("跨目录专辑不得串用任一目录图片，应回退首曲内嵌封面", "content://doc/a.mp3#embedded", albums[0].coverUri)
+    }
+
+    /** v2.1.23：同目录专辑无目录图片 → 回退首曲内嵌封面 */
+    @Test
+    fun `同目录专辑无图片文件 回退内嵌封面`() {
+        scan(
+            listOf(file("01.mp3", relativePath = "B"), file("02.mp3", relativePath = "B")),
+            coverExtractor = { "$it#embedded" }
+        )
+        val albums = runBlocking { albumStore.notPlayed(0) + albumStore.recentPlayed(0) }
+        assertEquals(1, albums.size)
+        assertEquals("content://doc/01.mp3#embedded", albums[0].coverUri)
     }
 }

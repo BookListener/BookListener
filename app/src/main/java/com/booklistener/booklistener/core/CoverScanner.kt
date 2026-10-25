@@ -26,9 +26,7 @@ class CoverScanner(
         return anyImage
     }
 
-    private fun isImageName(name: String): Boolean =
-        name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") ||
-            name.endsWith(".webp") || name.endsWith(".bmp")
+    private fun isImageName(name: String): Boolean = isImage(name)
 
     companion object {
         /** 常见专辑封面命名（小写） */
@@ -39,5 +37,10 @@ class CoverScanner(
             "albumart.jpg", "albumart.png", "album.jpg", "album.png",
             "artwork.jpg", "artwork.png"
         )
+
+        /** v2.1.23：图片扩展名判定（供扫描端复用，行为与实例方法一致） */
+        fun isImage(name: String): Boolean =
+            name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") ||
+                name.endsWith(".webp") || name.endsWith(".bmp")
     }
 }
