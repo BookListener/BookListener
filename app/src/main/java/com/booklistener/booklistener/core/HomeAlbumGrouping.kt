@@ -9,12 +9,17 @@ package com.booklistener.core
  * - 行为由 flow 测试经 PlayerViewModel 覆盖（SPECS §十二：不直接单测纯函数）
  */
 sealed interface HomeAlbumItem {
-    /** 系列分组头（albums 为收展过滤后的可见专辑；albumCount 为真实专辑数） */
+    /**
+     * 系列分组头（albums 为收展过滤后的可见专辑；albumCount 为真实专辑数）。
+     * v2.2.2：coverUri = 系列封面，取组内最近播放专辑封面（未播放回退组内排序第一张），
+     * 由 PlayerViewModel 按专辑行同款规则解析（作品封面优先、回退条目封面）。
+     */
     data class SeriesGroup(
         val key: String,
         val name: String,
         val albumCount: Int,
-        val albums: List<AlbumSummary>
+        val albums: List<AlbumSummary>,
+        val coverUri: String? = null
     ) : HomeAlbumItem
 
     /** 普通专辑行（含折叠的单专辑系列） */

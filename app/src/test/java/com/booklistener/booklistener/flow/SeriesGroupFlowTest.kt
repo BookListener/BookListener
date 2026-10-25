@@ -12,6 +12,7 @@ import com.booklistener.core.ScanCoordinator
 import com.booklistener.core.Source
 import com.booklistener.core.SourceFile
 import com.booklistener.core.SourceType
+import com.booklistener.core.WorkBackfill
 import com.booklistener.db.AppDao
 import com.booklistener.db.AppDatabase
 import com.booklistener.db.SavedEntryEntity
@@ -27,10 +28,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * v2.2.1 系列分组全流程场景测试（业务入口：ScanCoordinator.scan → PlayerViewModel 输出）。
+ * v2.2.2 系列分组全流程场景测试（业务入口：ScanCoordinator.scan → PlayerViewModel 输出）。
  *
  * 覆盖 SPECS §十三：多专辑系列聚合与系列序号自然排序、单专辑系列折叠、
- * 系列整体归属已播放分区（不跨分区）、缺失序列号排末、分组头默认收起与会话级收展记忆。
+ * 系列整体归属已播放分区（不跨分区）、缺失序列号排末、分组头默认收起与会话级收展记忆、
+ * 系列封面 = 组内最近播放专辑封面（未播放回退组内排序第一张）。
  * 断言用户可见的分区条目产物，不直接调 HomeAlbumGrouping（SPECS §十二：纯函数行为由流程测试覆盖）。
  * 注意：scan 对同一 entry 整体替换索引，故每个专辑使用独立条目（album tag 使同名专辑跨条目合并）。
  */
@@ -95,6 +97,15 @@ class SeriesGroupFlowTest {
 
     private fun touchPlayed(uri: String, atMs: Long) {
         runBlocking { dao.touchWorkPlayed(dao.getWorkIdByUri(uri)!!, atMs) }
+    }
+
+    /** 注入作品封面（works.coverUri，扫描提取不到时测试显式指定） */
+    private fun setCover(album: String, coverUri: String) {
+        runBlocking {
+            dao.updateWorkCoverByKey(
+                "local:${WorkBackfill.norm(album)}", coverUri, System.currentTimeMillis()
+            )
+        }
     }
 
     @Before
@@ -259,5 +270,43 @@ class SeriesGroupFlowTest {
         awaitTrue("再次点击收起") {
             (vm.neverItems.value.firstOrNull() as? HomeAlbumItem.SeriesGroup)?.albums?.isEmpty() == true
         }
+    }
+
+    // ---- 场景7：系列封面 = 组内最近播放专辑封面（v2.2.2）----
+
+    @Test
+    fun `系列封面 取组内最近播放专辑封面`() {
+        seedAlbum("三体·黑暗森林", "三体", "2", "02.flac")
+        seedAlbum("三体", "三体", "1", "01.flac")
+        setCover("三体", "cover://三体")
+        setCover("三体·黑暗森林", "cover://黑暗森林")
+        // 播放卷2（较晚）→ 组内最近播放 = 三体·黑暗森林
+        touchPlayed("content://doc/02.flac", 3_000L)
+
+        val vm = newViewModel()
+        vm.refreshAlbums()
+        awaitTrue("recentItems 含系列组") {
+            vm.recentItems.value.firstOrNull() is HomeAlbumItem.SeriesGroup
+        }
+        val group = vm.recentItems.value.firstOrNull() as? HomeAlbumItem.SeriesGroup
+        assertTrue("封面 = 最近播放专辑（黑暗森林）封面", group?.coverUri == "cover://黑暗森林")
+    }
+
+    // ---- 场景8：未播放系列封面回退组内排序第一张（v2.2.2）----
+
+    @Test
+    fun `未播放系列 封面回退组内排序第一张专辑`() {
+        seedAlbum("三体·黑暗森林", "三体", "2", "02.flac")
+        seedAlbum("三体", "三体", "1", "01.flac")
+        setCover("三体", "cover://三体")
+        setCover("三体·黑暗森林", "cover://黑暗森林")
+
+        val vm = newViewModel()
+        vm.refreshAlbums()
+        awaitTrue("neverItems 含系列组") {
+            vm.neverItems.value.firstOrNull() is HomeAlbumItem.SeriesGroup
+        }
+        val group = vm.neverItems.value.firstOrNull() as? HomeAlbumItem.SeriesGroup
+        assertTrue("未播放 → 封面 = 序号最小专辑（三体）封面", group?.coverUri == "cover://三体")
     }
 }

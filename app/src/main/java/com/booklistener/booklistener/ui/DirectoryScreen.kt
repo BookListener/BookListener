@@ -435,6 +435,7 @@ private fun LazyListScope.albumPartition(
                     SeriesHeader(
                         name = item.name,
                         count = item.albumCount,
+                        coverUri = item.coverUri,
                         expanded = expanded,
                         onClick = { onToggleSeries(item.key) }
                     )
@@ -510,9 +511,15 @@ private fun AlbumPartitionRow(
     }
 }
 
-/** v2.2.1：系列分组头——纯文字「系列名 + 共 N 张」+ 收展箭头，点击整行收展（默认收起） */
+/** v2.2.2：系列分组头——封面 + 「系列名 + 共 N 张」+ 收展箭头，点击整行收展（默认收起） */
 @Composable
-private fun SeriesHeader(name: String, count: Int, expanded: Boolean, onClick: () -> Unit) {
+private fun SeriesHeader(
+    name: String,
+    count: Int,
+    coverUri: String?,
+    expanded: Boolean,
+    onClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -520,13 +527,19 @@ private fun SeriesHeader(name: String, count: Int, expanded: Boolean, onClick: (
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // v2.2.2：系列封面 = 组内最近播放专辑封面（未播放回退组内排序第一张），占位/圆角同专辑行
+        CoverImage(
+            coverUri = coverUri,
+            displayName = name,
+            size = 56.dp
+        )
         Text(
             text = name,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f).padding(start = 12.dp)
         )
         Text(
             text = stringResource(MessageCatalog.SERIES_COUNT, count),

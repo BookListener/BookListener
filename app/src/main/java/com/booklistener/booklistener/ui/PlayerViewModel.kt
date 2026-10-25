@@ -456,12 +456,19 @@ class PlayerViewModel @JvmOverloads constructor(
         _neverItems.value = buildVisibleItems(neverSource, played = false)
     }
 
-    /** 分组 → 按收展集合过滤可见专辑（组头保留，收起时组内专辑隐藏） */
+    /** 分组 → 按收展集合过滤可见专辑（组头保留，收起时组内专辑隐藏）；并解析系列封面 */
     private fun buildVisibleItems(source: List<AlbumSummary>, played: Boolean): List<HomeAlbumItem> {
         val expanded = _expandedSeries.value
         return HomeAlbumGrouping.buildPartitionItems(source, played).map { item ->
-            if (item is HomeAlbumItem.SeriesGroup && item.key !in expanded) {
-                item.copy(albums = emptyList())
+            if (item is HomeAlbumItem.SeriesGroup) {
+                // v2.2.2：系列封面 = 组内最近播放专辑封面（未播放回退组内排序第一张）；
+                // 封面规则同专辑行：作品封面（works.coverUri）优先、回退来源条目封面
+                val coverAlbum = item.albums.maxByOrNull { it.lastPlayedAt }
+                val coverUri = coverAlbum?.let { a ->
+                    a.coverUri ?: _savedEntries.value.firstOrNull { it.id == a.entryId }?.coverUri
+                }
+                val withCover = item.copy(coverUri = coverUri)
+                if (item.key !in expanded) withCover.copy(albums = emptyList()) else withCover
             } else item
         }
     }
