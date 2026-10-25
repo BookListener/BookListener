@@ -83,7 +83,11 @@ object WorkBackfill {
                 songCount = list.size,
                 totalDurationMs = list.mapNotNull { it.durationMs }.sum(),
                 lastPlayedAt = lastPlayedAt,
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                // v2.2.0（spec: tag-fields-full）：作品层系列/媒体类型取首条非空（排序后首曲即 disc/track 最前）
+                series = first.series,
+                seriesNumber = first.seriesNumber,
+                mediaType = first.mediaType
             )
         }
     }
@@ -101,7 +105,11 @@ object WorkBackfill {
                 songCount = old.songCount + w.songCount,
                 totalDurationMs = old.totalDurationMs + w.totalDurationMs,
                 lastPlayedAt = maxOf(old.lastPlayedAt, w.lastPlayedAt),
-                updatedAt = w.updatedAt
+                updatedAt = w.updatedAt,
+                // v2.2.0：系列/媒体类型取最新扫描值
+                series = w.series,
+                seriesNumber = w.seriesNumber,
+                mediaType = w.mediaType
             ) ?: w
         }
         return byKey.values.toList()

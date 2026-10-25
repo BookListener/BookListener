@@ -9,7 +9,7 @@ import com.booklistener.core.ScanCoordinator
 import com.booklistener.core.SourceFile
 import com.booklistener.core.Source
 import com.booklistener.core.SourceType
-import com.booklistener.core.TagResolver
+import com.booklistener.core.ResolvedTags
 import com.booklistener.db.AppDao
 import com.booklistener.db.AppDatabase
 import com.booklistener.db.SavedEntryEntity
@@ -57,8 +57,8 @@ class ScanFlowTest {
 
     private fun scan(
         files: List<SourceFile>,
-        tagReader: suspend (SourceFile) -> TagResolver.AudioTags? = {
-            TagResolver.AudioTags(it.name.substringBeforeLast('.'), "歌手", "测试专辑", 1, 1, 180_000L)
+        tagReader: suspend (SourceFile) -> ResolvedTags? = {
+            ResolvedTags.basic(it.name.substringBeforeLast('.'), "歌手", "测试专辑", 1, 1, 180_000L)
         },
         cueTextReader: suspend (SourceFile) -> String? = { null },
         coverExtractor: (suspend (String) -> String?)? = null
@@ -99,7 +99,7 @@ class ScanFlowTest {
     fun `普通音频文件夹 扫描后聚合为一个专辑`() {
         scan(
             listOf(file("01.flac"), file("02.flac"), file("03.flac")),
-            tagReader = { TagResolver.AudioTags("歌${it.name[1]}", "歌手", "测试专辑", it.name[1].digitToInt(), 1, 180_000L) }
+            tagReader = { ResolvedTags.basic("歌${it.name[1]}", "歌手", "测试专辑", it.name[1].digitToInt(), 1, 180_000L) }
         )
         // entry_index：3 首音频入库
         val rows = runBlocking { dao.getEntryIndex(entryId) }
@@ -131,7 +131,7 @@ class ScanFlowTest {
     fun `非媒体文件 入库但不产生专辑`() {
         scan(
             listOf(file("01.flac"), file("封面.jpg"), file("readme.txt"), file("种子.torrent")),
-            tagReader = { if (it.name.endsWith(".flac")) TagResolver.AudioTags("歌", "歌手", "专辑", 1, 1, 180_000L) else null }
+            tagReader = { if (it.name.endsWith(".flac")) ResolvedTags.basic("歌", "歌手", "专辑", 1, 1, 180_000L) else null }
         )
         // 内容文件列表：4 个文件都入库
         val rows = runBlocking { dao.getEntryIndex(entryId) }
@@ -162,7 +162,7 @@ class ScanFlowTest {
     fun `过短音频 不入库`() {
         scan(
             listOf(file("short.mp3")),
-            tagReader = { TagResolver.AudioTags("短音效", null, null, null, null, 5_000L) }  // 5秒 < 30秒
+            tagReader = { ResolvedTags.basic("短音效", null, null, null, null, 5_000L) }  // 5秒 < 30秒
         )
         val rows = runBlocking { dao.getEntryIndex(entryId) }
         assertEquals(0, rows.size)
@@ -189,7 +189,7 @@ class ScanFlowTest {
             tagReader = {
                 val disc = it.name[1].digitToInt()
                 val track = it.name[3].digitToInt()
-                TagResolver.AudioTags("歌$track", "歌手", "专辑", track, disc, 180_000L)
+                ResolvedTags.basic("歌$track", "歌手", "专辑", track, disc, 180_000L)
             }
         )
         val rows = runBlocking { dao.getEntryIndex(entryId) }.sortedBy { it.sortRank }

@@ -217,13 +217,15 @@ interface AppDao {
     @Query(
         """
         UPDATE works SET title = :title, albumArtist = :albumArtist, sourceScope = :sourceScope,
-        coverUri = :coverUri, songCount = :songCount, totalDurationMs = :totalDurationMs, updatedAt = :updatedAt
+        coverUri = :coverUri, songCount = :songCount, totalDurationMs = :totalDurationMs, updatedAt = :updatedAt,
+        series = :series, seriesNumber = :seriesNumber, mediaType = :mediaType
         WHERE id = :id
         """
     )
     suspend fun updateWorkContent(
         id: Long, title: String, albumArtist: String?, sourceScope: String,
-        coverUri: String?, songCount: Int, totalDurationMs: Long, updatedAt: Long
+        coverUri: String?, songCount: Int, totalDurationMs: Long, updatedAt: Long,
+        series: String?, seriesNumber: String?, mediaType: String?
     )
 
     @Query("DELETE FROM works WHERE id = :id")
@@ -333,17 +335,19 @@ interface AppDao {
     suspend fun getWorkIdByEntryAndAlbum(entryId: String, title: String): Long?
 
     /**
-     * v4.0 扫描入库（作品实体化核心，事务）：
+     * v4.0 扫描入库（作品实体化核心，事务）+ v2.2.0（spec: tag-fields-full）扩展标签：
      * 1) 逐文件算 workKey → buildWorks 聚合 → upsert works by key（id 保持稳定，禁止整删重建）
-     * 2) 查回 workId → 写 entry_index（含 workId / sortRank / sizeBytes / albumArtist）
-     * 3) 清理该条目失效行 + 无引用作品（连带进度）
+     * 2) 查回 workId → 写 entry_index（含 workId / sortRank / sizeBytes / albumArtist / 全字段标签列）
+     * 3) 写 entry_tag_extras（文档其余字段原始键值全量保留，整体替换）
+     * 4) 清理该条目失效行 + 无引用作品（连带进度）
      */
     @androidx.room.Transaction
     suspend fun saveEntryIndexWithWorks(
         entryId: String,
         folderName: String,
         sourceScope: String,
-        files: List<IndexedFile>
+        files: List<IndexedFile>,
+        extrasByUri: Map<String, List<EntryTagExtraEntity>> = emptyMap()
     ) {
         val works = WorkBackfill.buildWorks(files, entryId, folderName, sourceScope)
         val workIdByKey = LinkedHashMap<String, Long>()
@@ -365,6 +369,12 @@ interface AppDao {
             )
         }
         replaceEntryIndex(entryId, rows)
+        // 扩展键值：整体替换（与 entry_index 同生命周期）
+        if (extrasByUri.isNotEmpty()) {
+            replaceEntryTagExtras(entryId, extrasByUri)
+        } else {
+            deleteEntryTagExtras(entryId)
+        }
         // 作品统计派生重算：跨条目同名专辑合并 songCount/时长累加、条目缩容正确收敛
         if (workIdByKey.isNotEmpty()) {
             recomputeWorkStats(workIdByKey.values.toList(), System.currentTimeMillis())
@@ -381,12 +391,34 @@ interface AppDao {
         return if (existing != null) {
             updateWorkContent(
                 existing.id, work.title, work.albumArtist, work.sourceScope,
-                work.coverUri, work.songCount, work.totalDurationMs, work.updatedAt
+                work.coverUri, work.songCount, work.totalDurationMs, work.updatedAt,
+                work.series, work.seriesNumber, work.mediaType
             )
             existing.id
         } else {
             insertWork(work)
         }
+    }
+
+    // ---- v2.2.0（spec: tag-fields-full）：标签扩展键值表 ----
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEntryTagExtras(extras: List<EntryTagExtraEntity>)
+
+    @Query("DELETE FROM entry_tag_extras WHERE entryId = :entryId")
+    suspend fun deleteEntryTagExtras(entryId: String)
+
+    @Query("SELECT * FROM entry_tag_extras WHERE entryId = :entryId AND uri = :uri ORDER BY key")
+    suspend fun getEntryTagExtras(entryId: String, uri: String): List<EntryTagExtraEntity>
+
+    @Query("SELECT * FROM entry_tag_extras WHERE entryId = :entryId ORDER BY uri, key")
+    suspend fun getEntryTagExtrasByEntry(entryId: String): List<EntryTagExtraEntity>
+
+    /** 整体替换某条目全部扩展键值（先删后插，事务由调用方 saveEntryIndexWithWorks 包裹） */
+    @androidx.room.Transaction
+    suspend fun replaceEntryTagExtras(entryId: String, extrasByUri: Map<String, List<EntryTagExtraEntity>>) {
+        deleteEntryTagExtras(entryId)
+        extrasByUri.values.flatten().takeIf { it.isNotEmpty() }?.let { insertEntryTagExtras(it) }
     }
 
     // ---- v4.0：专辑聚合（曲目界面，改走作品实体）----

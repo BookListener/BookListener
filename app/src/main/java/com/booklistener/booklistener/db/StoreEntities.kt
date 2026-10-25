@@ -59,5 +59,13 @@ data class EntryIndexEntity(
     val albumArtist: String? = null, // 参与作品键（当前解析无 albumArtist 概念，暂空，key 用 artist 兜底）
     // v2.2.0：设置侧链路重构
     val relativePath: String? = null, // 相对顶层文件夹的路径（子文件夹平铺显示/网盘导航筛选）
-    val error: String? = null         // 单文件解析失败原因（null=正常；非空时文件行显示错误图标）
+    val error: String? = null,         // 单文件解析失败原因（null=正常；非空时文件行显示错误图标）
+    // v2.2.0（spec: tag-fields-full）：全字段标签结构化列
+    val genre: String? = null,         // 流派 TCON/©gen
+    val year: Int? = null,             // 年份 TDRC/TYER/©day
+    val composer: String? = null,      // 作曲 TCOM/©wrt
+    val series: String? = null,        // 系列名 ©ser/TXXX:SERIES/TIT1
+    val seriesNumber: String? = null,  // 系列序号 ©sno/TXXX:SERIESNUMBER
+    val mediaType: String? = null,     // 媒体类型 stik/TCON/TXXX:MEDIATYPE
+    val encoder: String? = null        // 编码工具 TSSE/©too
 )

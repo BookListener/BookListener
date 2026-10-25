@@ -9,7 +9,7 @@ import com.booklistener.core.ScanCoordinator
 import com.booklistener.core.SourceFile
 import com.booklistener.core.Source
 import com.booklistener.core.SourceType
-import com.booklistener.core.TagResolver
+import com.booklistener.core.ResolvedTags
 import com.booklistener.db.AppDao
 import com.booklistener.db.AppDatabase
 import com.booklistener.db.SavedEntryEntity
@@ -51,8 +51,8 @@ class ScanCueFlowTest {
     private fun scan(
         files: List<SourceFile>,
         cueTextReader: suspend (SourceFile) -> String? = { null },
-        tagReader: suspend (SourceFile) -> TagResolver.AudioTags? = {
-            TagResolver.AudioTags(it.name.substringBeforeLast('.'), "歌手", "测试专辑", 1, 1, 180_000L)
+        tagReader: suspend (SourceFile) -> ResolvedTags? = {
+            ResolvedTags.basic(it.name.substringBeforeLast('.'), "歌手", "测试专辑", 1, 1, 180_000L)
         }
     ) {
         val coord = ScanCoordinator(
@@ -147,9 +147,9 @@ class ScanCueFlowTest {
             cueTextReader = { standardCue },
             tagReader = {
                 if (it.name == "独立歌.flac")
-                    TagResolver.AudioTags("独立歌", "独立歌手", "独立专辑", 1, 1, 200_000L)
+                    ResolvedTags.basic("独立歌", "独立歌手", "独立专辑", 1, 1, 200_000L)
                 else
-                    TagResolver.AudioTags("整轨", "某某乐队", "某某专辑", 1, 1, 600_000L)
+                    ResolvedTags.basic("整轨", "某某乐队", "某某专辑", 1, 1, 600_000L)
             }
         )
         val rows = runBlocking { dao.getEntryIndex(entryId) }
@@ -195,7 +195,7 @@ class ScanCueFlowTest {
                     else -> null
                 }
             },
-            tagReader = { TagResolver.AudioTags(it.name.substringBeforeLast('.'), "歌手", "专辑", 1, 1, 600_000L) }
+            tagReader = { ResolvedTags.basic(it.name.substringBeforeLast('.'), "歌手", "专辑", 1, 1, 600_000L) }
         )
         val rows = runBlocking { dao.getEntryIndex(entryId) }
         // 4 虚拟轨（2 专辑 × 2 轨）+ 2 CUE 文件 = 6

@@ -19,16 +19,41 @@ class ScanCoordinatorFactory(
     private val coverManager: CoverManager? = null
 ) {
 
-    /** 本地：SAF 列目录 + MediaMetadataRetriever 标签 + SAF 读 cue + 内嵌封面提取 */
+    companion object {
+        /** MP4 容器扩展名（ilst 原子树；含 alac——其容器仍是 mp4） */
+        val ILST_EXTS = setOf("m4a", "mp4", "alac")
+    }
+
+    /** 本地：SAF 列目录 + 新解析器（MetadataExtractor + Mp4IlstReader，唯一后端）+ SAF 读 cue + 内嵌封面提取 */
     fun forLocal(): ScanCoordinator {
-        val tagResolver = TagResolver(context)
+        val metadataExtractor = MetadataExtractor()
         return ScanCoordinator(
             source = LocalSource(context),
-            tagReader = { file -> tagResolver.resolve(android.net.Uri.parse(file.path)) },
+            tagReader = { file -> resolveLocalTags(metadataExtractor, file) },
             cueTextReader = { file -> readSafText(file.path) },
             indexStore = indexStore,
             coverExtractor = coverManager?.let { mgr -> { uri -> mgr.extractCover(uri) } }
         )
+    }
+
+    /**
+     * v2.2.0（spec: tag-fields-full）唯一解析后端：
+     * - m4a/mp4/alac：Media3 Mp4Extractor（标准原子映射帧 + 时长）∪ 自研 Mp4IlstReader（扩展原子/原始键名）
+     * - 其余音频：Media3 提取器直驱（mp3/flac/ogg 全帧）
+     * - 无 MediaMetadataRetriever 回退；失败返回 null（文件行走 error + 文件名显示）
+     */
+    private fun resolveLocalTags(extractor: MetadataExtractor, file: SourceFile): ResolvedTags? {
+        val bytes = readSafBytes(file.path) ?: return null
+        val ext = file.name.substringAfterLast('.', "")
+        return if (ext.lowercase() in ILST_EXTS) {
+            val m3 = extractor.extract(bytes, ext)
+            // 合并：Media3 标准映射帧 + 自研扩展原子（键名不同体系，全保留）
+            val entries = Mp4IlstReader.read(bytes) + m3.entries
+            ResolvedTags.fromEntries(entries, m3.durationMs)
+        } else {
+            val m3 = extractor.extract(bytes, ext)
+            if (m3.entries.isEmpty() && m3.durationMs == null) null else ResolvedTags.fromEntries(m3.entries, m3.durationMs)
+        }
     }
 
     /** 网盘：PROPFIND 列目录，无内嵌标签（tagReader 恒 null），GET 读 cue，无内嵌封面 */
@@ -50,6 +75,11 @@ class ScanCoordinatorFactory(
     private fun readSafText(uri: String): String? = runCatching {
         context.contentResolver.openInputStream(android.net.Uri.parse(uri))
             ?.use { CueTextDecoder.decode(it.readBytes()) }
+    }.getOrNull()
+
+    private fun readSafBytes(uri: String): ByteArray? = runCatching {
+        context.contentResolver.openInputStream(android.net.Uri.parse(uri))
+            ?.use { it.readBytes() }
     }.getOrNull()
 
     private fun readWebDavText(url: String): String? = runCatching {

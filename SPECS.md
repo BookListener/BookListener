@@ -200,7 +200,26 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 九、解码能力
+## 九、标签解析与入库（v2.2.0 确立）
+
+### 1. 解析器唯一后端（无降级）
+- 本地扫描标签解析只走两条路径，**MediaMetadataRetriever 彻底退出扫描链路**：
+  - `MetadataExtractor`：Media3 提取器直驱（MP3/FLAC/OGG + MP4 标准原子映射帧），同时产出时长（SeekMap）。
+  - `Mp4IlstReader`：自研 MP4 ilst 原子树解析（moov→udta→meta→ilst→data），补齐 Media3 不可达的扩展原子 `©ser`/`©sno`/`stik`（m4a/mp4/alac 与 Media3 结果合并，原始键名全保留）。
+- 解析失败不降级回退旧白名单：字段置空 + `error` 标记，显示名回退文件名（业务层语义）。
+
+### 2. 字段入库范围（文档全字段）
+- `entry_index` 结构化列：title/artist/album/albumArtist/genre/year/composer/track/disc/series/seriesNumber/mediaType/encoder。
+- `entry_tag_extras` 新表：原始键值全量保留（ID3 帧 id / TXXX 键名 / MP4 原子名 + 值 + 来源），随索引整体替换，生命周期与 entry_index 一致。
+- `works` 聚合列：series/seriesNumber/mediaType（作品层第一曲目值）。
+
+### 3. 键名兼容
+- TXXX 双风格：desc 非空（且非占位 `TXXX`）→ 键=desc；desc 为占位且 value 形如 `KEY:VALUE` → 按首冒号拆键值。
+- stik 数值→语义名：2→Audiobook、9/10/11→Music 等（文档 §3 映射表）。
+
+---
+
+## 十、解码能力
 
 - 当前栈：MediaCodec（系统/厂商注册实例接口）→ Media3 1.4.0。
 - MediaCodec 不支持 APE（专有格式，生态选择非技术做不到）。
@@ -209,14 +228,14 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 十、已知遗留问题（待清理）
+## 十一、已知遗留问题（待清理）
 
 1. `playItems`（搜索/单曲播放）ownerId=null，进度靠 uri 反查作品，功能正常但队列归属语义不统一。搜索单曲播放时用户就是想播这一首，ownerId=null 合理，暂不改造。
 2. FFmpeg 集成（APE/DSF/DFF 解码）：架构路线已定，未落代码，待用户拍板。
 
 ---
 
-## 十一、测试规范（v2.1.17 确立）
+## 十二、测试规范（v2.1.17 确立）
 
 ### 1. 测试分层原则
 - **业务流程测试（flow/）**：从业务操作入口进入（`ScanCoordinator.scan`、`PlayerViewModel`），覆盖完整链路，断言数据库/UI 产物。这是测试的主体。

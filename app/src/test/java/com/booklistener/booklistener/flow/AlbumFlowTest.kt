@@ -9,7 +9,7 @@ import com.booklistener.core.ScanCoordinator
 import com.booklistener.core.SourceFile
 import com.booklistener.core.Source
 import com.booklistener.core.SourceType
-import com.booklistener.core.TagResolver
+import com.booklistener.core.ResolvedTags
 import com.booklistener.db.AppDao
 import com.booklistener.db.AppDatabase
 import com.booklistener.db.SavedEntryEntity
@@ -49,7 +49,7 @@ class AlbumFlowTest {
     private fun scan(
         entryId: String,
         files: List<SourceFile>,
-        tagReader: suspend (SourceFile) -> TagResolver.AudioTags?
+        tagReader: suspend (SourceFile) -> ResolvedTags?
     ) {
         val coord = ScanCoordinator(
             source = FakeSource(files),
@@ -95,9 +95,9 @@ class AlbumFlowTest {
             listOf(file("01.flac"), file("02.flac"), file("03.flac")),
             tagReader = { f ->
                 when (f.name) {
-                    "01.flac" -> TagResolver.AudioTags("歌1", "周杰伦", "最伟大的作品", 1, 1, 180_000L)
-                    "02.flac" -> TagResolver.AudioTags("歌2", "周杰伦 with 五月天阿信", "最伟大的作品", 2, 1, 200_000L)
-                    else -> TagResolver.AudioTags("歌3", "周杰伦 with 杨瑞代", "最伟大的作品", 3, 1, 220_000L)
+                    "01.flac" -> ResolvedTags.basic("歌1", "周杰伦", "最伟大的作品", 1, 1, 180_000L)
+                    "02.flac" -> ResolvedTags.basic("歌2", "周杰伦 with 五月天阿信", "最伟大的作品", 2, 1, 200_000L)
+                    else -> ResolvedTags.basic("歌3", "周杰伦 with 杨瑞代", "最伟大的作品", 3, 1, 220_000L)
                 }
             }
         )
@@ -114,10 +114,10 @@ class AlbumFlowTest {
         addEntry("e1", "文件夹A")
         addEntry("e2", "文件夹B")
         scan("e1", listOf(file("a1.flac")), tagReader = {
-            TagResolver.AudioTags("歌A", "歌手", "同名专辑", 1, 1, 180_000L)
+            ResolvedTags.basic("歌A", "歌手", "同名专辑", 1, 1, 180_000L)
         })
         scan("e2", listOf(file("b1.flac")), tagReader = {
-            TagResolver.AudioTags("歌B", "歌手", "同名专辑", 1, 1, 200_000L)
+            ResolvedTags.basic("歌B", "歌手", "同名专辑", 1, 1, 200_000L)
         })
         val albums = allAlbums()
         assertEquals(1, albums.size)
@@ -147,9 +147,9 @@ class AlbumFlowTest {
             listOf(file("01.flac"), file("02.flac")),
             tagReader = { f ->
                 if (f.name == "01.flac")
-                    TagResolver.AudioTags("歌1", "歌手", "专辑甲", 1, 1, 180_000L)
+                    ResolvedTags.basic("歌1", "歌手", "专辑甲", 1, 1, 180_000L)
                 else
-                    TagResolver.AudioTags("歌2", "歌手", "专辑乙", 1, 1, 200_000L)
+                    ResolvedTags.basic("歌2", "歌手", "专辑乙", 1, 1, 200_000L)
             }
         )
         val albums = allAlbums()
@@ -169,9 +169,9 @@ class AlbumFlowTest {
             listOf(file("01.flac"), file("02.flac")),
             tagReader = { f ->
                 if (f.name == "01.flac")
-                    TagResolver.AudioTags("歌1", "歌手", "  Abbey Road  ", 1, 1, 180_000L)
+                    ResolvedTags.basic("歌1", "歌手", "  Abbey Road  ", 1, 1, 180_000L)
                 else
-                    TagResolver.AudioTags("歌2", "歌手", "Abbey Road", 2, 1, 200_000L)
+                    ResolvedTags.basic("歌2", "歌手", "Abbey Road", 2, 1, 200_000L)
             }
         )
         val albums = allAlbums()

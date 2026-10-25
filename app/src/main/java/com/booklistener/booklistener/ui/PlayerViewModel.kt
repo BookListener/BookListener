@@ -30,7 +30,6 @@ import com.booklistener.core.OpenFileItemFactory
 import com.booklistener.core.PlaybackSpeedTiers
 import com.booklistener.core.SavedEntry
 import com.booklistener.core.sortIndexedFiles
-import com.booklistener.core.TagResolver
 import com.booklistener.core.SavedEntryStore
 import com.booklistener.core.SearchHit
 import com.booklistener.core.SourceType
@@ -357,7 +356,6 @@ class PlayerViewModel @JvmOverloads constructor(
 
     // ---- 文件夹浏览（SAF OpenDocumentTree）----
     // v2.2.0：扫描统一走 ScanCoordinator（scanFactory），不再持有 FolderScanner 实例
-    private val tagResolver = TagResolver(app)
     private val coverManager = CoverManager(app, CoverScanner(::queryFolderChildren))
     private val _folderItems = MutableStateFlow<List<AudioItem>>(emptyList())
     val folderItems: StateFlow<List<AudioItem>> = _folderItems.asStateFlow()

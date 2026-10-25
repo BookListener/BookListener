@@ -29,7 +29,11 @@ data class WorkEntity(
     val songCount: Int,
     val totalDurationMs: Long,
     val lastPlayedAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    // v2.2.0（spec: tag-fields-full）：作品层系列/媒体类型（曲目聚合首值）
+    val series: String? = null,
+    val seriesNumber: String? = null,
+    val mediaType: String? = null
 )
 
 /**
@@ -68,4 +72,24 @@ data class CueSheetEntity(
     val entryId: String,
     val audioUri: String?,
     val workId: Long?
+)
+
+/**
+ * v2.2.0（spec: tag-fields-full）标签扩展键值表：
+ * 文档（tag_fields_reference.md §3/§4）中未结构化的其余全部字段，按原始键名全量保留——
+ * 歌词/版权/描述/合辑/分组/排序名/播客全套/影视/乐章/词作者/自定义 TXXX/章节等。
+ * - PK (entryId, uri, key)：扫描 replace 时整体替换，与 entry_index 同生命周期
+ * - source：ID3 / MP4
+ */
+@Entity(
+    tableName = "entry_tag_extras",
+    primaryKeys = ["entryId", "uri", "key"],
+    indices = [Index(value = ["entryId", "uri"])]
+)
+data class EntryTagExtraEntity(
+    val entryId: String,
+    val uri: String,
+    val key: String,
+    val value: String,
+    val source: String
 )

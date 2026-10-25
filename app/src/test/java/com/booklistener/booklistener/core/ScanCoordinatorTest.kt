@@ -74,7 +74,7 @@ class ScanCoordinatorTest {
         val source = FakeSource(listOf(file("01.flac")))
         val coord = ScanCoordinator(
             source = source,
-            tagReader = { TagResolver.AudioTags("标题", "歌手", "专辑", 1, 1, 180000L) },
+            tagReader = { ResolvedTags.basic("标题", "歌手", "专辑", 1, 1, 180000L) },
             cueTextReader = { null },
             indexStore = indexStore
         )
@@ -183,7 +183,7 @@ class ScanCoordinatorTest {
             source = source,
             tagReader = { sf ->
                 if (sf.name == "专辑.flac")
-                    TagResolver.AudioTags("专辑", "歌手", "CUE专辑", null, null, 180_000L)
+                    ResolvedTags.basic("专辑", "歌手", "CUE专辑", null, null, 180_000L)
                 else null
             },
             cueTextReader = { if (it.name.endsWith(".cue")) cueText else null },
@@ -243,7 +243,7 @@ class ScanCoordinatorTest {
         val source = FakeSource(listOf(tiny, normal))
         val coord = ScanCoordinator(
             source = source,
-            tagReader = { TagResolver.AudioTags("标题", "歌手", "专辑", 1, 1, 180000L) },
+            tagReader = { ResolvedTags.basic("标题", "歌手", "专辑", 1, 1, 180000L) },
             cueTextReader = { null },
             indexStore = indexStore
         )
@@ -259,7 +259,7 @@ class ScanCoordinatorTest {
         val source = FakeSource(listOf(file("short.mp3")))
         val coord = ScanCoordinator(
             source = source,
-            tagReader = { TagResolver.AudioTags("短音效", null, null, null, null, 5000L) },
+            tagReader = { ResolvedTags.basic("短音效", null, null, null, null, 5000L) },
             cueTextReader = { null },
             indexStore = indexStore
         )

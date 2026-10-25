@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 
 /**
  * v2.2.0 v5→v6 迁移测试：
- * 手建 v5 库（含 v5 全部表 + cue_sheets + 老数据）→ Room version 6 执行 MIGRATION_5_6 →
+ * 手建 v5 库（含 v5 全部表 + cue_sheets + 老数据）→ Room version 6 执行 MIGRATION_5_6, AppDatabase.MIGRATION_6_7 →
  * 验证 entry_index 新增 relativePath/error 两列（默认 NULL）、老数据不丢、DAO 可读写。
  */
 @RunWith(RobolectricTestRunner::class)
@@ -130,7 +130,7 @@ class Migration56Test {
 
     private fun openRoom(name: String): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, name)
-            .addMigrations(AppDatabase.MIGRATION_5_6)
+            .addMigrations(AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7)
             .allowMainThreadQueries()
             .build()
 

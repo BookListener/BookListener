@@ -2,6 +2,7 @@ package com.booklistener.core
 
 import com.booklistener.db.AppDao
 import com.booklistener.db.EntryIndexEntity
+import com.booklistener.db.EntryTagExtraEntity
 import com.booklistener.db.SavedEntryEntity
 
 /**
@@ -144,7 +145,15 @@ data class IndexedFile(
     val sizeBytes: Long? = null,
     // v2.2.0：设置侧链路重构
     val relativePath: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    // v2.2.0（spec: tag-fields-full）：全字段标签结构化列（入库）
+    val genre: String? = null,
+    val year: Int? = null,
+    val composer: String? = null,
+    val series: String? = null,
+    val seriesNumber: String? = null,
+    val mediaType: String? = null,
+    val encoder: String? = null
 ) {
     fun toEntity(entryId: String, workId: Long? = null, sortRank: Int? = null): EntryIndexEntity = EntryIndexEntity(
         entryId = entryId,
@@ -161,7 +170,14 @@ data class IndexedFile(
         sizeBytes = sizeBytes,
         albumArtist = albumArtist,
         relativePath = relativePath,
-        error = error
+        error = error,
+        genre = genre,
+        year = year,
+        composer = composer,
+        series = series,
+        seriesNumber = seriesNumber,
+        mediaType = mediaType,
+        encoder = encoder
     )
 
     companion object {
@@ -177,7 +193,14 @@ data class IndexedFile(
             albumArtist = e.albumArtist,
             sizeBytes = e.sizeBytes,
             relativePath = e.relativePath,
-            error = e.error
+            error = e.error,
+            genre = e.genre,
+            year = e.year,
+            composer = e.composer,
+            series = e.series,
+            seriesNumber = e.seriesNumber,
+            mediaType = e.mediaType,
+            encoder = e.encoder
         )
     }
 }
@@ -271,14 +294,20 @@ class EntryIndexStore(private val dao: AppDao) {
      * 解析 → 定位整轨（FILE 声明优先 + 同名扩展名探测）→ 虚拟轨并入 files、被吸收整轨剔除、
      * cue_sheets 落库（workId 按虚拟轨 uri 反查回填）。
      */
-    fun save(entryId: String, files: List<IndexedFile>, cueCandidates: List<CueIndexer.CueCandidate> = emptyList()) = blockingRun {
+    fun save(
+        entryId: String,
+        files: List<IndexedFile>,
+        cueCandidates: List<CueIndexer.CueCandidate> = emptyList(),
+        // v2.2.0（spec: tag-fields-full）：标签扩展键值（uri → 全量条目，随索引整体替换）
+        extrasByUri: Map<String, List<EntryTagExtraEntity>> = emptyMap()
+    ) = blockingRun {
         val entry = dao.getAllSavedEntries().firstOrNull { it.id == entryId }
         val folderName = entry?.displayName ?: entryId
         val sourceScope = entry?.sourceType ?: SourceType.LOCAL.name
         val cueResult = CueIndexer.index(entryId, files, cueCandidates)
         val merged = files.filterNot { it.uri in cueResult.absorbedAudioUris } + cueResult.virtualTracks
         val withTrack = assignTrackNumbers(merged)
-        dao.saveEntryIndexWithWorks(entryId, folderName, sourceScope, withTrack)
+        dao.saveEntryIndexWithWorks(entryId, folderName, sourceScope, withTrack, extrasByUri)
         // cue_sheets 与 entry_index 同生命周期整体替换；workId = 该 cue 首个虚拟轨所在作品
         if (cueResult.cueSheets.isNotEmpty()) {
             val sheets = cueResult.cueSheets.map { s ->

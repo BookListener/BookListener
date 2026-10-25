@@ -20,9 +20,10 @@ import com.booklistener.core.WorkBackfill
         EntryIndexEntity::class,
         WorkEntity::class,
         WorkProgressEntity::class,
-        CueSheetEntity::class
+        CueSheetEntity::class,
+        EntryTagExtraEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -335,6 +336,38 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2.2.0（spec: tag-fields-full）：全字段标签入库。
+         * - entry_index +7 列（genre/year/composer/series/seriesNumber/mediaType/encoder）
+         * - works +3 列（series/seriesNumber/mediaType，曲目聚合首值，下次扫描写入）
+         * - 新增 entry_tag_extras（文档其余字段原始键值全量保留）
+         * 仅结构变更，ADD 列默认 NULL、不回填；旧数据下次扫描覆盖。
+         */
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `genre` TEXT")
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `year` INTEGER")
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `composer` TEXT")
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `series` TEXT")
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `seriesNumber` TEXT")
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `mediaType` TEXT")
+                db.execSQL("ALTER TABLE `entry_index` ADD COLUMN `encoder` TEXT")
+                db.execSQL("ALTER TABLE `works` ADD COLUMN `series` TEXT")
+                db.execSQL("ALTER TABLE `works` ADD COLUMN `seriesNumber` TEXT")
+                db.execSQL("ALTER TABLE `works` ADD COLUMN `mediaType` TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `entry_tag_extras` (" +
+                        "`entryId` TEXT NOT NULL, `uri` TEXT NOT NULL, " +
+                        "`key` TEXT NOT NULL, `value` TEXT NOT NULL, `source` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`entryId`, `uri`, `key`))"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_entry_tag_extras_entry_uri` " +
+                        "ON `entry_tag_extras`(`entryId`, `uri`)"
+                )
+            }
+        }
+
         /** 迁移回填用行（entry_index JOIN saved_entry） */
         private data class Row(
             val entryId: String,
@@ -354,7 +387,10 @@ abstract class AppDatabase : RoomDatabase() {
                     ctx.applicationContext,
                     AppDatabase::class.java,
                     "music_db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build()
+                ).addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                    MIGRATION_6_7
+                ).build()
                 INSTANCE = ins
                 ins
             }

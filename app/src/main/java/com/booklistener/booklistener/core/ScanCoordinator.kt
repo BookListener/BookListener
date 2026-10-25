@@ -1,5 +1,7 @@
 package com.booklistener.core
 
+import com.booklistener.db.EntryTagExtraEntity
+
 /**
  * 扫描协调器（v2.2.0 设置侧链路重构）。
  *
@@ -7,11 +9,14 @@ package com.booklistener.core
  * 所有降级逻辑集中在此，来源无关。本地/网盘只差异在 [Source] 与读取器实现。
  *
  * 非音频文件（含 .cue）也入库，保证内容文件列表忠实显示所有文件。
+ *
+ * v2.2.0（spec: tag-fields-full）：tagReader 返回 [ResolvedTags]（结构化字段 + 全量键值条目），
+ * 全量条目写入 entry_tag_extras（文档字段原始键值不丢）。
  */
 class ScanCoordinator(
     private val source: Source,
-    /** 读音频标签（本地 MediaMetadataRetriever；网盘无标签返回 null）；失败应返回 null */
-    private val tagReader: suspend (SourceFile) -> TagResolver.AudioTags?,
+    /** 读音频标签（本地 MetadataExtractor + Mp4IlstReader；网盘无标签返回 null）；失败应返回 null */
+    private val tagReader: suspend (SourceFile) -> ResolvedTags?,
     /** 读 .cue 文本（本地 SAF / 网盘 GET，已做编码探测）；失败返回 null */
     private val cueTextReader: suspend (SourceFile) -> String?,
     private val indexStore: EntryIndexStore,
@@ -42,6 +47,8 @@ class ScanCoordinator(
 
         val indexed = mutableListOf<IndexedFile>()
         val cueCandidates = mutableListOf<CueIndexer.CueCandidate>()
+        // v2.2.0：每文件标签全量条目（uri → extras），扫描末随索引整体替换
+        val extrasByUri = LinkedHashMap<String, List<EntryTagExtraEntity>>()
 
         for (file in files) {
             when {
@@ -65,7 +72,7 @@ class ScanCoordinator(
                     if (size != null && size in 1..<MIN_AUDIO_SIZE_BYTES) {
                         continue
                     }
-                    // 音频：读标签；失败用文件名兜底，记 error
+                    // 音频：读标签；失败用文件名兜底，记 error（唯一后端，无次级解析）
                     val tags = runCatching { tagReader(file) }.getOrNull()
                     // v2.1.14：跳过播放时间过短的音频（标签解析出时长后判断）
                     val dur = tags?.durationMs
@@ -73,6 +80,17 @@ class ScanCoordinator(
                         continue
                     }
                     indexed += if (tags != null) {
+                        tags.entries.takeIf { it.isNotEmpty() }?.let { entries ->
+                            extrasByUri[file.path] = entries.map { e ->
+                                EntryTagExtraEntity(
+                                    entryId = entryId,
+                                    uri = file.path,
+                                    key = e.key,
+                                    value = e.value,
+                                    source = e.source
+                                )
+                            }
+                        }
                         IndexedFile(
                             displayName = tags.title?.takeIf { it.isNotBlank() }
                                 ?: file.name.substringBeforeLast('.').takeUnless { it.isEmpty() }
@@ -86,7 +104,15 @@ class ScanCoordinator(
                             rawName = file.name,
                             sizeBytes = file.sizeBytes,
                             relativePath = file.relativePath,
-                            error = null
+                            error = null,
+                            albumArtist = tags.albumArtist,
+                            genre = tags.genre,
+                            year = tags.year,
+                            composer = tags.composer,
+                            series = tags.series,
+                            seriesNumber = tags.seriesNumber,
+                            mediaType = tags.mediaType,
+                            encoder = tags.encoder
                         )
                     } else {
                         // 标签解析失败：文件名兜底，归入未知专辑
@@ -102,7 +128,7 @@ class ScanCoordinator(
 
         // 出口统一排序（disc → track → 名称自然序），列表顺序稳定
         val sorted = sortIndexed(indexed)
-        indexStore.save(entryId, sorted, cueCandidates)
+        indexStore.save(entryId, sorted, cueCandidates, extrasByUri)
 
         // v2.1.15：扫描后为每个作品提取首曲内嵌封面入库（专辑列表零 IO 显示封面）
         // v2.1.23：目录图片封面——专辑全部文件在同一目录时优先用该目录的图片，
