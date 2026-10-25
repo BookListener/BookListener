@@ -1,5 +1,7 @@
 # theme-settings Specification
 
+> 后续修订：本 spec"外观模式 MUST 提供 RadioButton 三选一"已被同日 **`settings-card-style`（v2.1.20）** 取代——外观模式改为图标化三元选择器（`SettingsTriSelector`，图标+文字+主题色下划线），现状代码一致；语言三态仍为 RadioButton。
+
 ## Purpose
 
 将 App 的外观相关设置收敛为统一的"主题"设置容器：新增明暗三态（白天/黑夜/自动）手动切换，并把原有的玻璃效果、语言入口收集到主题子页内，主页只保留一个"主题"入口。

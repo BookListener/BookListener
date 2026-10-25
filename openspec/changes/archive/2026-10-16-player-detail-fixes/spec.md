@@ -1,5 +1,7 @@
 # player-detail-fixes Specification
 
+> 后续修订：本 spec"设置主页仅以『毛玻璃特效』列举行"已被 **v2.1.19 `theme-settings`** 取代——设置主页只保留"主题"入口，玻璃效果/语言收敛进主题子页，不再有独立入口行。
+
 ## ADDED Requirements
 
 ### Requirement: 标题居中

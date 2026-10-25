@@ -1,7 +1,7 @@
 # BookListener 关键规格记忆
 
 > 本文件记录项目核心业务规则与概念边界，开发前必须先读。任何与本文件冲突的实现都是 bug。
-> 最后更新：v2.1.10
+> 最后更新：v2.1.25
 
 ---
 
@@ -50,6 +50,13 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - **禁止**用 `shouldRestartOnEnter("work:<id>")` 判断作品级重启——该方法内部把 `work:` 反查为 entryId，与 `"work:<id>"` 比较永远不等（v2.1.8 修复的 bug）。
 - **禁止**用 `openEntryAlbum`（取条目下第一个作品）——已标记 `@Deprecated`，会跳错专辑。
 - **禁止**在文件夹管理页添加播放事件。
+
+### 4. 播放速度档位（v2.0.9 起）
+- **7 档**：0.5x / 0.75x / 1.0x / 1.25x / 1.5x / 1.75x / 2.0x（`PlaybackSpeedTiers.TIERS`）。
+- 循环：`next` 取"大于当前值的最小档"，末档 2.0 回卷到 0.5；非档位持久化值（脏数据）取最近大于它的档。
+- 档位在进度条上**按序号均匀分布**：fraction = index/(size-1)（0.5→0%、2.0→100%），**禁止**按速度数值线性分布。
+- Slider 以档位索引为值（valueRange 0..6、steps 5），thumb 位置与档位刻度严格对齐，拖动吸附最近档（索引 roundToInt），松手应用并持久化。
+- 档位文字格式 "0.5x"/"1.0x"/"1.25x"/"1.75x"；当前档高亮（primary）+ 勾选，"当前 x.x x" 随拖动实时更新。
 
 ---
 
@@ -118,7 +125,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 四、CUE 虚拟分轨规则
+## 五、CUE 虚拟分轨规则
 
 ### 1. 解析
 - `CueParser`：多 FILE 段、INDEX 00/01、MM:SS:FF→ms、PREGAP 忽略、无 INDEX 跳过、末轨播到文件尾。
@@ -136,7 +143,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 五、UI 设计规格
+## 六、UI 设计规格
 
 ### 1. 二级页面标题
 - 统一用 `titleMedium`（与定时关闭标题一致）。
@@ -157,7 +164,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - 子页用返回箭头+标题+说明+配置项结构（同缓存子页）。
 - 新增子项必须保持设计统一。
 - **主题子页（v2.1.19）**：设置主页仅保留"主题"一个入口（含外观/玻璃/语言三区块），移除原"玻璃效果""语言"独立入口；子页自上而下为 外观模式 / 玻璃效果 / 语言 三区块，区块间用 HorizontalDivider 分隔。
-- **外观模式**：白天/黑夜/自动 三选一（RadioButton），默认自动；切档走 `AppCompatDelegate.setDefaultNightMode`（DayNight 重建换肤），持久化到 prefs，冷启动恢复；手动明暗下 Material You 动态色仍生效。
+- **外观模式**：白天/黑夜/自动 三选一，**图标化三元选择器 `SettingsTriSelector`（图标+文字+主题色下划线，v2.1.20 起，替代 RadioButton）**，默认自动；切档走 `AppCompatDelegate.setDefaultNightMode`（DayNight 重建换肤），持久化到 prefs，冷启动恢复；手动明暗下 Material You 动态色仍生效。
 - **玻璃效果**：沿用 `glassActionBar`/`glassPlayerPanel` 两开关，逻辑零改动。
 - **语言**：沿用三态（跟随系统/中文/英文），逻辑零改动。
 
@@ -167,7 +174,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 六、国际化（i18n）
+## 七、国际化（i18n）
 
 - 三态语言切换：跟随系统 / 中文 / 英文。
 - `MessageCatalog` 集中管理文案，UI 层通过 `stringResource(MessageCatalog.XXX)` 引用。
@@ -175,7 +182,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 七、版本与构建规则
+## 八、版本与构建规则
 
 ### 1. 版本号
 - 未经人工确认的新改动**只递增第三位（patch）**，人工确认后才升第二位（minor）。
@@ -192,7 +199,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 八、解码能力
+## 九、解码能力
 
 - 当前栈：MediaCodec（系统/厂商注册实例接口）→ Media3 1.4.0。
 - MediaCodec 不支持 APE（专有格式，生态选择非技术做不到）。
@@ -201,14 +208,14 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ---
 
-## 九、已知遗留问题（待清理）
+## 十、已知遗留问题（待清理）
 
 1. `playItems`（搜索/单曲播放）ownerId=null，进度靠 uri 反查作品，功能正常但队列归属语义不统一。搜索单曲播放时用户就是想播这一首，ownerId=null 合理，暂不改造。
 2. FFmpeg 集成（APE/DSF/DFF 解码）：架构路线已定，未落代码，待用户拍板。
 
 ---
 
-## 十、测试规范（v2.1.17 确立）
+## 十一、测试规范（v2.1.17 确立）
 
 ### 1. 测试分层原则
 - **业务流程测试（flow/）**：从业务操作入口进入（`ScanCoordinator.scan`、`PlayerViewModel`），覆盖完整链路，断言数据库/UI 产物。这是测试的主体。

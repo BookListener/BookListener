@@ -1,7 +1,9 @@
 # Spec: database-redesign-v4（作品实体化 + 进度内容引用）
 
 > 依据：`DESIGN-数据库重构-v4.md`（用户 2026-10-18 拍板）+ proposal.md（status: implemented，v2.1.0/versionCode 69）。
-> 后续修订已标注（v2.1.9 workKey 去 artist，用户拍板）。
+> 后续修订已标注：
+> - **v2.1.9 workKey 去 artist**（用户拍板，见 §2）；
+> - **v2.1.22 专辑曲目加载改为一次全量查询、禁分页**（`album-single-query` spec）——本 spec §4"SQL 分页下推"仅适用于 v4 当时设计，已被取代，进入专辑只查一次数据库，多消费方复用。
 
 ## 1. 作品实体（works）
 
