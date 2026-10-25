@@ -44,6 +44,11 @@ object PlaybackController {
      *  生产代码不应调用；仅用于 Robolectric 单测中 player=null 时模拟播放上下文。 */
     internal fun setStateForTest(s: PlaybackState) { _state.value = s }
 
+    /** 测试辅助：当前曲目的媒体封面（通知/锁屏封面来源 artworkUri），仅用于 Robolectric 单测断言。
+     *  生产代码不应调用（通知取 mediaSession.player 同源）。 */
+    internal val currentArtworkUri: Uri?
+        get() = player?.currentMediaItem?.mediaMetadata?.artworkUri
+
     /** 当前队列所属的 SavedEntry id（本地=文件夹树 Uri 字符串，网盘=条目 id）。
      *  判定"再次进入的是否为当前正在播放的队列"必须依赖此播放层状态，
      *  不能依赖易被清空的 UI 状态（_currentFolderUri 在退出条目视图时置 null）。 */

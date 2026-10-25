@@ -107,6 +107,8 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - **文件夹不设封面**：文件夹管理条目行不显示封面（`EntrySummaryRow(showCover=false)`）。
 - 专辑封面只从该专辑所在**当前目录**提取，**不跨子文件夹**找封面。
 - 多专辑文件夹中每个专辑独立从本目录首曲提取内嵌封面。
+- **v2.1.23 作品封面入库（works.coverUri）**：扫描时为每个作品解析封面并写入 works 表（专辑列表零 IO 显示）——专辑全部文件在同一目录（含扫描根）时，优先用该目录内封面图片（常见命名 cover/folder/front/AlbumArt\* → 任意图片，复用 `CoverScanner.PREFERRED_NAMES`）；无目录图片或**专辑跨子文件夹**（不查目录图片，防串图）→ 回退首曲内嵌封面。目录定位基于 `relativePath`，复用扫描文件列表，零额外 IO，本地与 WebDAV 统一生效。
+- **v2.1.24 播放队列封面同源**：通知栏/锁屏封面（MediaItem artworkUri）与专辑列表同源——播放队列构建时**作品封面优先**（`album.coverUri`/`work.coverUri`），缺失才回退条目封面（`resolveAlbumCover`）。禁止只走条目封面（嵌套场景条目封面为 null 会导致通知无封面）。
 
 ### 5. 内容文件列表
 - 平铺显示所有文件（含子文件夹，通过 relativePath 标注），不做子文件夹导航。

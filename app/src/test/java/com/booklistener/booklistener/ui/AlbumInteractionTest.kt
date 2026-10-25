@@ -2,8 +2,10 @@ package com.booklistener.ui
 
 import com.booklistener.auth.CredentialStore
 import android.net.Uri
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.booklistener.core.AlbumStore
 import com.booklistener.core.AlbumSummary
 import com.booklistener.core.AudioItemFactory
 import com.booklistener.core.IndexedFile
@@ -158,5 +160,37 @@ class AlbumInteractionTest {
         assertEquals("曲目顺序按 sortRank（第1章在前）", "第1章", vm.albumSongs.value[0].displayName)
         // 队列与列表同源：ownerId 仍指向该作品（openAlbum 复用同一份数据构建队列）
         awaitQueueOwner("work:$workId")
+    }
+
+    /**
+     * v2.1.24：通知栏/锁屏封面与专辑列表同源——播放队列 artwork 应为作品封面（works.coverUri），
+     * 而不是条目封面（嵌套场景条目封面为 null，是此前通知无封面的根因）。
+     */
+    @Test
+    fun openAlbum_queueArtwork_usesWorkCover() {
+        // 作品封面入库（v2.1.23 扫描产物，AlbumStore 查询可得）
+        runBlocking {
+            db.dao().updateWorkCoverByKey(
+                "local:哈利·波特与魔法石", "content://cover/album.jpg", System.currentTimeMillis()
+            )
+        }
+        // 从 AlbumStore（真实入口）取摘要：coverUri 应为作品封面
+        val summary = runBlocking {
+            (AlbumStore(db.dao()).notPlayed(0) + AlbumStore(db.dao()).recentPlayed(0))
+                .first { it.album == "哈利·波特与魔法石" }
+        }
+        assertEquals("作品封面已入库并可读", "content://cover/album.jpg", summary.coverUri)
+
+        // 确保队列落进可达 player（service 未接管时用本测试 player；接管时读同一引用）
+        val probe = ExoPlayer.Builder(ApplicationProvider.getApplicationContext()).build()
+        PlaybackController.attach(probe)
+        val vm = newViewModel()
+        vm.openAlbum(summary)
+        awaitQueueOwner("work:$workId")
+        awaitTrue("通知栏封面应为作品封面（与专辑列表同源）") {
+            PlaybackController.currentArtworkUri?.toString() == "content://cover/album.jpg"
+        }
+        PlaybackController.detach(probe)
+        probe.release()
     }
 }

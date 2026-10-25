@@ -535,7 +535,10 @@ class PlayerViewModel @JvmOverloads constructor(
         val (startIndex, startPos) = FolderProgressLogic.resolveStart(items, record)
         lastSavedIndex = startIndex
         lastSavedUri = items.getOrNull(startIndex)?.path
-        val cover = entry?.let { coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri) }
+        // v2.1.24：队列封面 = 作品封面优先（works.coverUri，与专辑列表/通知栏同源），缺失回退条目封面
+        val cover = album.coverUri ?: entry?.let {
+            coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri)
+        }
         MediaPlayService.start(getApplication())
         PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:$workId")
     }
@@ -611,7 +614,10 @@ class PlayerViewModel @JvmOverloads constructor(
             val sourceType = savedEntryById(album.entryId)?.sourceType ?: SourceType.LOCAL
             val items = all.map { it.toAudioItem(sourceType) }
             val entry = savedEntryById(album.entryId)
-            val cover = entry?.let { coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri) }
+            // v2.1.24：队列封面 = 作品封面优先（works.coverUri，与专辑列表/通知栏同源），缺失回退条目封面
+            val cover = album.coverUri ?: entry?.let {
+                coverManager.resolveAlbumCover(it.coverUri, album.albumCountInEntry, all.firstOrNull()?.uri)
+            }
             MediaPlayService.start(getApplication())
             PlaybackController.setQueue(
                 resolveAll(items, coverUri = cover),
@@ -1261,7 +1267,8 @@ class PlayerViewModel @JvmOverloads constructor(
             lastSavedIndex = startIndex
             lastSavedUri = items.getOrNull(startIndex)?.path
             val albumCount = runBlocking { appDb.dao().getWorksByEntry(entryId) }.size.coerceAtLeast(1)
-            val cover = coverManager.resolveAlbumCover(entry.coverUri, albumCount, all.firstOrNull()?.uri)
+            // v2.1.24：队列封面 = 作品封面优先（works.coverUri，与专辑列表/通知栏同源），缺失回退条目封面
+            val cover = work.coverUri ?: coverManager.resolveAlbumCover(entry.coverUri, albumCount, all.firstOrNull()?.uri)
             MediaPlayService.start(getApplication())
             PlaybackController.prepareFolder(resolveAll(items, coverUri = cover), startIndex, startPos, "work:${work.id}")
             refreshAlbums()
