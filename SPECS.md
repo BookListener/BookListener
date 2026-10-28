@@ -1,7 +1,7 @@
 # BookListener 关键规格记忆
 
 > 本文件记录项目核心业务规则与概念边界，开发前必须先读。任何与本文件冲突的实现都是 bug。
-> 最后更新：v2.2.4
+> 最后更新：v2.2.5
 
 ---
 
@@ -336,3 +336,19 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ### 5. CUE 联动
 - `CueIndexer.WHOLE_EXTENSIONS` 增 `"m4b"`：cue 引用 .m4b 整轨的同名扩展名探测可定位。
+
+---
+
+## 十六、MP4/m4b 扫描只读 moov 区间 + 解析器前导容错（v2.2.5）
+
+> 已实现（v2.2.5，openspec: m4b-moov-range-read；43eb029 健壮性修复一并纳入本版）。
+
+### 1. 解析器对文件头非 box 前导的容错（43eb029）
+- 背景：真实 m4b 文件头可能带非标准前导（ID3/私有头）；Media3 Mp4Extractor 可容错跳过（时长正常），自研解析器旧实现遇损坏 box 整体放弃 → 标签/章节全空、降级文件名聚合。
+- 规则：`Mp4IlstReader.findBox` / `Mp4ChapterReader` 的 box 遍历对损坏/越界 box **逐字节重对齐**，且仅按已知 box 类型白名单（`KNOWN_BOX_TYPES`）按 size 跳转——垃圾区偶然组成的伪 box 不带走遍历；`size==0` 按损坏处理（不再解释为"到文件尾"）。
+
+### 2. 扫描只读 moov 区间
+- 背景：单部 m4b ~1GB；本地扫描旧实现整文件读入内存（`readSafBytes`）→ OOM 风险。
+- 规则：本地扫描 `ILST_EXTS`（m4a/mp4/alac/m4b）只读 moov 区间——头部形态读 `[0, moovEnd)`（头 1MB 定位）；尾部形态（非 faststart，mdat 在前）读文件尾 16MB 定位 moov。标签/章节/时长全部位于 moov，mdat 音频数据不读。
+- 定位失败 → 回退整读（保底不丢识别）；解析器输入为区间字节，输出与整读一致（真实样本验证：标签条目、章节列表、Media3 时长/标准帧逐项相等）。
+- 非 ILST 格式（mp3/flac/ogg）保持整读现状；WebDAV 网盘无标签解析，不涉及；播放侧为 Media3 流式，无此问题。
