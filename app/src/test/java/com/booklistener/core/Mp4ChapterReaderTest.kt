@@ -191,4 +191,20 @@ class Mp4ChapterReaderTest {
         assertTrue(Mp4ChapterReader.read(byteArrayOf(1, 2, 3)).isEmpty())
         assertTrue(ChplChapterReader.read(ByteArray(0)).isEmpty())
     }
+
+    @Test
+    fun `文件头带非 box 前导 仍解析章节`() {
+        // ID3 风格前导：size 字段巨大越界，旧逻辑整体放弃，v2.2.4 逐字节重对齐
+        val junkPrefix = byteArrayOf(
+            'I'.code.toByte(), 'D'.code.toByte(), '3'.code.toByte(), 0x04,
+            0, 0, 0, 0, 9, 9
+        )
+        val bytes = junkPrefix + concat(
+            box(fourcc("moov"), concat(mvhd(1000), udta(chpl(0L to "第一章", 3_600_000L to "第二章"))))
+        )
+        val chapters = Mp4ChapterReader.read(bytes)
+        assertEquals(2, chapters.size)
+        assertEquals("第一章", chapters[0].title)
+        assertEquals(3_600_000L, chapters[1].startMs)
+    }
 }

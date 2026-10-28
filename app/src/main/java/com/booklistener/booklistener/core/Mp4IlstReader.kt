@@ -42,20 +42,27 @@ object Mp4IlstReader {
                 buf.seekTo(pos)
                 val size = buf.u32()
                 val type = buf.u32()
-                if (size < 8) break // 损坏 box，放弃本层
-                if (type == types[depth]) {
-                    val start = pos
-                    val end = (pos + size).coerceAtMost(buf.size)
-                    if (depth == types.lastIndex) {
-                        // meta 原子有 4 字节 version/flags 头，其子 box 从 start+8+4 开始
-                        val childStart = if (type == META) start + 12 else start + 8
-                        return childStart..end
+                // v2.2.4：损坏/越界/未知类型 box（文件头非 box 前导，如 ID3/私有头）逐字节重对齐，
+                // 不再整体放弃本层（Media3 Mp4Extractor 对同类前导可容错，自研解析器需对齐；
+                // 未知类型一律逐字节，防垃圾区偶然组成的伪 box 带偏遍历）
+                val validSize = size >= 8 && pos.toLong() + size.toLong() <= buf.size && type in KNOWN_BOX_TYPES
+                if (validSize) {
+                    if (type == types[depth]) {
+                        val start = pos
+                        val end = (pos + size).coerceAtMost(buf.size)
+                        if (depth == types.lastIndex) {
+                            // meta 原子有 4 字节 version/flags 头，其子 box 从 start+8+4 开始
+                            val childStart = if (type == META) start + 12 else start + 8
+                            return childStart..end
+                        }
+                        found = childRange(start, end, type)
+                        pos = found.first // 进入下一层
+                        break
                     }
-                    found = childRange(start, end, type)
-                    pos = found.first // 进入下一层
-                    break
+                    pos += size
+                } else {
+                    pos += 1 // 损坏 box：逐字节前进找下一个合法 box
                 }
-                pos += size
             }
             if (found == null) return null
             pos = found.first

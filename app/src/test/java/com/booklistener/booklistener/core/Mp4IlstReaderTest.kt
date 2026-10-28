@@ -52,6 +52,20 @@ class Mp4IlstReaderTest {
         assertTrue(Mp4IlstReader.read(ByteArray(0)).isEmpty())
     }
 
+    @Test
+    fun `文件头带非 box 前导 仍解析 ilst`() {
+        // ID3 风格前导：size 字段巨大越界，旧逻辑整体放弃，v2.2.4 逐字节重对齐
+        val junkPrefix = byteArrayOf(
+            'I'.code.toByte(), 'D'.code.toByte(), '3'.code.toByte(), 0x04,
+            0, 0, 0, 0, 1, 2, 3, 4
+        )
+        val bytes = junkPrefix + resource("tagprobe/probe_custom2.m4a")
+        val entries = Mp4IlstReader.read(bytes)
+        assertEntry(entries, "\u00A9ser", "哈利·波特系列")
+        assertEntry(entries, "\u00A9nam", "大难不死的男孩")
+        assertEntry(entries, "\u00A9alb", "哈利·波特与魔法石")
+    }
+
     private fun resource(name: String): ByteArray =
         javaClass.classLoader!!.getResourceAsStream(name)!!.use { it.readBytes() }
 

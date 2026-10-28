@@ -233,13 +233,44 @@ internal class Mp4BoxReader(private val data: ByteArray) {
     }
 }
 
-/** box size（含头）；支持 64 位 largesize（size==1）与 size==0（到范围尾） */
+/** MP4 常见 box 类型（findBoxChain/enumerateRaw 对齐用白名单：
+ * 仅已知类型才按 size 跳转，未知类型一律逐字节，防止垃圾前导偶然组成的伪 box 带偏遍历） */
+internal val KNOWN_BOX_TYPES = setOf(
+    0x66747970, // ftyp
+    0x6D6F6F76, // moov
+    0x6D646174, // mdat
+    0x66726565, // free
+    0x736B6970, // skip
+    0x77696465, // wide
+    0x75647461, // udta
+    0x6D657461, // meta
+    0x696C7374, // ilst
+    0x64617461, // data
+    0x7472616B, // trak
+    0x6D646961, // mdia
+    0x6D696E66, // minf
+    0x7374626C, // stbl
+    0x6D766864, // mvhd
+    0x746B6864, // tkhd
+    0x6D646864, // mdhd
+    0x73747473, // stts
+    0x74726566, // tref
+    0x63686170, // chap
+    0x6368706C, // chpl
+    0x6D657474, // mett
+    0x6D657478, // metx
+    0x74696D65, // time
+    0x73617473  // sats
+)
+
+/** box size（含头）；支持 64 位 largesize（size==1）。size==0 按损坏返回 0（v2.2.4：
+ * 文件头垃圾中的全 0 若解释为"延伸到范围尾"会直接跳到文件尾丢失对齐，逐字节重对齐更可靠） */
 internal fun boxSize(buf: Mp4BoxReader, start: Int, endExclusive: Int): Long {
     if (start + 8 > endExclusive) return 0
     val s = buf.u32(start).toLong() and 0xFFFFFFFFL
     return when {
         s == 1L -> if (start + 16 <= buf.size) buf.u64(start + 8) else 0
-        s == 0L -> (endExclusive - start).toLong()
+        s == 0L -> 0
         else -> s
     }
 }
@@ -253,7 +284,11 @@ internal fun findBoxChain(buf: Mp4BoxReader, range: IntRange, vararg types: Int)
         while (pos + 8 <= searchRange.last) {
             val size = boxSize(buf, pos, searchRange.last + 1)
             val type = buf.u32(pos + 4)
-            if (size < 8) break
+            // v2.2.4：损坏/越界/未知类型 box（文件头非 box 前导）逐字节重对齐，不整体放弃本层
+            if (size < 8 || pos.toLong() + size > (searchRange.last + 1).toLong() || type !in KNOWN_BOX_TYPES) {
+                pos += 1
+                continue
+            }
             val end = (pos + size).coerceAtMost((searchRange.last + 1).toLong()).toInt()
             if (type == types[depth]) {
                 if (depth == types.lastIndex) {
@@ -284,7 +319,11 @@ internal fun enumerateRaw(buf: Mp4BoxReader, range: IntRange, type: Int): List<I
     var pos = range.first
     while (pos + 8 <= range.last) {
         val size = boxSize(buf, pos, range.last + 1)
-        if (size < 8) break
+        // v2.2.4：损坏/越界/未知类型 box 逐字节重对齐
+        if (size < 8 || pos.toLong() + size > (range.last + 1).toLong() || buf.u32(pos + 4) !in KNOWN_BOX_TYPES) {
+            pos += 1
+            continue
+        }
         val boxType = buf.u32(pos + 4)
         val end = (pos + size).coerceAtMost((range.last + 1).toLong()).toInt()
         if (boxType == type) out += (pos + 8)..end
