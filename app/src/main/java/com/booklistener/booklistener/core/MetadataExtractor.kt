@@ -41,9 +41,9 @@ class MetadataExtractor {
             "mp3" -> androidx.media3.extractor.mp3.Mp3Extractor()
             "flac" -> androidx.media3.extractor.flac.FlacExtractor()
             "ogg" -> androidx.media3.extractor.ogg.OggExtractor()
-            // m4a/mp4/alac：Media3 仅输出 iTunes 标准原子映射帧 + 时长；
+            // m4a/mp4/alac/m4b：Media3 仅输出 iTunes 标准原子映射帧 + 时长；
             // 扩展原子（©ser/©sno/stik）由 Mp4IlstReader 补齐（调用侧合并）
-            "m4a", "mp4", "alac" -> androidx.media3.extractor.mp4.Mp4Extractor()
+            "m4a", "mp4", "alac", "m4b" -> androidx.media3.extractor.mp4.Mp4Extractor()
             else -> return Extracted(emptyList(), null)
         }
         return runCatching {

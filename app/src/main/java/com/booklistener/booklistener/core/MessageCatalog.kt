@@ -31,6 +31,9 @@ object MessageCatalog {
     val MSG_GLOBAL_SLEEP_DONE = R.string.msg_global_sleep_done
     val MSG_SLEEP_END_UNKNOWN = R.string.msg_sleep_end_unknown
 
+    // v2.2.4：ALAC m4b 解码失败提示（本版不支持 ALAC）
+    val MSG_ALAC_UNSUPPORTED = R.string.msg_alac_unsupported
+
     // v5.0（spec: cue-virtual-tracks）：虚拟轨浏览弹层
     val CUE_VIRTUAL_TRACKS = R.string.cue_virtual_tracks
     val CUE_NO_TRACKS = R.string.cue_no_tracks

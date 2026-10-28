@@ -249,11 +249,26 @@ object PlaybackController {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val idx = player?.currentMediaItemIndex ?: 0
-            _state.update { st -> PlaybackQueueLogic.transitionState(st, idx) }
+            // v2.2.4：切歌/重试清除 ALAC 不支持标记（避免残留提示）
+            _state.update { st -> PlaybackQueueLogic.transitionState(st, idx).copy(alacUnsupported = false) }
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            _state.update { it.copy(isBuffering = false, isPlaying = false) }
+            // v2.2.4：m4b 解码器失败（本版不内置 ALAC 软解，设备无 audio/alac 解码器时触发）
+            // → 标记 alacUnsupported，UI 提示"ALAC 编码暂不支持"；其他错误保持原行为
+            val isDecoderError = error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+                error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
+            // 章节虚拟轨 uri=<整本.m4b>#track_<startMs>，取 #track_ 前的整本扩展名
+            val currentUri = player?.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
+            val base = currentUri.substringBefore("#track_")
+            val isM4b = base.substringAfterLast('.', "").equals("m4b", ignoreCase = true)
+            _state.update {
+                it.copy(
+                    isBuffering = false,
+                    isPlaying = false,
+                    alacUnsupported = isDecoderError && isM4b
+                )
+            }
         }
     }
 

@@ -79,7 +79,52 @@ class ScanCoordinator(
                     if (dur != null && dur in 1..<MIN_AUDIO_DURATION_MS) {
                         continue
                     }
-                    indexed += if (tags != null) {
+                    // v2.2.4（spec: m4b-audiobook-chapters）：m4b 有章节 → 章节虚拟轨，
+                    // 整本被吸收（不入 indexed，同 CUE 吸收语义）；无章节 → 普通媒体条目。
+                    val chapters = tags?.chapters.orEmpty()
+                    if (tags != null && chapters.isNotEmpty() && file.extension.equals("m4b", ignoreCase = true)) {
+                        tags.entries.takeIf { it.isNotEmpty() }?.let { entries ->
+                            extrasByUri[file.path] = entries.map { e ->
+                                EntryTagExtraEntity(
+                                    entryId = entryId,
+                                    uri = file.path,
+                                    key = e.key,
+                                    value = e.value,
+                                    source = e.source
+                                )
+                            }
+                        }
+                        val wholeDuration = tags.durationMs
+                        chapters.forEachIndexed { i, ch ->
+                            val nextStart = chapters.getOrNull(i + 1)?.startMs
+                            indexed += IndexedFile(
+                                displayName = ch.title.ifBlank { "第 ${i + 1} 章" },
+                                uri = "${file.path}#track_${ch.startMs}",
+                                album = tags.album,
+                                artist = tags.artist,
+                                track = i + 1,
+                                disc = tags.disc,
+                                durationMs = when {
+                                    nextStart != null -> nextStart - ch.startMs
+                                    wholeDuration != null -> wholeDuration - ch.startMs
+                                    else -> null
+                                },
+                                rawName = "${file.name}#${i + 1}",
+                                sizeBytes = null,
+                                relativePath = file.relativePath,
+                                error = null,
+                                albumArtist = tags.albumArtist,
+                                genre = tags.genre,
+                                year = tags.year,
+                                composer = tags.composer,
+                                series = tags.series,
+                                seriesNumber = tags.seriesNumber,
+                                mediaType = tags.mediaType,
+                                encoder = tags.encoder
+                            )
+                        }
+                    } else {
+                        indexed += if (tags != null) {
                         tags.entries.takeIf { it.isNotEmpty() }?.let { entries ->
                             extrasByUri[file.path] = entries.map { e ->
                                 EntryTagExtraEntity(
@@ -117,6 +162,7 @@ class ScanCoordinator(
                     } else {
                         // 标签解析失败：文件名兜底，归入未知专辑
                         file.toIndexedFile(error = "tag parse failed")
+                    }
                     }
                 }
                 else -> {

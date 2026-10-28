@@ -1,7 +1,7 @@
 # BookListener 关键规格记忆
 
 > 本文件记录项目核心业务规则与概念边界，开发前必须先读。任何与本文件冲突的实现都是 bug。
-> 最后更新：v2.2.3
+> 最后更新：v2.2.4
 
 ---
 
@@ -309,3 +309,30 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 ### 2. 音频输出断开自动暂停
 - 耳机拔出/蓝牙断开（音频路由切回扬声器，系统 ACTION_AUDIO_BECOMING_NOISY）→ **自动暂停**，不继续外放。
 - 实现：Media3 ExoPlayer `setHandleAudioBecomingNoisy(true)`（v2.2.3）；恢复播放由用户手动点击播放按钮。
+
+---
+
+## 十五、m4b 有声书支持（v2.2.4）
+
+> 已实现（v2.2.4，openspec: m4b-audiobook-chapters；ALAC 范围经用户拍板调整）。
+
+### 1. 识别与标签
+- `AudioExt.SUPPORTED` 增 `"m4b"`；`ILST_EXTS` 增 `"m4b"`（MP4 容器，Mp4IlstReader 现成解析 `©nam`/`©ART`/`©alb`/`©ser`/`©sno`/`covr`）。
+- 存量 m4b **重扫生效**，不做迁移。
+
+### 2. 章节虚拟轨（1 作品 = 1 本书）
+- 有章节 m4b：整本被**吸收**（不入 entry_index），章节虚拟轨入库（uri = `<整本>#track_<startMs>`，与 CUE 虚拟轨同一形态），归属该书作品（标题/作者/系列/序列号取 m4b 标签）。
+- 章节解析优先级：**iTunes 章节表优先**（moov 内章节轨 + tref/chap 引用 + 章节名样本），**chpl 原子兜底**；两者都无 → 整本退化为普通音频文件（同 CUE 退化语义）。
+- 章节名空 → 以「第 N 章」兜底。
+
+### 3. 播放与进度
+- 播放 = **顺序播章**（虚拟轨队列连续）；进度按章锚点（虚拟轨 uri 反查作品，work 级），与 CUE 虚拟轨完全一致。
+- 搜索：章节名可搜（虚拟轨是索引行）；内容文件列表仍显示整本 m4b 文件。
+
+### 4. 解码（v2.2.4 实施范围调整）
+- AAC m4b：当前 MediaCodec 栈直接支持。
+- ALAC m4b：本版**标记为不支持**——正常识别/入库/浏览；播放时设备无 audio/alac 解码器则解码失败，提示「此 m4b 可能为 ALAC 编码，当前版本暂不支持播放」。
+- 范围调整依据（已核实）：评审拟引入的 `androidx.media3:media3-decoder-alac` 在 Google Maven / Maven Central 均不存在（404），Media3 无内置 ALAC 软解；全设备可播需第三方 FFmpeg 扩展（APK 体积大幅增加），用户 2026-10-28 拍板：本版 ALAC 标记不支持，解码支持后续单独排期。
+
+### 5. CUE 联动
+- `CueIndexer.WHOLE_EXTENSIONS` 增 `"m4b"`：cue 引用 .m4b 整轨的同名扩展名探测可定位。

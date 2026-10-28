@@ -664,7 +664,13 @@ class PlayerViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             var lastIsPlaying = false
             var lastQueueIndex = -1
+            var lastAlacUnsupported = false
             PlaybackController.state.collect { st ->
+                // v2.2.4：ALAC m4b 解码失败 → 事件消息提示（上升沿触发，避免 collect 重复）
+                if (st.alacUnsupported && !lastAlacUnsupported) {
+                    _eventMsg.value = getString(MessageCatalog.MSG_ALAC_UNSUPPORTED)
+                }
+                lastAlacUnsupported = st.alacUnsupported
                 val idx = st.queueIndex
                 if (st.isPlaying && idx >= 0 && st.currentItem != null) {
                     markCurrentEntryPlayed()

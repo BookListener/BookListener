@@ -147,6 +147,7 @@
     <string name="msg_sleep_timer_done">定时关闭：已暂停播放</string>
     <string name="msg_global_sleep_done">全局定时关闭：已暂停播放</string>
     <string name="msg_sleep_end_unknown">当前曲目时长未知，无法使用「听完本章节」</string>
+    <string name="msg_alac_unsupported">此 m4b 可能为 ALAC 编码，当前版本暂不支持播放</string>
 
     <!-- ViewModel 事件 -->
     <string name="toast_aliyun_auth_ok">阿里云盘授权成功</string>

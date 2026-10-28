@@ -20,8 +20,8 @@ class ScanCoordinatorFactory(
 ) {
 
     companion object {
-        /** MP4 容器扩展名（ilst 原子树；含 alac——其容器仍是 mp4） */
-        val ILST_EXTS = setOf("m4a", "mp4", "alac")
+        /** MP4 容器扩展名（ilst 原子树；含 alac——其容器仍是 mp4）；v2.2.4：m4b 同容器纳入 */
+        val ILST_EXTS = setOf("m4a", "mp4", "alac", "m4b")
     }
 
     /** 本地：SAF 列目录 + 新解析器（MetadataExtractor + Mp4IlstReader，唯一后端）+ SAF 读 cue + 内嵌封面提取 */
@@ -44,12 +44,16 @@ class ScanCoordinatorFactory(
      */
     private fun resolveLocalTags(extractor: MetadataExtractor, file: SourceFile): ResolvedTags? {
         val bytes = readSafBytes(file.path) ?: return null
-        val ext = file.name.substringAfterLast('.', "")
-        return if (ext.lowercase() in ILST_EXTS) {
+        val ext = file.name.substringAfterLast('.', "").lowercase()
+        return if (ext in ILST_EXTS) {
             val m3 = extractor.extract(bytes, ext)
             // 合并：Media3 标准映射帧 + 自研扩展原子（键名不同体系，全保留）
             val entries = Mp4IlstReader.read(bytes) + m3.entries
-            ResolvedTags.fromEntries(entries, m3.durationMs)
+            // v2.2.4：m4b 内嵌章节（iTunes 章节表优先 + chpl 兜底；无章节 → null）
+            val chapters = if (ext == "m4b") {
+                Mp4ChapterReader.read(bytes).takeIf { it.isNotEmpty() }
+            } else null
+            ResolvedTags.fromEntries(entries, m3.durationMs).copy(chapters = chapters)
         } else {
             val m3 = extractor.extract(bytes, ext)
             if (m3.entries.isEmpty() && m3.durationMs == null) null else ResolvedTags.fromEntries(m3.entries, m3.durationMs)

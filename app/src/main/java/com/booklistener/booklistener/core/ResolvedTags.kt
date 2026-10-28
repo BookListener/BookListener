@@ -19,6 +19,8 @@ data class ResolvedTags(
     val seriesNumber: String?,
     val mediaType: String?,
     val encoder: String?,
+    /** v2.2.4：m4b 内嵌章节（iTunes 章节表优先 + chpl 兜底；无章节 = null） */
+    val chapters: List<Chapter>? = null,
     /** 文档字段全集键值条目（原始键名，含未结构化字段） */
     val entries: List<TagEntry>
 ) {
@@ -43,7 +45,7 @@ data class ResolvedTags(
                 entries = entries
             )
 
-        /** 基础字段便捷构造（测试注入/旧 AudioTags 语义迁移）；v2.2.1 增 series/seriesNumber 可选参 */
+        /** 基础字段便捷构造（测试注入/旧 AudioTags 语义迁移）；v2.2.1 增 series/seriesNumber 可选参；v2.2.4 增 chapters */
         fun basic(
             title: String?,
             artist: String?,
@@ -52,12 +54,13 @@ data class ResolvedTags(
             disc: Int?,
             durationMs: Long?,
             series: String? = null,
-            seriesNumber: String? = null
+            seriesNumber: String? = null,
+            chapters: List<Chapter>? = null
         ): ResolvedTags = ResolvedTags(
             title = title, artist = artist, album = album, track = track, disc = disc,
             durationMs = durationMs, albumArtist = null, genre = null, year = null,
             composer = null, series = series, seriesNumber = seriesNumber, mediaType = null,
-            encoder = null, entries = emptyList()
+            encoder = null, chapters = chapters, entries = emptyList()
         )
     }
 }

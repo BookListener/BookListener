@@ -1,7 +1,8 @@
 package com.booklistener.core
 
 object AudioExt {
-    val SUPPORTED = listOf("mp3", "m4a", "flac", "wav", "ogg", "aac", "alac")
+    // v2.2.4：m4b（MPEG-4 有声书，MP4 容器）纳入可播放媒体判定
+    val SUPPORTED = listOf("mp3", "m4a", "flac", "wav", "ogg", "aac", "alac", "m4b")
 
     fun isAudio(name: String): Boolean {
         val ext = name.substringAfterLast('.', "").lowercase()

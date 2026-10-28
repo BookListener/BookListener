@@ -20,8 +20,9 @@ object CueIndexer {
      * 整轨候选扩展名（同名探测兜底顺序）。
      * 仅含 Media3 官方解码器支持的格式（flac/wav/mp3/m4a）；ape/dsf/dff 无解码支持
      * （需 FFmpeg 扩展，项目未引入），不纳入吸收探测，整轨保持普通条目。
+     * v2.2.4：m4b 纳入（同 m4a 的 MP4 容器，AAC/ALAC 由 MediaCodec/alac 扩展解码）。
      */
-    val WHOLE_EXTENSIONS = setOf("flac", "wav", "mp3", "m4a")
+    val WHOLE_EXTENSIONS = setOf("flac", "wav", "mp3", "m4a", "m4b")
 
     /** 扫描发现的 .cue 文件（文本已由调用方按源读取） */
     data class CueCandidate(
