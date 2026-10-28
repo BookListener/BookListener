@@ -1,7 +1,7 @@
 # BookListener 关键规格记忆
 
 > 本文件记录项目核心业务规则与概念边界，开发前必须先读。任何与本文件冲突的实现都是 bug。
-> 最后更新：v2.2.2
+> 最后更新：v2.2.3
 
 ---
 
@@ -294,3 +294,18 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 ### 8. 边界
 - 搜索**不新增**系列结果（只出专辑/曲目，见第一节）。
 - 播放队列仍 work 级，系列仅为浏览维度，无系列级播放入口。
+
+---
+
+## 十四、删除条目联动与音频输出断开（v2.2.3）
+
+### 1. 删除条目（文件夹）联动清理
+- 删除文件夹管理中的条目时（clearSavedEntry）按序联动：
+  1. **正在播放清理**：当前播放队列所属作品（resolveCurrentWorkId，队列归属维度 workId）属于被删条目 → PlaybackController.clearQueue()（停止播放、清空媒体项、MediaSession 通知移除、队列归属复位）。
+  2. **数据清理**：删除条目内容索引；无文件引用的作品连同其 work_progress 进度由 cleanupOrphanWorks 收敛；本地封面缓存文件删除。
+  3. **界面刷新**：主页专辑列表全量重查（refreshAlbums，专辑即时消失）；搜索框非空时结果同步刷新（索引已删）。
+- 播放记录（work_progress）随其作品一起删除：作品仍被其他条目引用时保留（作品还在，仅收敛统计）。
+
+### 2. 音频输出断开自动暂停
+- 耳机拔出/蓝牙断开（音频路由切回扬声器，系统 ACTION_AUDIO_BECOMING_NOISY）→ **自动暂停**，不继续外放。
+- 实现：Media3 ExoPlayer `setHandleAudioBecomingNoisy(true)`（v2.2.3）；恢复播放由用户手动点击播放按钮。

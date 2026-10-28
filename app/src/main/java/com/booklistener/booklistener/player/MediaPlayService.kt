@@ -298,6 +298,8 @@ class MediaPlayService : MediaSessionService() {
             .setUserAgent("BookListener/1.0")
         val compositeDs = DefaultDataSource.Factory(this, okHttpDs)
         return ExoPlayer.Builder(this)
+            // v2.2.3：耳机拔出/蓝牙断开（音频路由切到扬声器）时自动暂停，不继续外放
+            .setHandleAudioBecomingNoisy(true)
             .setMediaSourceFactory(DefaultMediaSourceFactory(compositeDs))
             .build()
     }

@@ -215,6 +215,20 @@ object PlaybackController {
         player?.stop()
     }
 
+    /**
+     * v2.2.3：清空当前队列并复位播放状态（删除条目联动——被删条目正在播放时调用）。
+     * 停止播放、清空媒体项（MediaSession 通知随之移除）、重置队列归属与暂存队列。
+     */
+    fun clearQueue() {
+        player?.run {
+            stop()
+            setMediaItems(emptyList())
+        }
+        pendingQueue = null
+        queueOwnerId = null
+        _state.value = PlaybackState()
+    }
+
     fun release() {
         player?.release()
         player = null

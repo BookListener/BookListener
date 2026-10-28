@@ -1287,13 +1287,29 @@ class PlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    /** 删除已添加条目（含内容索引、本地封面缓存；无引用作品连同其进度由 cleanupOrphanWorks 收敛） */
+    /**
+     * 删除已添加条目（含内容索引、本地封面缓存；无引用作品连同其进度由 cleanupOrphanWorks 收敛）。
+     * v2.2.3：被删条目正在播放时清空队列停止播放；删除后刷新主页专辑列表（专辑即时消失）。
+     */
     fun clearSavedEntry(entry: SavedEntry) {
+        // 正在播放判定：队列归属维度是 workId（SPECS §二.1），被删条目作品集内 → 清空队列
+        val entryWorkIds = runBlocking { appDb.dao().getWorksByEntry(entry.id) }.map { it.id }.toSet()
+        val currentWorkId = resolveCurrentWorkId(
+            PlaybackController.currentQueueOwnerId,
+            PlaybackController.state.value.currentItem?.path
+        )
+        if (currentWorkId != null && currentWorkId in entryWorkIds) {
+            PlaybackController.clearQueue()
+        }
         setEntries(entryStore.remove(_savedEntries.value, entry.id))
         indexStore.remove(entry.id)
         if (entry.coverUri?.startsWith("file://") == true) {
             runCatching { File(Uri.parse(entry.coverUri).path!!).delete() }
         }
+        // 主页专辑列表移除该条目作品（孤儿作品/进度已在 entryStore.remove 内清理）
+        refreshAlbums()
+        // 搜索结果若正显示该条目作品，一并移除（索引已删）
+        if (_searchQuery.value.isNotBlank()) onSearchQueryChange(_searchQuery.value)
     }
 
     /**

@@ -3,8 +3,10 @@ package com.booklistener.booklistener.flow
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.booklistener.auth.CredentialStore
 import com.booklistener.core.AlbumStore
 import com.booklistener.core.EntryIndexStore
+import com.booklistener.core.SavedEntry
 import com.booklistener.core.ScanCoordinator
 import com.booklistener.core.SourceFile
 import com.booklistener.core.Source
@@ -13,6 +15,10 @@ import com.booklistener.core.ResolvedTags
 import com.booklistener.db.AppDao
 import com.booklistener.db.AppDatabase
 import com.booklistener.db.SavedEntryEntity
+import com.booklistener.db.WorkProgressEntity
+import com.booklistener.player.PlaybackController
+import com.booklistener.player.PlaybackState
+import com.booklistener.ui.PlayerViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -32,6 +38,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class AlbumFlowTest {
 
+    private lateinit var db: AppDatabase
     private lateinit var dao: AppDao
     private lateinit var indexStore: EntryIndexStore
     private lateinit var albumStore: AlbumStore
@@ -76,14 +83,34 @@ class AlbumFlowTest {
 
     @Before
     fun setUp() {
+        // 隔离用例间单例残留：默认无队列归属
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, null)
         val ctx: Context = ApplicationProvider.getApplicationContext()
-        val db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).allowMainThreadQueries().build()
+        db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).allowMainThreadQueries().build()
         dao = db.dao()
         indexStore = EntryIndexStore(dao)
         albumStore = AlbumStore(dao)
     }
 
     private fun allAlbums() = runBlocking { albumStore.notPlayed() + albumStore.recentPlayed() }
+
+    private fun newViewModel(): PlayerViewModel =
+        PlayerViewModel(
+            ApplicationProvider.getApplicationContext(),
+            database = db,
+            credentialStore = CredentialStore(ApplicationProvider.getApplicationContext(), secure = false)
+        )
+
+    /** 通用异步断言：主 looper idle + 轮询，超时失败（refreshAlbums 走 IO 调度） */
+    private fun awaitTrue(msg: String, block: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < deadline) {
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            if (block()) return
+            Thread.sleep(20)
+        }
+        assertTrue(msg, false)
+    }
 
     // ---- 场景1：同专辑多作者合并为一个专辑 ----
 
@@ -177,5 +204,43 @@ class AlbumFlowTest {
         val albums = allAlbums()
         assertEquals(1, albums.size)
         assertEquals(2, albums[0].songCount)
+    }
+
+    // ---- 场景：删除条目联动清理（v2.2.3）----
+
+    @Test
+    fun `删除条目 作品与进度清理 正在播放清空 主页专辑消失`() {
+        val entryId = "content://tree/del"
+        addEntry(entryId, "待删书架")
+        scan(entryId, listOf(file("01.flac")), tagReader = {
+            ResolvedTags.basic("歌1", "作者", "待删专辑", 1, 1, 120_000L, null, null)
+        })
+        val workId = runBlocking { dao.getWorkIdByUri("content://doc/01.flac")!! }
+        // 已有播放记录（播放时间 + 进度）
+        runBlocking {
+            dao.touchWorkPlayed(workId, 1_000L)
+            dao.upsertWorkProgress(
+                WorkProgressEntity(workId, "content://doc/01.flac", 0, 1, 30_000L, 1f, 2_000L)
+            )
+        }
+        // 模拟正在播放该条目作品：队列归属 workId（单测无真实播放器，走暂存队列路径）
+        PlaybackController.prepareFolder(emptyList(), 0, 0L, "work:$workId")
+        assertEquals("work:$workId", PlaybackController.currentQueueOwnerId)
+
+        val vm = newViewModel()
+        vm.clearSavedEntry(
+            SavedEntry(id = entryId, displayName = "待删书架", uri = entryId, sourceType = SourceType.LOCAL)
+        )
+
+        // 正在播放已清理：队列归属复位、状态清空
+        assertEquals(null, PlaybackController.currentQueueOwnerId)
+        assertEquals(PlaybackState(), PlaybackController.state.value)
+        // 数据清理：作品与播放进度一并删除
+        assertTrue("作品已删", runBlocking { dao.getWorkById(workId) } == null)
+        assertTrue("播放记录已删", runBlocking { dao.getWorkProgress(workId) } == null)
+        // 界面产物：主页专辑列表不再含该专辑（refreshAlbums 产物）
+        awaitTrue("主页两分区均不再含该专辑") {
+            vm.recentItems.value.isEmpty() && vm.neverItems.value.isEmpty()
+        }
     }
 }
