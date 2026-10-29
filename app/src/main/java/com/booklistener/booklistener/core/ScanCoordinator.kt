@@ -125,6 +125,28 @@ class ScanCoordinator(
                                 encoder = tags.encoder
                             )
                         }
+                        // v2.2.10：章节虚拟轨把原始 .m4b 吸收后，内容文件列表会空（该列表过滤虚拟轨）。
+                        // 保留一条原始 .m4b 行（excludeFromWork=true）：内容文件列表显示原始文件、
+                        // 不参与作品聚合（曲目列表仍只由章节虚拟轨组成，避免重复）。
+                        indexed += IndexedFile(
+                            displayName = file.name,
+                            uri = file.path,
+                            album = tags.album,
+                            artist = tags.artist,
+                            rawName = file.name,
+                            sizeBytes = file.sizeBytes,
+                            relativePath = file.relativePath,
+                            error = null,
+                            albumArtist = tags.albumArtist,
+                            genre = tags.genre,
+                            year = tags.year,
+                            composer = tags.composer,
+                            series = tags.series,
+                            seriesNumber = tags.seriesNumber,
+                            mediaType = tags.mediaType,
+                            encoder = tags.encoder,
+                            excludeFromWork = true
+                        )
                     } else {
                         indexed += if (tags != null) {
                         tags.entries.takeIf { it.isNotEmpty() }?.let { entries ->

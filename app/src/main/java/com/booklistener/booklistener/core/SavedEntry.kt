@@ -155,7 +155,10 @@ data class IndexedFile(
     val series: String? = null,
     val seriesNumber: String? = null,
     val mediaType: String? = null,
-    val encoder: String? = null
+    val encoder: String? = null,
+    // v2.2.10：不参与作品聚合（仅作内容文件展示，不入库）。m4b 有章节时原始 .m4b 行
+    // 用它保留在内容文件列表，但不进曲目列表（曲目由章节虚拟轨承担，避免重复）。
+    val excludeFromWork: Boolean = false
 ) {
     fun toEntity(entryId: String, workId: Long? = null, sortRank: Int? = null): EntryIndexEntity = EntryIndexEntity(
         entryId = entryId,

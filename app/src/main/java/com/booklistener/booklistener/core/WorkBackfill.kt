@@ -49,6 +49,8 @@ object WorkBackfill {
      * 忠实显示），但不参与作品聚合，不产生"文件夹名"专辑。
      */
     fun isPlayableMedia(f: IndexedFile): Boolean {
+        // v2.2.10：排除"仅内容文件展示"的行（m4b 有章节时的原始 .m4b 行，避免曲目列表重复）
+        if (f.excludeFromWork) return false
         if (VirtualTrackUri.isVirtual(f.uri)) return true
         return AudioExt.isAudio(f.rawName ?: f.uri)
     }

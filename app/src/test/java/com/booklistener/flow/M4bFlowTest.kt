@@ -124,17 +124,19 @@ class M4bFlowTest {
         Chapter(7_200_000L, "第三章")
     )
 
-    // ---- 场景1：有章节 → 章节虚拟轨 + 整本吸收 ----
+    // ---- 场景1：有章节 → 章节虚拟轨 + 原始 .m4b 行保留（v2.2.10） ----
 
     @Test
-    fun `有章节 m4b 生成章节虚拟轨 整本被吸收`() {
+    fun `有章节 m4b 生成章节虚拟轨 原始行保留且不参与聚合`() {
         val id = seedBook("三体", "三体", "1", threeChapters)
 
         val indexed = indexStore.loadEntry(id)
         val wholeUri = "content://doc/book.m4b"
-        assertFalse("整本 m4b 被吸收，不入 entry_index", indexed.any { it.uri == wholeUri })
+        // v2.2.10：保留原始 .m4b 行（内容文件列表显示原始文件；excludeFromWork 是扫描时
+        // 内存标记不入库，聚合排除效果由"归属单作品"场景的曲目列表断言验证）
+        assertTrue("原始 .m4b 行保留在内容文件索引", indexed.any { it.uri == wholeUri })
 
-        val tracks = indexed.filter { it.uri.startsWith(wholeUri) }
+        val tracks = indexed.filter { it.uri.startsWith(wholeUri) && it.uri != wholeUri }
         assertEquals("3 条章节虚拟轨", 3, tracks.size)
         assertEquals(
             listOf("content://doc/book.m4b#track_0", "content://doc/book.m4b#track_3600000", "content://doc/book.m4b#track_7200000"),
@@ -154,8 +156,13 @@ class M4bFlowTest {
         val book = works.firstOrNull { it.album == "三体" }
         assertTrue("专辑列表含该书（1 作品 = 1 本书）", book != null)
         assertEquals("作品系列归属", "三体", book?.series)
-        assertEquals("作品歌曲数 = 章节数", 3, book?.songCount)
+        assertEquals("作品歌曲数 = 章节数（原始行被排除）", 3, book?.songCount)
         assertEquals("作品总时长 = 整本时长", 10_800_000L, book?.totalDurationMs)
+        // 曲目列表只含章节虚拟轨，无原始 .m4b 重复行
+        val songs = albumStore.allSongs(book!!.workId)
+        assertEquals("曲目数 = 章节数", 3, songs.size)
+        assertTrue("曲目均为章节虚拟轨", songs.all { it.uri.contains("#track_") })
+        assertTrue("无原始 .m4b 行", songs.none { it.uri == "content://doc/book.m4b" })
     }
 
     // ---- 场景2：章节名空 →「第 N 章」兜底 ----
