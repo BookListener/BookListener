@@ -349,6 +349,8 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 
 ### 2. 扫描只读 moov 区间
 - 背景：单部 m4b ~615MB；本地扫描旧实现整文件读入内存（`readSafBytes`）→ OOM 风险。
-- 规则（v2.2.7 修订）：本地扫描 `ILST_EXTS`（m4a/mp4/alac/m4b）只读 moov 区间——**流式 box 链遍历**（`MoovLocator.streamMoovRange`）从文件头逐 box 读 8 字节头（size+type），白名单类型按 size 跳过（含巨大的 mdat），损坏 box 逐字节重对齐；moov 位于文件任意位置（头/中/尾）均可命中，全程只读 box 头、不读音频数据。标签/章节/时长全部位于 moov，mdat 音频数据不读。
-- 定位失败 → 回退整读**仅限 ≤64MB 文件**（`MOOV_FALLBACK_LIMIT`）；>64MB 大文件定位失败直接判定失败并记诊断（整读必然 OOM，v2.2.6 实测 615MB 整读失败）。解析器输入为区间字节，输出与整读一致（真实样本验证：标签条目、章节列表、Media3 时长/标准帧逐项相等）。
-- 非 ILST 格式（mp3/flac/ogg）保持整读现状；WebDAV 网盘无标签解析，不涉及；播放侧为 Media3 流式，无此问题。
+- 规则（v2.2.15 修订最终态）：本地扫描 `ILST_EXTS`（m4a/mp4/alac/m4b）只读 moov 区间——`MoovLocator.streamMoovRange` 流式 box 链遍历：**按 size 跳转、不查 type 白名单**（MP4 严格 box 树，size 合法即合法 box，含 uuid/pssh 等未知 box 不应误判，v2.2.15 去白名单；这是对 §十六.1 解析器内部白名单与流式定位的明确区分），mdat 等巨大 box 直接跳过；损坏/越界 box 在**块内搜索 moov 魔数**（v2.2.14 起不再逐字节全文件重对齐，防大文件 CPU 卡死）+ 迭代预算 `MAX_BOX_HEADS`。moov 位于文件任意位置（头/中/尾）均可命中，全程只读 box 头、不读音频数据。标签/章节/时长全部位于 moov，mdat 音频数据不读。
+- moov 区间读取上限 128MB（`MAX_MOOV_BYTES`，v2.2.16）：防定位器误判巨大 moov 区间（随机数据伪 moov + 巨大 size）导致 `readExact` 试图读数百 MB → 卡 + 内存暴涨；moov 正常几 MB~几十 MB，超限放弃读取。
+- 定位失败 → 回退整读**仅限 ≤64MB 文件**（`MOOV_FALLBACK_LIMIT`）；>64MB 大文件定位失败直接判定失败并记诊断（整读必然 OOM，v2.2.6 实测 615MB 整读失败）。
+- 解析（v2.2.19 修订）：m4a/mp4/alac/m4b **全部自研解析、不再调用 Media3 `Mp4Extractor`**——分步诊断铁证（v2.2.18 `probeByPath`）：第2063集 moov 读取全完成（152049B 就绪）、卡在 `extractor.extract`，Media3 对 moov-only 字节在 Android 设备上死循环（JVM 探针 522ms、设备上 >10s 超时），而自研解析器对同字节毫秒级完成。解析链：`Mp4IlstReader`（标签，遍历 ilst 全原子较 Media3 更全，实测 Media3 独有条目=[]）+ `readDurationMs`（mvhd 时长，v2.2.18 起；Media3 对 moov-only 字节解析不出时长，实测 dur=null）+ `Mp4ChapterReader`（章节）+ `readCover`（封面）。mp3/flac/ogg 仍走 Media3（整读头部，无此问题）；WebDAV 网盘无标签解析，不涉及；播放侧为 Media3 流式，无此问题。
+- v2.2.17 健壮性：单文件标签解析放入独立线程池 + 10s 超时（`tagExecutor` + `Future.get` + `cancel(true)`），任何单文件（SAF 读取卡死/解析死循环）超时即放弃（文件名兜底 + 记 error）继续下一个，scan 不被单文件拖死；`probeByPath` 实时分步进度（打开 SAF/读头部/定位 moov/读 moov/开始解析，ConcurrentHashMap 跨线程可见），超时中断后 error 弹窗仍能显示卡在哪一步。
