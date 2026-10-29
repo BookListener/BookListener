@@ -195,6 +195,31 @@ class MoovLocatorTest {
         }
     }
 
+    @Test
+    fun `流式定位 含未知type合法box(uuid) 按size跳过 命中moov`() {
+        // v2.2.15 回归：旧实现 `&& type in KNOWN_BOX_TYPES` 会把合法未知 box（如 'uuid'，
+        // 加密/DRM 常见）误判为损坏 → 重对齐；新实现任何 type 只要 size 合法都按 size 跳。
+        val moovBytes = box(fourcc("moov"), concat(mvhd(1000), udta(chpl(0L to "第一章"))))
+        val file = concat(
+            box(fourcc("ftyp"), ByteArray(8)),
+            box(fourcc("uuid"), ByteArray(4096)), // 未知但 size 合法的 box
+            moovBytes
+        )
+        val tmp = java.io.File.createTempFile("moov_stream_uuid", ".m4b")
+        try {
+            tmp.writeBytes(file)
+            java.io.FileInputStream(tmp).use { fis ->
+                val range = MoovLocator.streamMoovRange(fis.channel, file.size.toLong())
+                assertNotNull("未知合法 box 不应被误判损坏，moov 应命中", range)
+                val expectedStart = (16 + 8 + 4096).toLong() // ftyp(16) + uuid(8+4096)
+                assertEquals(expectedStart, range!!.first)
+                assertEquals(expectedStart + moovBytes.size.toLong(), range.last)
+            }
+        } finally {
+            tmp.delete()
+        }
+    }
+
     private fun resource(name: String): ByteArray =
         javaClass.classLoader!!.getResourceAsStream(name)!!.use { it.readBytes() }
 }

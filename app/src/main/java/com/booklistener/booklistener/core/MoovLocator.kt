@@ -70,8 +70,8 @@ object MoovLocator {
         val hdr = java.nio.ByteBuffer.allocate(16)
         var heads = 0
         while (pos + 8 <= fileLength) {
-            // v2.2.14：扫描预算——防止损坏文件退化为逐字节扫描大文件导致 CPU 高/卡死（如 615MB m4b
-            // 或含非白名单 box 的 m4a 逐字节重对齐几亿次 IO）。超预算放弃，调用方回退整读或记 error。
+            // v2.2.14：扫描预算——防止损坏文件重对齐扫大文件导致 CPU 高/卡死。超预算放弃，
+            // 调用方回退整读（≤64MB）或记 error。
             if (++heads > MAX_BOX_HEADS) return null
             channel.position(pos)
             hdr.clear()
@@ -92,13 +92,17 @@ object MoovLocator {
                 size == 0L -> fileLength - pos // size=0：延伸到文件尾
                 else -> size
             }
-            if (boxLen >= 8 && pos + boxLen <= fileLength && type in KNOWN_BOX_TYPES) {
+            // v2.2.15：按 size 跳过不查 type 白名单——MP4 是严格 box 树，size 合法（8≤boxLen
+            // 且 pos+boxLen≤文件尾）则任何 type（含 uuid/pssh/sinf 等自定义/加密 box）都是
+            // 合法 box，应直接按 size 跳；只有 size 越界（真损坏）才重对齐。
+            // 旧实现 `&& type in KNOWN_BOX_TYPES` 会把合法的未知 box 误判为损坏 → 重对齐 →
+            // 大文件逐字节扫卡死（西乙队 m4a 根因）。
+            if (boxLen >= 8 && pos + boxLen <= fileLength) {
                 if (type == MOOV) return pos..(pos + boxLen)
                 pos += boxLen
             } else {
-                // v2.2.14：损坏/越界/未知类型——块内搜索下一个已知 box 魔数，
-                // 替代 v2.2.7 的 pos+=1 逐字节 IO（大文件逐字节 = 几亿次 position+read，卡死）
-                val next = searchNextKnownBox(channel, fileLength, pos)
+                // 真损坏（size 越界/<8）：块内搜索 moov 魔数，替代逐字节 IO 卡死
+                val next = searchMoov(channel, fileLength, pos)
                 if (next == null) return null
                 pos = next
             }
@@ -106,9 +110,9 @@ object MoovLocator {
         return null
     }
 
-    /** v2.2.14：块内扫描 [from, fileLength)，返回下一个已知 box type 魔数的文件偏移；找不到返回 null。
-     *  每次读 64KB chunk 在内存遍历 4 字节魔数，避免逐字节 IO；chunk 间重叠 3 字节防跨块边界漏检。 */
-    private fun searchNextKnownBox(
+    /** v2.2.14：块内扫描 [from, fileLength)，返回下一个 'moov' 魔数的文件偏移；找不到返回 null。
+     *  每次读 64KB chunk 在内存遍历 4 字节魔数，避免逐字节 IO；chunk 间重叠 3 字节防跨块漏检。 */
+    private fun searchMoov(
         channel: java.nio.channels.FileChannel,
         fileLength: Long,
         from: Long
@@ -124,17 +128,17 @@ object MoovLocator {
             if (channel.read(buf) < len) return null
             val arr = buf.array()
             for (i in 0 until len - 3) {
-                val v = ((arr[i].toInt() and 0xFF) shl 24) or
-                    ((arr[i + 1].toInt() and 0xFF) shl 16) or
-                    ((arr[i + 2].toInt() and 0xFF) shl 8) or
-                    (arr[i + 3].toInt() and 0xFF)
-                if (v in KNOWN_BOX_TYPES) return off + i
+                if (arr[i] == 'm'.code.toByte() &&
+                    arr[i + 1] == 'o'.code.toByte() &&
+                    arr[i + 2] == 'o'.code.toByte() &&
+                    arr[i + 3] == 'v'.code.toByte()
+                ) return off + i
             }
             off += len - 3
         }
         return null
     }
 
-    /** v2.2.14：流式定位 box 头读取预算（超预算放弃，防损坏文件逐字节卡死） */
+    /** v2.2.14：流式定位 box 头读取预算（超预算放弃，防损坏文件重对齐卡死） */
     private const val MAX_BOX_HEADS = 200_000
 }
