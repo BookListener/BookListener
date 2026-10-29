@@ -95,11 +95,15 @@ class ScanCoordinatorFactory(
         }
         val diagBase =
             "tag parse failed\n文件: ${file.name}\n大小: ${file.sizeBytes ?: "?"} B\n${read.detail}\n读取: ${bytes.size} B"
-        probeByPath[file.path] = "moov 字节就绪(${bytes.size}B)，开始解析（Media3+ilst）…"
+        probeByPath[file.path] = "moov 字节就绪(${bytes.size}B)，开始自研解析…"
         return if (isMp4) {
-            val m3 = extractor.extract(bytes, ext)
-            // 合并：Media3 标准映射帧 + 自研扩展原子（键名不同体系，全保留）
-            val entries = Mp4IlstReader.read(bytes) + m3.entries
+            // v2.2.19：m4a/mp4/alac/m4b 全部自研解析，不再调用 Media3 Mp4Extractor——
+            // 实测 Media3 对「只有 moov 无 mdat」的字节在 Android 设备上可死循环卡死
+            // （第2063集分步诊断：moov 读取完成、卡在 extract），而自研解析器对同字节
+            // 毫秒级完成（标签 Mp4IlstReader + 时长 mvhd + 章节 Mp4ChapterReader + covr）。
+            // Media3 的 Mp4Extractor 标准映射帧与 Mp4IlstReader 输出等价（iTunes 原子），
+            // 去掉后标签无缺失（Mp4IlstReader 遍历 ilst 全原子，较 Media3 更全）。
+            val entries = Mp4IlstReader.read(bytes)
             // v2.2.4：m4b 内嵌章节（iTunes 章节表优先 + chpl 兜底；无章节 → null）
             val chapters = if (ext == "m4b") {
                 Mp4ChapterReader.read(bytes).takeIf { it.isNotEmpty() }
@@ -110,8 +114,8 @@ class ScanCoordinatorFactory(
                     coverUriByUri[file.path] = it
                 }
             }
-            // v2.2.18：时长优先 Media3，缺失（moov-only 字节 Media3 解析不出）回退自研 mvhd
-            val durationMs = m3.durationMs ?: Mp4IlstReader.readDurationMs(bytes)
+            // v2.2.18：mvhd 自研时长（Media3 对 moov-only 字节解析不出，已实测 dur=null）
+            val durationMs = Mp4IlstReader.readDurationMs(bytes)
             val firstChapter = chapters?.firstOrNull()
             diagnostics[file.path] = "$diagBase\n解析: ilst=${entries.size} dur=${durationMs} chapters=${chapters?.size ?: 0} 首章=${firstChapter?.title?.take(24) ?: "无"}"
             ResolvedTags.fromEntries(entries, durationMs).copy(chapters = chapters)
