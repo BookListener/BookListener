@@ -207,4 +207,62 @@ class Mp4ChapterReaderTest {
         assertEquals("第一章", chapters[0].title)
         assertEquals(3_600_000L, chapters[1].startMs)
     }
+
+    // ---- v2.2.8：iTunes 标题全空回退 chpl 补标题 ----
+
+    @Test
+    fun `iTunes 时间点成功但标题全空 chpl 按序补标题`() {
+        // iTunes 章节轨（tref/chap + stts 时间点，无 ilst 名）+ chpl（同数量，带标题）
+        val mainTrak = box(fourcc("trak"), concat(tkhd(1), chapRef(2)))
+        val chapterTrak = box(
+            fourcc("trak"),
+            concat(
+                tkhd(2),
+                mdia(concat(mdhd(1000), minf(stbl(stts(1 to 3_600_000, 1 to 3_600_000)))))
+            )
+        )
+        val bytes = concat(
+            box(
+                fourcc("moov"),
+                concat(
+                    mvhd(1000),
+                    mainTrak,
+                    chapterTrak,
+                    udta(chpl(0L to "第一章", 3_600_000L to "第二章"))
+                )
+            )
+        )
+        val chapters = Mp4ChapterReader.read(bytes)
+        assertEquals(2, chapters.size)
+        assertEquals(0L, chapters[0].startMs)
+        assertEquals("第一章", chapters[0].title) // chpl 补的标题
+        assertEquals(3_600_000L, chapters[1].startMs)
+        assertEquals("第二章", chapters[1].title)
+    }
+
+    @Test
+    fun `iTunes 标题全空且 chpl 数量不一致 保留 iTunes 时间点不强补`() {
+        val mainTrak = box(fourcc("trak"), concat(tkhd(1), chapRef(2)))
+        val chapterTrak = box(
+            fourcc("trak"),
+            concat(
+                tkhd(2),
+                mdia(concat(mdhd(1000), minf(stbl(stts(1 to 3_600_000, 1 to 3_600_000, 1 to 3_600_000)))))
+            )
+        )
+        val bytes = concat(
+            box(
+                fourcc("moov"),
+                concat(
+                    mvhd(1000),
+                    mainTrak,
+                    chapterTrak,
+                    udta(chpl(0L to "第一章", 3_600_000L to "第二章"))
+                )
+            )
+        )
+        val chapters = Mp4ChapterReader.read(bytes)
+        assertEquals(3, chapters.size) // iTunes 3 章时间点
+        assertTrue(chapters.all { it.title.isEmpty() }) // 数量不一致不强补
+    }
 }

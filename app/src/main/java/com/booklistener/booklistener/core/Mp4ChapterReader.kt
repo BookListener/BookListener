@@ -32,8 +32,18 @@ object Mp4ChapterReader {
 
     /** iTunes 章节表优先，chpl 兜底；无章节 → 空列表 */
     fun read(bytes: ByteArray): List<Chapter> = runCatching {
-        val chapters = readITunesChapters(bytes)
-        if (chapters.isNotEmpty()) chapters else ChplChapterReader.read(bytes)
+        val itunes = readITunesChapters(bytes)
+        if (itunes.isNotEmpty() && itunes.any { it.title.isNotBlank() }) return itunes
+        // v2.2.8：iTunes 时间点成功但标题全空（常见：章节轨无 ilst 名）→ chpl 补标题。
+        // chpl 章节数与 iTunes 一致 → 按序覆盖标题（时间点以 iTunes 为准）；数量不一致
+        // 说明时间轴不同（章节轨/电影 timescale 差异），不强补，标题空走「第 N 章」兜底。
+        val chpl = ChplChapterReader.read(bytes)
+        when {
+            itunes.isEmpty() -> chpl
+            chpl.isEmpty() -> itunes
+            chpl.size == itunes.size -> itunes.mapIndexed { i, c -> c.copy(title = chpl[i].title) }
+            else -> itunes
+        }
     }.getOrElse { emptyList() }
 
     private fun readITunesChapters(bytes: ByteArray): List<Chapter> {

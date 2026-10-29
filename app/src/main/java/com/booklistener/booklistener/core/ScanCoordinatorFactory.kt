@@ -35,13 +35,22 @@ class ScanCoordinatorFactory(
             tagReader = { file -> resolveLocalTags(metadataExtractor, file) },
             cueTextReader = { file -> readSafText(file.path) },
             indexStore = indexStore,
-            coverExtractor = coverManager?.let { mgr -> { uri -> mgr.extractCover(uri) } },
+            // v2.2.8：封面回填优先用扫描时自研 covr 提取结果（coverUriByUri，零额外 IO、
+            // 不依赖 MediaMetadataRetriever 对 615MB 级 m4b 的慢速/不稳提取）；
+            // 非 MP4 或 covr 缺失回退 MediaMetadataRetriever。
+            coverExtractor = { uri ->
+                val real = VirtualTrackUri.parse(uri)?.first ?: uri
+                coverUriByUri[real] ?: coverManager?.extractCover(uri)
+            },
             errorDetailProvider = { uri -> diagnostics[uri] }
         )
     }
 
     /** v2.2.6：扫描诊断（uri → 文本；内容文件列表点信息图标弹窗展示，不入库） */
     private val diagnostics = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** v2.2.8：自研 covr 提取结果缓存（整轨 uri → 封面 file:// uri；扫描回填直接用） */
+    private val coverUriByUri = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
      * v2.2.0（spec: tag-fields-full）唯一解析后端：
@@ -82,7 +91,14 @@ class ScanCoordinatorFactory(
             val chapters = if (ext == "m4b") {
                 Mp4ChapterReader.read(bytes).takeIf { it.isNotEmpty() }
             } else null
-            diagnostics[file.path] = "$diagBase\n解析: ilst=${entries.size} dur=${m3.durationMs} chapters=${chapters?.size ?: 0}"
+            // v2.2.8：自研 covr 字节提取 → 写封面文件 → 缓存（专辑行/系列分组封面回填用）
+            Mp4IlstReader.readCover(bytes)?.let { covr ->
+                coverManager?.saveCoverBytes(file.path, covr.mime, covr.bytes)?.let {
+                    coverUriByUri[file.path] = it
+                }
+            }
+            val firstChapter = chapters?.firstOrNull()
+            diagnostics[file.path] = "$diagBase\n解析: ilst=${entries.size} dur=${m3.durationMs} chapters=${chapters?.size ?: 0} 首章=${firstChapter?.title?.take(24) ?: "无"}"
             ResolvedTags.fromEntries(entries, m3.durationMs).copy(chapters = chapters)
         } else {
             val m3 = extractor.extract(bytes, ext)

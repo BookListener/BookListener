@@ -69,6 +69,71 @@ class Mp4IlstReaderTest {
     private fun resource(name: String): ByteArray =
         javaClass.classLoader!!.getResourceAsStream(name)!!.use { it.readBytes() }
 
+    // ---- v2.2.8：自研 covr 字节提取 ----
+
+    private fun fourcc(s: String): Int =
+        (s[0].code shl 24) or (s[1].code shl 16) or (s[2].code shl 8) or s[3].code
+
+    private fun box(type: Int, payload: ByteArray): ByteArray =
+        java.nio.ByteBuffer.allocate(8 + payload.size).putInt(8 + payload.size).putInt(type).put(payload).array()
+
+    private fun concat(vararg parts: ByteArray): ByteArray {
+        var total = 0
+        for (p in parts) total += p.size
+        val out = ByteArray(total)
+        var off = 0
+        for (p in parts) {
+            p.copyInto(out, off)
+            off += p.size
+        }
+        return out
+    }
+
+    /** data 子原子（typeFlags=13 jpeg / 14 png），payload 为图片字节 */
+    private fun dataAtom(flags: Int, payload: ByteArray): ByteArray =
+        box(fourcc("data"), concat(
+            java.nio.ByteBuffer.allocate(4).putInt(flags).array(),
+            java.nio.ByteBuffer.allocate(4).putInt(0).array(),
+            payload
+        ))
+
+    /** meta → ilst（meta 自带 4B version/flags 头） */
+    private fun metaIlst(children: ByteArray): ByteArray =
+        box(fourcc("meta"), concat(byteArrayOf(0, 0, 0, 0), box(fourcc("ilst"), children)))
+
+    @Test
+    fun `readCover 提取 jpeg covr 字节与 mime`() {
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 1, 2, 3)
+        val covr = box(fourcc("covr"), dataAtom(13, jpeg))
+        val bytes = concat(box(fourcc("moov"), box(fourcc("udta"), metaIlst(covr))))
+        val cover = Mp4IlstReader.readCover(bytes)
+        assertTrue("应提取出封面", cover != null)
+        assertEquals("image/jpeg", cover!!.mime)
+        assertTrue(cover.bytes.contentEquals(jpeg))
+    }
+
+    @Test
+    fun `readCover 提取 png covr 与文本原子并存`() {
+        val png = byteArrayOf(0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(), 9, 8)
+        val covr = box(fourcc("covr"), dataAtom(14, png))
+        val nam = box(fourcc("\u00A9nam"), dataAtom(1, "标题".toByteArray(Charsets.UTF_8)))
+        val bytes = concat(box(fourcc("moov"), box(fourcc("udta"), metaIlst(concat(nam, covr)))))
+        val cover = Mp4IlstReader.readCover(bytes)
+        assertTrue(cover != null)
+        assertEquals("image/png", cover!!.mime)
+        assertTrue(cover.bytes.contentEquals(png))
+        // 文本原子不受影响
+        val entries = Mp4IlstReader.read(bytes)
+        assertEntry(entries, "\u00A9nam", "标题")
+    }
+
+    @Test
+    fun `readCover 无 covr 返回 null`() {
+        val nam = box(fourcc("\u00A9nam"), dataAtom(1, "标题".toByteArray(Charsets.UTF_8)))
+        val bytes = concat(box(fourcc("moov"), box(fourcc("udta"), metaIlst(nam))))
+        assertEquals(null, Mp4IlstReader.readCover(bytes))
+    }
+
     private fun assertEntry(entries: List<com.booklistener.core.TagEntry>, key: String, value: String) {
         val hit = entries.firstOrNull { it.key == key }
         assertTrue("缺少键 $key（实际键：" + entries.map { it.key } + "）", hit != null)

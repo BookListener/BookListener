@@ -33,6 +33,57 @@ object Mp4IlstReader {
         parseIlst(buf, ilst)
     }.getOrElse { emptyList() }
 
+    /** 内嵌封面（covr 原子 → 图片字节；typeFlags=13 jpeg / 14 png）。无 covr/结构异常 → null */
+    data class CoverData(val mime: String, val bytes: ByteArray)
+
+    /** 最大封面字节数（正常内嵌封面 <1MB；超限视为异常不提取） */
+    private const val MAX_COVER_BYTES = 4 * 1024 * 1024
+
+    /**
+     * v2.2.8：自研 covr 字节提取（moov 区间已读入内存，零额外 IO；
+     * 替代扫描封面回填依赖 MediaMetadataRetriever 对 615MB 级 m4b 的慢速/不稳提取）。
+     * 遍历 ilst 子原子找 covr → 其 data 子原子 payload（跳过 size/type/data 头 16B）。
+     */
+    fun readCover(bytes: ByteArray): CoverData? = runCatching {
+        val buf = Reader(bytes)
+        val ilst = findBox(buf, MOOV, UDTA, META, ILST) ?: return null
+        var pos = ilst.first
+        while (pos + 8 <= ilst.last) {
+            buf.seekTo(pos)
+            val size = buf.u32()
+            val type = buf.u32()
+            if (size < 8) break
+            val boxEnd = (pos + size).coerceAtMost(ilst.last + 1)
+            if (type == 0x636F7672 /* covr */) {
+                var p = pos + 8
+                while (p + 8 <= boxEnd) {
+                    buf.seekTo(p)
+                    val dSize = buf.u32()
+                    val dType = buf.u32()
+                    if (dSize < 8) break
+                    val dEnd = (p + dSize).coerceAtMost(boxEnd)
+                    if (dType == DATA) {
+                        buf.seekTo(p + 8)
+                        val flags = buf.u32()
+                        if (flags == 13 || flags == 14) {
+                            val len = dEnd - (p + 16)
+                            if (len in 1..MAX_COVER_BYTES) {
+                                return CoverData(
+                                    if (flags == 13) "image/jpeg" else "image/png",
+                                    buf.copyOfRange(p + 16, len)
+                                )
+                            }
+                        }
+                        break
+                    }
+                    p = dEnd
+                }
+            }
+            pos = boxEnd
+        }
+        null
+    }.getOrNull()
+
     /** 从 start 起遍历同一层 box，找 type 链（如 moov→udta→meta→ilst）；返回目标 box 的范围 */
     private fun findBox(buf: Reader, vararg types: Int): IntRange? {
         var pos = 0
@@ -213,6 +264,13 @@ object Mp4IlstReader {
             val i = offset.coerceIn(0, data.size)
             val n = len.coerceAtMost(data.size - i)
             return String(data, i, n, Charsets.UTF_8).trimEnd('\u0000')
+        }
+
+        /** 复制 [start, start+len) 字节（越界截断） */
+        fun copyOfRange(start: Int, len: Int): ByteArray {
+            val i = start.coerceIn(0, data.size)
+            val n = len.coerceAtMost(data.size - i)
+            return data.copyOfRange(i, i + n)
         }
     }
 }

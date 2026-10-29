@@ -41,6 +41,19 @@ class CoverManager(
     /** v2.1.15：公开内嵌封面提取（供扫描时为作品提取首曲封面入库） */
     fun extractCover(audioUri: String): String? = extractEmbeddedCover(audioUri)
 
+    /**
+     * v2.2.8：直接把自研解析出的内嵌封面字节写入封面文件（扫描 covr 路径，替代对 615MB 级
+     * m4b 的 MediaMetadataRetriever 提取）；返回 file:// uri。mime 决定扩展名。
+     */
+    fun saveCoverBytes(realUri: String, mime: String, bytes: ByteArray): String? = runCatching {
+        val coverDir = CacheDirs.coverFilesDir(app)
+        coverDir.mkdirs()
+        val ext = if (mime.contains("png", ignoreCase = true)) "png" else "jpg"
+        val file = File(coverDir, sanitize(coverDir, realUri) + ".$ext")
+        file.writeBytes(bytes)
+        Uri.fromFile(file).toString()
+    }.getOrNull()
+
     /** 条目文件集合的专辑数判定（v1.6.22）：无 tag 的 null 视为同组；空集合返回 0 */
     fun albumCountOf(items: List<AudioItem>): Int = items.map { it.album }.distinct().size
 
