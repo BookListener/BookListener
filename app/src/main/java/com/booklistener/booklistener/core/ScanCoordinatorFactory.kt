@@ -98,9 +98,11 @@ class ScanCoordinatorFactory(
                     coverUriByUri[file.path] = it
                 }
             }
+            // v2.2.18：时长优先 Media3，缺失（moov-only 字节 Media3 解析不出）回退自研 mvhd
+            val durationMs = m3.durationMs ?: Mp4IlstReader.readDurationMs(bytes)
             val firstChapter = chapters?.firstOrNull()
-            diagnostics[file.path] = "$diagBase\n解析: ilst=${entries.size} dur=${m3.durationMs} chapters=${chapters?.size ?: 0} 首章=${firstChapter?.title?.take(24) ?: "无"}"
-            ResolvedTags.fromEntries(entries, m3.durationMs).copy(chapters = chapters)
+            diagnostics[file.path] = "$diagBase\n解析: ilst=${entries.size} dur=${durationMs} chapters=${chapters?.size ?: 0} 首章=${firstChapter?.title?.take(24) ?: "无"}"
+            ResolvedTags.fromEntries(entries, durationMs).copy(chapters = chapters)
         } else {
             val m3 = extractor.extract(bytes, ext)
             diagnostics[file.path] = "$diagBase\n解析: dur=${m3.durationMs} entries=${m3.entries.size}"

@@ -24,6 +24,7 @@ object Mp4IlstReader {
     private const val DATA = 0x64617461 // 'data'
     private const val CHPL = 0x6368706C // 'chpl'
     private const val DASHES = 0x2D2D2D2D // '----'
+    private const val MVHD = 0x6D766864 // 'mvhd'
 
     /** 解析 ilst 原子树；无 meta/ilst 或结构异常 → 空列表 */
     fun read(bytes: ByteArray): List<TagEntry> = runCatching {
@@ -32,6 +33,42 @@ object Mp4IlstReader {
         val ilst = findBox(buf, MOOV, UDTA, META, ILST) ?: return emptyList()
         parseIlst(buf, ilst)
     }.getOrElse { emptyList() }
+
+    /**
+     * v2.2.18：自研 mvhd 时长（毫秒）——Media3 Mp4Extractor 对「只有 moov 无 mdat」的字节
+     * 解析不出 SeekMap/时长（实测 dur=null），导致所有 m4a/m4b 列表「时长未知」。
+     * 直接从 moov 内 mvhd 读 timescale+duration（version 0/1），不依赖 Media3 结构。
+     * 无 mvhd / 结构异常 / timescale 非法 → null。
+     */
+    fun readDurationMs(bytes: ByteArray): Long? = runCatching {
+        val buf = Reader(bytes)
+        val mvhd = findBox(buf, MOOV, MVHD) ?: return null
+        val base = mvhd.first + 8 // 跳过 size+type → version/flags
+        val version = buf.u8(base)
+        val timescale: Long
+        val duration: Long
+        if (version == 1) {
+            // creation(8) modification(8) timescale(4) duration(8)
+            timescale = u32At(buf, base + 20).toLong() and 0xFFFFFFFFL
+            duration = u64At(bytes, base + 24)
+        } else {
+            // creation(4) modification(4) timescale(4) duration(4)
+            timescale = u32At(buf, base + 12).toLong() and 0xFFFFFFFFL
+            duration = u32At(buf, base + 16).toLong() and 0xFFFFFFFFL
+        }
+        if (timescale <= 0) null else duration * 1000 / timescale
+    }.getOrElse { null }
+
+    private fun u32At(buf: Reader, off: Int): Int {
+        buf.seekTo(off)
+        return buf.u32()
+    }
+
+    private fun u64At(data: ByteArray, off: Int): Long {
+        var v = 0L
+        for (i in 0 until 8) v = (v shl 8) or ((data.getOrNull(off + i)?.toLong() ?: 0L) and 0xFF)
+        return v
+    }
 
     /** 内嵌封面（covr 原子 → 图片字节；typeFlags=13 jpeg / 14 png）。无 covr/结构异常 → null */
     data class CoverData(val mime: String, val bytes: ByteArray)
