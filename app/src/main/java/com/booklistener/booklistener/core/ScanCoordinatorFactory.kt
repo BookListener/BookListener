@@ -43,12 +43,23 @@ class ScanCoordinatorFactory(
                 val real = VirtualTrackUri.parse(uri)?.first ?: uri
                 coverUriByUri[real] ?: coverManager?.extractCover(uri)
             },
-            errorDetailProvider = { uri -> diagnostics[uri] }
+            errorDetailProvider = { uri ->
+                // v2.2.18：优先完整诊断（resolveLocalTags 完成时写入）；若为空（超时/中断，
+                // diagnostics 未及写入）回退 probeByPath 的分步进度（卡在哪一步）
+                diagnostics[uri] ?: probeByPath[uri]?.let { "tag parse failed\n$it" } ?: "tag parse failed"
+            }
         )
     }
 
     /** v2.2.6：扫描诊断（uri → 文本；内容文件列表点信息图标弹窗展示，不入库） */
     private val diagnostics = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * v2.2.18：单文件 moov 读取的实时分步进度（uri → 已完成步骤）。resolveLocalTags 每完成
+     * 一步立即写入（ConcurrentHashMap 保证跨线程可见）——即使该文件解析超时被中断、diagnostics
+     * 未及写入，弹窗仍能显示「卡在打开 SAF / 定位 moov / 读 moov / 解析」哪一步。
+     */
+    private val probeByPath = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /** v2.2.8：自研 covr 提取结果缓存（整轨 uri → 封面 file:// uri；扫描回填直接用） */
     private val coverUriByUri = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -84,6 +95,7 @@ class ScanCoordinatorFactory(
         }
         val diagBase =
             "tag parse failed\n文件: ${file.name}\n大小: ${file.sizeBytes ?: "?"} B\n${read.detail}\n读取: ${bytes.size} B"
+        probeByPath[file.path] = "moov 字节就绪(${bytes.size}B)，开始解析（Media3+ilst）…"
         return if (isMp4) {
             val m3 = extractor.extract(bytes, ext)
             // 合并：Media3 标准映射帧 + 自研扩展原子（键名不同体系，全保留）
@@ -145,15 +157,19 @@ class ScanCoordinatorFactory(
      * 命中后只读 moov 区间字节。定位失败 bytes=null（调用方按文件大小决定是否回退整读）。
      */
     private fun readMoovRangeBytes(uri: String): MoovRead = runCatching {
+        probeByPath[uri] = "打开 SAF（openAssetFileDescriptor）…"
         val afd = context.contentResolver.openAssetFileDescriptor(android.net.Uri.parse(uri), "r")
             ?: return MoovRead(null, "openAssetFileDescriptor 失败")
+        probeByPath[uri] = "打开 SAF 完成，构造 FileInputStream…"
         afd.use {
             val length = it.length
             if (length <= 0) return MoovRead(null, "文件长度=$length")
+            probeByPath[uri] = "文件长度=$length，读头部…"
             java.io.FileInputStream(it.fileDescriptor).use { fis ->
                 val channel = fis.channel
                 val head = readExact(channel, 0, minOf(length, 64L).toInt())
                 val headHex = head.take(48).joinToString("") { "%02x".format(it) }
+                probeByPath[uri] = "头部完成，流式定位 moov…"
                 val range = MoovLocator.streamMoovRange(channel, length)
                 if (range != null) {
                     val moovLen = range.last - range.first
@@ -161,24 +177,31 @@ class ScanCoordinatorFactory(
                     // 时 range 会异常巨大，readExact 试图读数百 MB → 卡 + 内存暴涨；moov 正常几 MB~
                     // 几十 MB，超过 128MB 视为误判，放弃本次解析（走回退/记 error），不再读。
                     if (moovLen > MAX_MOOV_BYTES) {
+                        probeByPath[uri] = "moov 区间过大(${moovLen}B)疑似误判，放弃读取"
                         return MoovRead(
                             null,
                             "moov 区间过大(${moovLen}B)疑似误判，放弃读取\n头部hex: $headHex"
                         )
                     }
+                    probeByPath[uri] = "moov 定位命中(${range.first}..${range.last})，读取 ${moovLen}B…"
                     val bytes = readExact(channel, range.first, moovLen.toInt())
+                    probeByPath[uri] = "读 moov 完成（${bytes.size}B）"
                     return MoovRead(
                         bytes,
                         "moov: 流式命中 range=${range.first}..${range.last}（len=${bytes.size}B）\n头部hex: $headHex"
                     )
                 }
+                probeByPath[uri] = "moov 流式遍历未命中"
                 MoovRead(
                     null,
                     "moov: 流式遍历未命中（文件 ${length}B）\n头部hex: $headHex"
                 )
             }
         }
-    }.getOrElse { MoovRead(null, "读取异常: ${it.message}") }
+    }.getOrElse { e ->
+        probeByPath[uri] = "读取异常: ${e.message}"
+        MoovRead(null, "读取异常: ${e.message}")
+    }
 
     /** 从 [channel] 的 [start] 起精确读 [len] 字节 */
     private fun readExact(channel: java.nio.channels.FileChannel, start: Long, len: Int): ByteArray {
