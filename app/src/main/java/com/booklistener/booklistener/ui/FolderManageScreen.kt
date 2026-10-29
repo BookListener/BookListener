@@ -69,6 +69,7 @@ fun FolderManageScreen(
     val savedEntries by viewModel.savedEntries.collectAsStateWithLifecycle()
     val manageFiles by viewModel.manageFiles.collectAsStateWithLifecycle()
     val scanningEntryId by viewModel.scanningEntryId.collectAsStateWithLifecycle()
+    val scanProgress by viewModel.scanProgress.collectAsStateWithLifecycle()
     val useRawName by viewModel.albumTitleMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showAddDialog by remember { mutableStateOf(false) }
@@ -456,17 +457,20 @@ fun FolderManageScreen(
                 }
             }
             val files = manageFiles
-            if (files == null) {
+            if (scanningEntryId == opened.id && (files == null || files.isEmpty())) {
+                // v2.2.12：索引空/未加载且正在扫描 → 显示"正在扫描…"（而非误导的"加载中"）；
+                // v2.2.13：有进度则附 "i/t"（文件处理阶段），无进度表示仍在列目录阶段
                 Text(
-                    text = stringResource(R.string.common_loading),
+                    text = if (scanProgress != null) {
+                        stringResource(R.string.common_scanning) + "  " + scanProgress
+                    } else stringResource(R.string.common_scanning),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)
                 )
-            } else if (scanningEntryId == opened.id && files.isEmpty()) {
-                // v2.2.12：索引为空且正在扫描 → 显示"正在扫描…"，替代静默空态
+            } else if (files == null) {
                 Text(
-                    text = stringResource(R.string.common_scanning),
+                    text = stringResource(R.string.common_loading),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)

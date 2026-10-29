@@ -37,7 +37,12 @@ class ScanCoordinator(
      * @param entryId 条目标识（写索引的 key；本地 SAF tree uri / 网盘 "webdav://..." ）
      * @param rootUri 列目录的根标识（本地 SAF tree uri / 网盘完整 URL）
      */
-    suspend fun scan(entryId: String, rootUri: String = entryId) {
+    suspend fun scan(
+        entryId: String,
+        rootUri: String = entryId,
+        /** v2.2.13：扫描进度回调 (已处理, 总数)。仅文件处理阶段触发；列目录阶段不触发 */
+        onProgress: ((done: Int, total: Int) -> Unit)? = null
+    ) {
         val sourceFiles = source.listFiles(rootUri)
         // v2.1.15：过滤目录 + 隐藏文件（. 开头，含文件名和 relativePath 各路径段）；
         // CUE/封面图片不受音频大小/时长过滤影响
@@ -52,7 +57,10 @@ class ScanCoordinator(
         // v2.2.0：每文件标签全量条目（uri → extras），扫描末随索引整体替换
         val extrasByUri = LinkedHashMap<String, List<EntryTagExtraEntity>>()
 
+        var processed = 0
         for (file in files) {
+            processed++
+            onProgress?.invoke(processed, files.size)
             // v2.2.11：目录树访问失败的诊断行（来自 Source 递归列目录），
             // 作为内容文件入索引展示错误，避免"添加父目录一个都扫不到且无任何提示"
             if (file.scanError != null) {

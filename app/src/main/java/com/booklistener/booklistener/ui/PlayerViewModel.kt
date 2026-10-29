@@ -365,6 +365,10 @@ class PlayerViewModel @JvmOverloads constructor(
     // v2.2.12：正在扫描的条目 id（内容文件列表据此显示"正在扫描…"，替代无任何提示的静默空）
     private val _scanningEntryId = MutableStateFlow<String?>(null)
     val scanningEntryId: StateFlow<String?> = _scanningEntryId.asStateFlow()
+
+    // v2.2.13：扫描进度文本（"已处理/总数"），仅文件处理阶段更新；列目录阶段为 null
+    private val _scanProgress = MutableStateFlow<String?>(null)
+    val scanProgress: StateFlow<String?> = _scanProgress.asStateFlow()
     private val _inFolderView = MutableStateFlow(false)
     val inFolderView: StateFlow<Boolean> = _inFolderView.asStateFlow()
 
@@ -866,14 +870,18 @@ class PlayerViewModel @JvmOverloads constructor(
         saveFolder(treeUri)
         viewModelScope.launch {
             _scanningEntryId.value = treeUri.toString()
+            _scanProgress.value = null
             withContext(Dispatchers.IO) {
                 // v2.2.0：扫描统一走 ScanCoordinator（列目录→标签→CUE→写索引）；
                 // 已有索引（重复添加）不重复扫描。
                 if (loadFromIndex(treeUri.toString(), SourceType.LOCAL) == null) {
-                    scanFactory.forLocal().scan(treeUri.toString())
+                    scanFactory.forLocal().scan(treeUri.toString()) { done, total ->
+                        _scanProgress.value = "$done/$total"
+                    }
                 }
             }
             _scanningEntryId.value = null
+            _scanProgress.value = null
             val items = loadFromIndex(treeUri.toString(), SourceType.LOCAL).orEmpty()
             val entry = buildLocalEntry(treeUri, items, _savedEntries.value.firstOrNull { it.id == treeUri.toString() })
             setEntries(entryStore.replace(_savedEntries.value, entry))
@@ -893,14 +901,19 @@ class PlayerViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             val id = entry.id
             _scanningEntryId.value = id
+            _scanProgress.value = null
             try {
                 withContext(Dispatchers.IO) {
                     val existing = indexStore.load()[id].orEmpty()
                     if (existing.isEmpty()) {
                         if (entry.isLocal) {
-                            scanFactory.forLocal().scan(id)
+                            scanFactory.forLocal().scan(id) { done, total ->
+                                _scanProgress.value = "$done/$total"
+                            }
                         } else if (entry.sourceType == SourceType.WEBDAV) {
-                            scanFactory.forWebDav().scan(entryId = id, rootUri = entry.uri)
+                            scanFactory.forWebDav().scan(entryId = id, rootUri = entry.uri) { done, total ->
+                                _scanProgress.value = "$done/$total"
+                            }
                         }
                     }
                 }
@@ -909,6 +922,7 @@ class PlayerViewModel @JvmOverloads constructor(
                 _eventMsg.value = getString(MessageCatalog.MSG_SCAN_FAILED, entry.displayName)
             }
             _scanningEntryId.value = null
+            _scanProgress.value = null
             _manageFiles.value = withContext(Dispatchers.IO) { indexStore.load()[id] ?: emptyList() }
             refreshAlbums()
         }
