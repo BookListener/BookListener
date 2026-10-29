@@ -25,6 +25,7 @@ class ScanCoordinatorFactory(
 
         /** v2.2.7（spec: m4b-moov-range-read）：流式定位失败时整读回退的文件大小上限（防大文件 OOM） */
         private const val MOOV_FALLBACK_LIMIT = 64L * 1024 * 1024
+        private const val MAX_MOOV_BYTES = 128L * 1024 * 1024
     }
 
     /** 本地：SAF 列目录 + 新解析器（MetadataExtractor + Mp4IlstReader，唯一后端）+ SAF 读 cue + 内嵌封面提取 */
@@ -153,7 +154,17 @@ class ScanCoordinatorFactory(
                 val headHex = head.take(48).joinToString("") { "%02x".format(it) }
                 val range = MoovLocator.streamMoovRange(channel, length)
                 if (range != null) {
-                    val bytes = readExact(channel, range.first, (range.last - range.first).toInt())
+                    val moovLen = range.last - range.first
+                    // v2.2.16：moov 区间大小上限——定位器误判（随机数据碰巧构成伪 moov + 巨大 size）
+                    // 时 range 会异常巨大，readExact 试图读数百 MB → 卡 + 内存暴涨；moov 正常几 MB~
+                    // 几十 MB，超过 128MB 视为误判，放弃本次解析（走回退/记 error），不再读。
+                    if (moovLen > MAX_MOOV_BYTES) {
+                        return MoovRead(
+                            null,
+                            "moov 区间过大(${moovLen}B)疑似误判，放弃读取\n头部hex: $headHex"
+                        )
+                    }
+                    val bytes = readExact(channel, range.first, moovLen.toInt())
                     return MoovRead(
                         bytes,
                         "moov: 流式命中 range=${range.first}..${range.last}（len=${bytes.size}B）\n头部hex: $headHex"

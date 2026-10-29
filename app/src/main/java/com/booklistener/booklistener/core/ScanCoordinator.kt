@@ -40,8 +40,8 @@ class ScanCoordinator(
     suspend fun scan(
         entryId: String,
         rootUri: String = entryId,
-        /** v2.2.13：扫描进度回调 (已处理, 总数)。仅文件处理阶段触发；列目录阶段不触发 */
-        onProgress: ((done: Int, total: Int) -> Unit)? = null
+        /** v2.2.13：扫描进度回调 (已处理, 总数, 当前文件名)。仅文件处理阶段触发；列目录阶段不触发 */
+        onProgress: ((done: Int, total: Int, currentName: String) -> Unit)? = null
     ) {
         val sourceFiles = source.listFiles(rootUri)
         // v2.1.15：过滤目录 + 隐藏文件（. 开头，含文件名和 relativePath 各路径段）；
@@ -60,7 +60,7 @@ class ScanCoordinator(
         var processed = 0
         for (file in files) {
             processed++
-            onProgress?.invoke(processed, files.size)
+            onProgress?.invoke(processed, files.size, file.name)
             // v2.2.11：目录树访问失败的诊断行（来自 Source 递归列目录），
             // 作为内容文件入索引展示错误，避免"添加父目录一个都扫不到且无任何提示"
             if (file.scanError != null) {

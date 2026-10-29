@@ -875,8 +875,8 @@ class PlayerViewModel @JvmOverloads constructor(
                 // v2.2.0：扫描统一走 ScanCoordinator（列目录→标签→CUE→写索引）；
                 // 已有索引（重复添加）不重复扫描。
                 if (loadFromIndex(treeUri.toString(), SourceType.LOCAL) == null) {
-                    scanFactory.forLocal().scan(treeUri.toString()) { done, total ->
-                        _scanProgress.value = "$done/$total"
+                    scanFactory.forLocal().scan(treeUri.toString()) { done, total, currentName ->
+                        _scanProgress.value = "$currentName  ($done/$total)"
                     }
                 }
             }
@@ -907,12 +907,12 @@ class PlayerViewModel @JvmOverloads constructor(
                     val existing = indexStore.load()[id].orEmpty()
                     if (existing.isEmpty()) {
                         if (entry.isLocal) {
-                            scanFactory.forLocal().scan(id) { done, total ->
-                                _scanProgress.value = "$done/$total"
+                            scanFactory.forLocal().scan(id) { done, total, currentName ->
+                                _scanProgress.value = "$currentName  ($done/$total)"
                             }
                         } else if (entry.sourceType == SourceType.WEBDAV) {
-                            scanFactory.forWebDav().scan(entryId = id, rootUri = entry.uri) { done, total ->
-                                _scanProgress.value = "$done/$total"
+                            scanFactory.forWebDav().scan(entryId = id, rootUri = entry.uri) { done, total, currentName ->
+                                _scanProgress.value = "$currentName  ($done/$total)"
                             }
                         }
                     }
