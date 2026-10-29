@@ -26,6 +26,13 @@ class ScanCoordinator(
     private val errorDetailProvider: (uri: String) -> String? = { null }
 ) {
 
+    // v2.2.17：单个文件的标签解析线程池 + 超时——扫描绝不因一个文件的 SAF 读取/解析
+    // 死循环或极慢而整体卡死；超时文件放弃（记 error）继续下一个。2 线程：极端情况下
+    // cancel 中断失败泄漏 1 个线程后仍有 1 个可用，扫描仍能走完。
+    private val tagExecutor: java.util.concurrent.ExecutorService =
+        java.util.concurrent.Executors.newFixedThreadPool(2)
+    private val tagTimeoutMs = 10_000L
+
     companion object {
         // v2.1.15：跳过过小/过短的音频文件（铃声/通知音/系统音效）
         const val MIN_AUDIO_SIZE_BYTES = 100L * 1024L   // 100 KB
@@ -89,7 +96,26 @@ class ScanCoordinator(
                         continue
                     }
                     // 音频：读标签；失败用文件名兜底，记 error（唯一后端，无次级解析）
-                    val tags = runCatching { tagReader(file) }.getOrNull()
+                    // v2.2.17：单文件解析放独立线程 + 超时——任何文件（SAF 读取卡死/
+                    // 解析死循环）超时即放弃继续，scan 不被单文件拖死。tagReader 是 suspend，
+                    // 在 worker 线程 runBlocking 执行；超时 cancel(true) 中断该线程（IO 阻塞
+                    // 会抛中断异常，线程可回收；纯 CPU 死循环无法中断，靠 2 线程池兜底）。
+                    val tags: ResolvedTags? = try {
+                        val fut: java.util.concurrent.Future<ResolvedTags?> =
+                            tagExecutor.submit(java.util.concurrent.Callable<ResolvedTags?> {
+                                kotlinx.coroutines.runBlocking { tagReader(file) }
+                            })
+                        try {
+                            fut.get(tagTimeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        } catch (e: java.util.concurrent.TimeoutException) {
+                            fut.cancel(true)
+                            null
+                        } catch (e: java.util.concurrent.ExecutionException) {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
                     // v2.1.14：跳过播放时间过短的音频（标签解析出时长后判断）
                     val dur = tags?.durationMs
                     if (dur != null && dur in 1..<MIN_AUDIO_DURATION_MS) {
