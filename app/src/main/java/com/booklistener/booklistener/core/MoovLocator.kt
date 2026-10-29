@@ -61,13 +61,18 @@ object MoovLocator {
      *
      * 从文件头开始逐 box 读取 8 字节头（size+type），白名单类型按 size 跳过（含巨大的 mdat——
      * mdat 是白名单，size 合法时直接跳到其末尾继续），moov 在文件任意位置（头/中/尾）都能命中；
-     * 损坏 box 逐字节重对齐。全程只读 box 头（每 box 8~16 字节），不读音频数据，大文件无 OOM。
-     * 返回 moov box 的 [start, endExclusive)；未命中返回 null。
+     * 损坏 box 改为块内搜索下一个已知 box 魔数（v2.2.14 替代 v2.2.7 的逐字节 pos+=1）。
+     * 全程只读 box 头（每 box 8~16 字节）+ 损坏段按 chunk 读一次，不读音频数据，大文件无 OOM。
+     * 返回 moov box 的 [start, endExclusive)；未命中或超预算返回 null（调用方回退整读/记 error）。
      */
     fun streamMoovRange(channel: java.nio.channels.FileChannel, fileLength: Long): LongRange? {
         var pos = 0L
         val hdr = java.nio.ByteBuffer.allocate(16)
+        var heads = 0
         while (pos + 8 <= fileLength) {
+            // v2.2.14：扫描预算——防止损坏文件退化为逐字节扫描大文件导致 CPU 高/卡死（如 615MB m4b
+            // 或含非白名单 box 的 m4a 逐字节重对齐几亿次 IO）。超预算放弃，调用方回退整读或记 error。
+            if (++heads > MAX_BOX_HEADS) return null
             channel.position(pos)
             hdr.clear()
             hdr.limit(8)
@@ -91,9 +96,45 @@ object MoovLocator {
                 if (type == MOOV) return pos..(pos + boxLen)
                 pos += boxLen
             } else {
-                pos += 1 // 损坏/越界/未知类型：逐字节重对齐
+                // v2.2.14：损坏/越界/未知类型——块内搜索下一个已知 box 魔数，
+                // 替代 v2.2.7 的 pos+=1 逐字节 IO（大文件逐字节 = 几亿次 position+read，卡死）
+                val next = searchNextKnownBox(channel, fileLength, pos)
+                if (next == null) return null
+                pos = next
             }
         }
         return null
     }
+
+    /** v2.2.14：块内扫描 [from, fileLength)，返回下一个已知 box type 魔数的文件偏移；找不到返回 null。
+     *  每次读 64KB chunk 在内存遍历 4 字节魔数，避免逐字节 IO；chunk 间重叠 3 字节防跨块边界漏检。 */
+    private fun searchNextKnownBox(
+        channel: java.nio.channels.FileChannel,
+        fileLength: Long,
+        from: Long
+    ): Long? {
+        val CHUNK = 64 * 1024
+        var off = from
+        val buf = java.nio.ByteBuffer.allocate(CHUNK + 4)
+        while (off + 4 <= fileLength) {
+            val len = minOf(CHUNK.toLong(), fileLength - off).toInt()
+            channel.position(off)
+            buf.clear()
+            buf.limit(len)
+            if (channel.read(buf) < len) return null
+            val arr = buf.array()
+            for (i in 0 until len - 3) {
+                val v = ((arr[i].toInt() and 0xFF) shl 24) or
+                    ((arr[i + 1].toInt() and 0xFF) shl 16) or
+                    ((arr[i + 2].toInt() and 0xFF) shl 8) or
+                    (arr[i + 3].toInt() and 0xFF)
+                if (v in KNOWN_BOX_TYPES) return off + i
+            }
+            off += len - 3
+        }
+        return null
+    }
+
+    /** v2.2.14：流式定位 box 头读取预算（超预算放弃，防损坏文件逐字节卡死） */
+    private const val MAX_BOX_HEADS = 200_000
 }
