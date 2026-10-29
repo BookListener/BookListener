@@ -38,6 +38,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -457,6 +459,11 @@ fun FolderManageScreen(
                 }
             }
             val files = manageFiles
+            // v2.2.21：内嵌扫描进度模块（扫描中显示进度；完成有失败驻留可展开重试）
+            ScanProgressModule(
+                state = scanProgress,
+                onRetry = { uri -> viewModel.rescanManageFile(opened, uri) }
+            )
             if (scanningEntryId == opened.id && (files == null || files.isEmpty())) {
                 // v2.2.12：索引空/未加载且正在扫描 → 显示"正在扫描…"（而非误导的"加载中"）；
                 // v2.2.13：有进度则附 "i/t"（文件处理阶段），无进度表示仍在列目录阶段
@@ -589,6 +596,8 @@ fun FolderManageScreen(
                 textAlign = TextAlign.Center
             )
         } else {
+            // v2.2.21：文件夹管理主列表也显示扫描进度（仅汇总；重试入口在内容文件列表）
+            ScanProgressModule(state = scanProgress, onRetry = null, interactive = false)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -605,6 +614,122 @@ fun FolderManageScreen(
                         )
                         // v2.0.12：管理列表行间格线（同设置页/账号列表风格）
                         HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * v2.2.21：内嵌扫描进度模块（不可手动关闭，随扫描任务生命周期）。
+ * - 扫描中：当前文件 + N/M + 线性进度条 + 失败/重试计数（不可点击）；
+ * - 扫描完成但有失败：驻留卡片，点击展开失败清单（每行：文件名 + 完整诊断 + 重试按钮）；
+ * - 完成无失败：state=null 不渲染。
+ * interactive=false（文件夹管理主列表）：仅显示汇总，不展开/不提供重试（重试入口在内容文件列表）。
+ */
+@Composable
+private fun ScanProgressModule(
+    state: ScanProgressState?,
+    onRetry: ((uri: String) -> Unit)? = null,
+    interactive: Boolean = true
+) {
+    val s = state ?: return
+    var expanded by remember { mutableStateOf(false) }
+    val bg = if (s.scanning) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    } else {
+        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .clickable(enabled = interactive && !s.scanning && s.failedFiles.isNotEmpty()) {
+                expanded = !expanded
+            }
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        if (s.scanning) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.common_scanning) + "  ${s.done}/${s.total}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (s.retryingCount > 0) {
+                    Text(
+                        text = stringResource(R.string.scan_retrying, s.retryingCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            s.currentName?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            LinearProgressIndicator(
+                progress = { if (s.total > 0) s.done.toFloat() / s.total else 0f },
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+            )
+            if (s.failedFiles.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.common_scan_failed_count, s.failedFiles.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.scan_done_with_failed, s.failedFiles.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (interactive && s.failedFiles.isNotEmpty()) {
+                    Text(
+                        text = stringResource(if (expanded) R.string.common_collapse else R.string.common_expand),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (expanded && interactive) {
+                s.failedFiles.forEach { f ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = f.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = f.detail,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        TextButton(onClick = { onRetry?.invoke(f.uri) }) {
+                            Text(stringResource(R.string.common_retry))
+                        }
                     }
                 }
             }

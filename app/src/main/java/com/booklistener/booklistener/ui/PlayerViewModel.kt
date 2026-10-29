@@ -21,6 +21,7 @@ import com.booklistener.core.CoverScanner
 import com.booklistener.core.CueTextDecoder
 import com.booklistener.core.EntryIndexStore
 import com.booklistener.core.ScanCoordinatorFactory
+import com.booklistener.core.ScanCoordinator.ScanFailedFile
 import com.booklistener.core.FolderEntry
 import com.booklistener.core.FolderProgressLogic
 import com.booklistener.core.WorkStore
@@ -88,6 +89,21 @@ data class WebDavFormState(
     val testOk: Boolean? = null,
     val testResult: String? = null,
     val savedMsg: String? = null
+)
+
+/**
+ * v2.2.21：扫描进度模块的 UI 状态。
+ * - scanning=true：扫描进行中（进度条 + 当前文件 + 重试计数）；
+ * - scanning=false 且 failedFiles 非空：扫描完成但有失败 → 模块驻留展示失败清单（直到下次扫描覆盖）；
+ * - null：扫描完成且无失败 → 模块消失。
+ */
+data class ScanProgressState(
+    val scanning: Boolean,
+    val done: Int,
+    val total: Int,
+    val currentName: String?,
+    val retryingCount: Int,
+    val failedFiles: List<ScanFailedFile>
 )
 
 /** 主界面 ViewModel：已添加内容（本地文件夹 + 网盘源）浏览、搜索、播放控制入口。
@@ -366,9 +382,9 @@ class PlayerViewModel @JvmOverloads constructor(
     private val _scanningEntryId = MutableStateFlow<String?>(null)
     val scanningEntryId: StateFlow<String?> = _scanningEntryId.asStateFlow()
 
-    // v2.2.13：扫描进度文本（"已处理/总数"），仅文件处理阶段更新；列目录阶段为 null
-    private val _scanProgress = MutableStateFlow<String?>(null)
-    val scanProgress: StateFlow<String?> = _scanProgress.asStateFlow()
+    // v2.2.13：扫描进度；v2.2.21 升级为结构化状态（扫描中进度 / 完成驻留失败清单）
+    private val _scanProgress = MutableStateFlow<ScanProgressState?>(null)
+    val scanProgress: StateFlow<ScanProgressState?> = _scanProgress.asStateFlow()
     private val _inFolderView = MutableStateFlow(false)
     val inFolderView: StateFlow<Boolean> = _inFolderView.asStateFlow()
 
@@ -875,9 +891,19 @@ class PlayerViewModel @JvmOverloads constructor(
                 // v2.2.0：扫描统一走 ScanCoordinator（列目录→标签→CUE→写索引）；
                 // 已有索引（重复添加）不重复扫描。
                 if (loadFromIndex(treeUri.toString(), SourceType.LOCAL) == null) {
-                    scanFactory.forLocal().scan(treeUri.toString()) { done, total, currentName ->
-                        _scanProgress.value = "$currentName  ($done/$total)"
+                    val result = scanFactory.forLocal().scan(treeUri.toString()) { done, total, currentName, retrying ->
+                        _scanProgress.value = ScanProgressState(
+                            scanning = true, done = done, total = total,
+                            currentName = currentName, retryingCount = retrying, failedFiles = emptyList()
+                        )
                     }
+                    // v2.2.21：完成——有失败驻留（失败清单），无失败消失
+                    _scanProgress.value = if (result.failedFiles.isNotEmpty()) {
+                        ScanProgressState(
+                            scanning = false, done = result.total, total = result.total,
+                            currentName = null, retryingCount = 0, failedFiles = result.failedFiles
+                        )
+                    } else null
                 }
             }
             _scanningEntryId.value = null
@@ -906,14 +932,29 @@ class PlayerViewModel @JvmOverloads constructor(
                 withContext(Dispatchers.IO) {
                     val existing = indexStore.load()[id].orEmpty()
                     if (existing.isEmpty()) {
-                        if (entry.isLocal) {
-                            scanFactory.forLocal().scan(id) { done, total, currentName ->
-                                _scanProgress.value = "$currentName  ($done/$total)"
+                        val result = if (entry.isLocal) {
+                            scanFactory.forLocal().scan(id) { done, total, currentName, retrying ->
+                                _scanProgress.value = ScanProgressState(
+                                    scanning = true, done = done, total = total,
+                                    currentName = currentName, retryingCount = retrying, failedFiles = emptyList()
+                                )
                             }
                         } else if (entry.sourceType == SourceType.WEBDAV) {
-                            scanFactory.forWebDav().scan(entryId = id, rootUri = entry.uri) { done, total, currentName ->
-                                _scanProgress.value = "$currentName  ($done/$total)"
+                            scanFactory.forWebDav().scan(entryId = id, rootUri = entry.uri) { done, total, currentName, retrying ->
+                                _scanProgress.value = ScanProgressState(
+                                    scanning = true, done = done, total = total,
+                                    currentName = currentName, retryingCount = retrying, failedFiles = emptyList()
+                                )
                             }
+                        } else null
+                        // v2.2.21：完成——有失败驻留（失败清单），无失败消失
+                        if (result != null) {
+                            _scanProgress.value = if (result.failedFiles.isNotEmpty()) {
+                                ScanProgressState(
+                                    scanning = false, done = result.total, total = result.total,
+                                    currentName = null, retryingCount = 0, failedFiles = result.failedFiles
+                                )
+                            } else null
                         }
                     }
                 }
@@ -924,6 +965,38 @@ class PlayerViewModel @JvmOverloads constructor(
             _scanningEntryId.value = null
             _scanProgress.value = null
             _manageFiles.value = withContext(Dispatchers.IO) { indexStore.load()[id] ?: emptyList() }
+            refreshAlbums()
+        }
+    }
+
+    /**
+     * v2.2.21：失败清单的「重试」——只重扫这一个文件。
+     * 成功 → 从驻留清单移除 + 刷新内容文件列表；失败 → 清单中该项 detail 更新为完整诊断。
+     */
+    fun rescanManageFile(entry: SavedEntry, uri: String) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                if (entry.isLocal) {
+                    scanFactory.forLocal().rescanFile(entry.id, entry.id, uri)
+                } else if (entry.sourceType == SourceType.WEBDAV) {
+                    scanFactory.forWebDav().rescanFile(entryId = entry.id, rootUri = entry.uri, uri = uri)
+                } else null
+            } ?: return@launch
+            _scanProgress.value = _scanProgress.value?.let { st ->
+                val name = st.failedFiles.firstOrNull { it.uri == uri }?.name ?: uri.substringAfterLast('/')
+                val updated = if (result.success) {
+                    st.failedFiles.filterNot { it.uri == uri }
+                } else {
+                    st.failedFiles.map { if (it.uri == uri) it.copy(detail = result.detail ?: it.detail) else it }
+                }
+                if (updated.isEmpty()) null else st.copy(failedFiles = updated)
+            }
+            _manageFiles.value = withContext(Dispatchers.IO) { indexStore.load()[entry.id] ?: emptyList() }
+            if (result.success) {
+                _eventMsg.value = getString(MessageCatalog.MSG_RESCAN_OK, result.displayName ?: uri.substringAfterLast('/'))
+            } else {
+                _eventMsg.value = getString(MessageCatalog.MSG_RESCAN_FAILED, result.detail ?: "tag parse failed")
+            }
             refreshAlbums()
         }
     }

@@ -27,6 +27,10 @@ object MessageCatalog {
     val MSG_REFRESH_CONFIRM_TITLE = R.string.msg_refresh_confirm_title
     val MSG_REFRESH_CONFIRM_TEXT = R.string.msg_refresh_confirm_text
 
+    // v2.2.21：失败清单手动重试
+    val MSG_RESCAN_OK = R.string.msg_rescan_ok
+    val MSG_RESCAN_FAILED = R.string.msg_rescan_failed
+
     // v1.6.7：定时关闭
     val MSG_SLEEP_TIMER_DONE = R.string.msg_sleep_timer_done
     val MSG_GLOBAL_SLEEP_DONE = R.string.msg_global_sleep_done

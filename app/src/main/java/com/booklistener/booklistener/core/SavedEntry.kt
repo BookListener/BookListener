@@ -282,6 +282,11 @@ class EntryIndexStore(private val dao: AppDao) {
         dao.getEntryIndex(entryId).map { IndexedFile.fromEntity(it) }
     }
 
+    /** v2.2.21：读取条目全部标签扩展键值（uri → 列表），供单文件重扫时合并保留 */
+    fun loadExtras(entryId: String): Map<String, List<EntryTagExtraEntity>> = kotlinx.coroutines.runBlocking {
+        dao.getEntryTagExtrasByEntry(entryId).groupBy { it.uri }
+    }
+
     /** v2.1.15：读取条目标题（用作无 tag 时的 workKey folderName 部分） */
     fun getFolderName(entryId: String): String? = kotlinx.coroutines.runBlocking {
         dao.getAllSavedEntries().firstOrNull { it.id == entryId }?.displayName

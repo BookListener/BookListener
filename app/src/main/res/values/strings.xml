@@ -11,6 +11,12 @@
     <string name="nav_close">Close</string>    <string name="common_loading">Loading…</string>
     <string name="common_off">Off</string>
     <string name="common_scanning">Scanning…</string>
+    <string name="common_scan_failed_count">Failed %1$d</string>
+    <string name="scan_retrying">Retrying %1$d</string>
+    <string name="scan_done_with_failed">Scan finished · %1$d failed</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_expand">Details</string>
+    <string name="common_collapse">Collapse</string>
     <string name="common_minutes_label">Minutes</string>
     <string name="common_minutes">%1$d min</string>
     <string name="common_unknown_duration">Duration unknown</string>
@@ -144,6 +150,8 @@
     <string name="msg_added">Added %1$s</string>
     <string name="msg_refreshed">Refreshed %1$d audio files</string>
     <string name="msg_scan_failed">Scan failed: %1$s</string>
+    <string name="msg_rescan_ok">Reparsed %1$s</string>
+    <string name="msg_rescan_failed">Reparse failed: %1$s</string>
     <string name="msg_refresh_confirm_title">Refresh database</string>
     <string name="msg_refresh_confirm_text">This will re-read all audio in this folder (tags/duration/cover) and keep playback progress. Refresh?</string>
     <string name="msg_sleep_timer_done">Sleep timer: playback paused</string>
