@@ -13,8 +13,8 @@ android {
         applicationId 'com.booklistener'
         minSdk 26
         targetSdk 34
-        versionCode 107
-        versionName '2.2.11'
+        versionCode 108
+        versionName '2.2.12'
     }
 
     buildTypes {

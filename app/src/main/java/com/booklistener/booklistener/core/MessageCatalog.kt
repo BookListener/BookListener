@@ -23,6 +23,7 @@ object MessageCatalog {
     val MSG_FOUND = R.string.msg_found
     val MSG_ADDED = R.string.msg_added
     val MSG_REFRESHED = R.string.msg_refreshed
+    val MSG_SCAN_FAILED = R.string.msg_scan_failed
     val MSG_REFRESH_CONFIRM_TITLE = R.string.msg_refresh_confirm_title
     val MSG_REFRESH_CONFIRM_TEXT = R.string.msg_refresh_confirm_text
 

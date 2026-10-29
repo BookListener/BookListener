@@ -68,6 +68,7 @@ fun FolderManageScreen(
 ) {
     val savedEntries by viewModel.savedEntries.collectAsStateWithLifecycle()
     val manageFiles by viewModel.manageFiles.collectAsStateWithLifecycle()
+    val scanningEntryId by viewModel.scanningEntryId.collectAsStateWithLifecycle()
     val useRawName by viewModel.albumTitleMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showAddDialog by remember { mutableStateOf(false) }
@@ -415,7 +416,8 @@ fun FolderManageScreen(
     // 文件列表子视图：显示文件名（含扩展名）+ 时长，db 加载
     val opened = selectedEntry
     if (opened != null) {
-        LaunchedEffect(opened.id) { viewModel.loadManageFiles(opened.id) }
+        // v2.2.12：进入内容文件列表——索引空则自动触发扫描，扫描中显示"正在扫描…"
+        LaunchedEffect(opened.id) { viewModel.openManageFolder(opened) }
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -457,6 +459,14 @@ fun FolderManageScreen(
             if (files == null) {
                 Text(
                     text = stringResource(R.string.common_loading),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)
+                )
+            } else if (scanningEntryId == opened.id && files.isEmpty()) {
+                // v2.2.12：索引为空且正在扫描 → 显示"正在扫描…"，替代静默空态
+                Text(
+                    text = stringResource(R.string.common_scanning),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 24.dp).padding(horizontal = 16.dp)

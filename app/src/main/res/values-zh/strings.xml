@@ -10,6 +10,7 @@
     <string name="nav_confirm">确定</string>
     <string name="nav_close">关闭</string>    <string name="common_loading">加载中…</string>
     <string name="common_off">关闭</string>
+    <string name="common_scanning">正在扫描…</string>
     <string name="common_minutes_label">分钟数</string>
     <string name="common_minutes">%1$d 分钟</string>
     <string name="common_unknown_duration">时长未知</string>
@@ -142,6 +143,7 @@
     <string name="msg_found">找到 %1$d 个可播放音频</string>
     <string name="msg_added">已添加 %1$s</string>
     <string name="msg_refreshed">已刷新 %1$d 个音频</string>
+    <string name="msg_scan_failed">扫描失败：%1$s</string>
     <string name="msg_refresh_confirm_title">刷新数据库</string>
     <string name="msg_refresh_confirm_text">将重新读取该目录全部音频（标签/时长/封面），保留播放进度。确定刷新？</string>
     <string name="msg_sleep_timer_done">定时关闭：已暂停播放</string>

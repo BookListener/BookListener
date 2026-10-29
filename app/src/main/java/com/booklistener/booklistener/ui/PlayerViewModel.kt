@@ -361,6 +361,10 @@ class PlayerViewModel @JvmOverloads constructor(
     private val coverManager = CoverManager(app, CoverScanner(::queryFolderChildren))
     private val _folderItems = MutableStateFlow<List<AudioItem>>(emptyList())
     val folderItems: StateFlow<List<AudioItem>> = _folderItems.asStateFlow()
+
+    // v2.2.12：正在扫描的条目 id（内容文件列表据此显示"正在扫描…"，替代无任何提示的静默空）
+    private val _scanningEntryId = MutableStateFlow<String?>(null)
+    val scanningEntryId: StateFlow<String?> = _scanningEntryId.asStateFlow()
     private val _inFolderView = MutableStateFlow(false)
     val inFolderView: StateFlow<Boolean> = _inFolderView.asStateFlow()
 
@@ -861,6 +865,7 @@ class PlayerViewModel @JvmOverloads constructor(
         // 同步固化基础条目（保证 UI 与兼容 API 立即可见），异步加载后原位补充封面/文件数
         saveFolder(treeUri)
         viewModelScope.launch {
+            _scanningEntryId.value = treeUri.toString()
             withContext(Dispatchers.IO) {
                 // v2.2.0：扫描统一走 ScanCoordinator（列目录→标签→CUE→写索引）；
                 // 已有索引（重复添加）不重复扫描。
@@ -868,13 +873,49 @@ class PlayerViewModel @JvmOverloads constructor(
                     scanFactory.forLocal().scan(treeUri.toString())
                 }
             }
+            _scanningEntryId.value = null
             val items = loadFromIndex(treeUri.toString(), SourceType.LOCAL).orEmpty()
             val entry = buildLocalEntry(treeUri, items, _savedEntries.value.firstOrNull { it.id == treeUri.toString() })
             setEntries(entryStore.replace(_savedEntries.value, entry))
+            // v2.2.12：添加/打开目录后同步刷新内容文件列表，避免进入时仍是旧空态
+            if (_currentManageEntryId == treeUri.toString()) {
+                _manageFiles.value = withContext(Dispatchers.IO) { indexStore.load()[treeUri.toString()] ?: emptyList() }
+            }
             _eventMsg.value = getString(MessageCatalog.MSG_ADDED, entry.displayName)
             refreshAlbums()
         }
     }
+
+    /** v2.2.12：进入文件夹管理的内容文件列表——索引空则自动触发扫描；
+     *  扫描中置 scanningEntryId（UI 显示"正在扫描…"），完成刷新列表，失败经 eventMsg 可见。 */
+    fun openManageFolder(entry: SavedEntry) {
+        _currentManageEntryId = entry.id
+        viewModelScope.launch {
+            val id = entry.id
+            _scanningEntryId.value = id
+            try {
+                withContext(Dispatchers.IO) {
+                    val existing = indexStore.load()[id].orEmpty()
+                    if (existing.isEmpty()) {
+                        if (entry.isLocal) {
+                            scanFactory.forLocal().scan(id)
+                        } else if (entry.sourceType == SourceType.WEBDAV) {
+                            scanFactory.forWebDav().scan(entryId = id, rootUri = entry.uri)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                AppLog.e("scan ${entry.displayName} failed", e)
+                _eventMsg.value = getString(MessageCatalog.MSG_SCAN_FAILED, entry.displayName)
+            }
+            _scanningEntryId.value = null
+            _manageFiles.value = withContext(Dispatchers.IO) { indexStore.load()[id] ?: emptyList() }
+            refreshAlbums()
+        }
+    }
+
+    /** 正在查看内容文件列表的条目 id（scanFolder 完成后据此刷新该列表） */
+    private var _currentManageEntryId: String? = null
 
     /** v1.6.14：从数据库索引读取条目文件清单（按展示序排序后转 AudioItem）；无数据返回 null 由调用方兜底 */
     private suspend fun loadFromIndex(entryId: String, sourceType: SourceType): List<AudioItem>? {
