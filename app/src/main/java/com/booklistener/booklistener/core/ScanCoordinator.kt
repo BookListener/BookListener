@@ -192,7 +192,9 @@ class ScanCoordinator(
             // v2.1.23：同一作品的文件目录集合（relativePath 目录部分，根目录=""）
             val dirsByKey = LinkedHashMap<String, MutableSet<String>>()
             for (f in sorted) {
-                if (!AudioExt.isAudio(f.rawName ?: f.uri)) continue
+                // v2.2.8：章节/CUE 虚拟轨也计入（rawName 形如 "整轨.m4b#1"，isAudio 对 rawName
+                // 判扩展名失败 → 必须显式放行虚拟轨；封面在整轨上，extractor 内部解析，目录不影响判定）
+                if (!AudioExt.isAudio(f.rawName ?: f.uri) && !VirtualTrackUri.isVirtual(f.uri)) continue
                 // 虚拟轨也计入（封面在整轨上，extractor 内部解析；虚拟轨与整轨同目录，不影响目录判定）
                 val key = WorkBackfill.workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
                 if (!firstAudioByKey.containsKey(key)) {
