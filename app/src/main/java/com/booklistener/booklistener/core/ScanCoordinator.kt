@@ -165,9 +165,9 @@ class ScanCoordinator(
                                 encoder = tags.encoder
                             )
                         }
-                        // v2.2.10：章节虚拟轨把原始 .m4b 吸收后，内容文件列表会空（该列表过滤虚拟轨）。
-                        // 保留一条原始 .m4b 行（excludeFromWork=true）：内容文件列表显示原始文件、
-                        // 不参与作品聚合（曲目列表仍只由章节虚拟轨组成，避免重复）。
+                        // v2.2.20：原始 .m4b 正常入库（内容文件列表显示原始文件）；作品聚合时
+                        // 由 WorkBackfill.buildWorks 的「虚拟轨整轨源排除」挡在曲目列表外，
+                        // 曲目列表仍只由章节虚拟轨组成，无需 excludeFromWork 补丁标记。
                         indexed += IndexedFile(
                             displayName = file.name,
                             uri = file.path,
@@ -184,8 +184,7 @@ class ScanCoordinator(
                             series = tags.series,
                             seriesNumber = tags.seriesNumber,
                             mediaType = tags.mediaType,
-                            encoder = tags.encoder,
-                            excludeFromWork = true
+                            encoder = tags.encoder
                         )
                     } else {
                         indexed += if (tags != null) {

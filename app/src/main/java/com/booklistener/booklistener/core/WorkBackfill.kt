@@ -49,17 +49,31 @@ object WorkBackfill {
      * 忠实显示），但不参与作品聚合，不产生"文件夹名"专辑。
      */
     fun isPlayableMedia(f: IndexedFile): Boolean {
-        // v2.2.10：排除"仅内容文件展示"的行（m4b 有章节时的原始 .m4b 行，避免曲目列表重复）
-        if (f.excludeFromWork) return false
         if (VirtualTrackUri.isVirtual(f.uri)) return true
         return AudioExt.isAudio(f.rawName ?: f.uri)
     }
+
+    /**
+     * v2.2.20：虚拟轨覆盖的整轨源 uri 集合（m4b 章节 / CUE 分轨的整轨部分）。
+     * 被覆盖的整轨：不参与作品聚合（buildWorks），也不归属任何作品（AppDao 行级 workId 分配）——
+     * 原始整轨行仍入库（内容文件列表忠实显示），曲目列表由虚拟轨承担，避免重复。
+     */
+    fun coveredWholeUris(files: List<IndexedFile>): Set<String> =
+        files
+            .asSequence()
+            .filter { VirtualTrackUri.isVirtual(it.uri) }
+            .mapNotNull { VirtualTrackUri.parse(it.uri)?.first }
+            .toHashSet()
 
     /**
      * 按作品键聚合文件清单 → 作品实体列表（songCount / totalDurationMs 由聚合计算；
      * lastPlayedAt 由调用方传入——扫描置 0（upsert 不更新该字段），迁移回填传 MAX(条目 lastPlayedAt)）。
      *
      * 仅聚合 [isPlayableMedia] 文件；非媒体文件（cue/图片/种子/文本）不参与聚合。
+     * v2.2.20：被虚拟轨覆盖的整轨源（m4b 章节 / CUE 分轨的整轨 uri）不参与聚合——原始整轨行
+     * 仍入库（内容文件列表忠实显示），曲目列表由虚拟轨承担，避免重复。与 CUE「吸收剔除」的
+     * 区别：CUE 整轨完全不入库，m4b 原始行入库但被本排除逻辑挡在作品聚合外（替代 v2.2.10 的
+     * excludeFromWork 补丁，聚合语义统一、无需扫描侧打标记）。
      */
     fun buildWorks(
         files: List<IndexedFile>,
@@ -68,9 +82,12 @@ object WorkBackfill {
         sourceScope: String,
         lastPlayedAt: Long = 0L
     ): List<WorkEntity> {
+        // 虚拟轨覆盖的整轨源集合（uri = `<整轨>#track_<startMs>` → 整轨部分）
+        val coveredSources = coveredWholeUris(files)
         val byKey = LinkedHashMap<String, MutableList<IndexedFile>>()
         files.forEach { f ->
             if (!isPlayableMedia(f)) return@forEach
+            if (f.uri in coveredSources) return@forEach
             val key = workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
             byKey.getOrPut(key) { mutableListOf() }.add(f)
         }

@@ -354,11 +354,14 @@ interface AppDao {
         works.forEach { w ->
             workIdByKey[w.key] = upsertWorkByKey(w)
         }
+        // v2.2.20：虚拟轨覆盖的整轨源（m4b 章节 / CUE 分轨的整轨）不归属任何作品——
+        // 原始整轨行仍入库（内容文件列表显示），但 workId=null 不进曲目列表（与 buildWorks 同语义）
+        val covered = WorkBackfill.coveredWholeUris(files)
         val ranks = WorkBackfill.assignSortRank(files).toMap()
         val rows = files.map { f ->
             // 非媒体文件（cue/图片/种子/文本）不属于任何作品，workId=null；
             // 它们仍入库（内容文件列表显示），但不参与专辑/曲目聚合。
-            val workId = if (WorkBackfill.isPlayableMedia(f)) {
+            val workId = if (WorkBackfill.isPlayableMedia(f) && f.uri !in covered) {
                 val key = WorkBackfill.workKey(entryId, folderName, f.album, f.albumArtist, f.artist)
                 workIdByKey[key]
             } else null

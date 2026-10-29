@@ -132,8 +132,8 @@ class M4bFlowTest {
 
         val indexed = indexStore.loadEntry(id)
         val wholeUri = "content://doc/book.m4b"
-        // v2.2.10：保留原始 .m4b 行（内容文件列表显示原始文件；excludeFromWork 是扫描时
-        // 内存标记不入库，聚合排除效果由"归属单作品"场景的曲目列表断言验证）
+        // v2.2.20：保留原始 .m4b 行正常入库（内容文件列表显示原始文件）；聚合排除由
+        // WorkBackfill「虚拟轨整轨源排除」承担（曲目列表断言见"归属单作品"场景）
         assertTrue("原始 .m4b 行保留在内容文件索引", indexed.any { it.uri == wholeUri })
 
         val tracks = indexed.filter { it.uri.startsWith(wholeUri) && it.uri != wholeUri }
