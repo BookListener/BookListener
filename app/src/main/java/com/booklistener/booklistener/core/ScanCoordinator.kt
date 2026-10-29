@@ -53,6 +53,12 @@ class ScanCoordinator(
         val extrasByUri = LinkedHashMap<String, List<EntryTagExtraEntity>>()
 
         for (file in files) {
+            // v2.2.11：目录树访问失败的诊断行（来自 Source 递归列目录），
+            // 作为内容文件入索引展示错误，避免"添加父目录一个都扫不到且无任何提示"
+            if (file.scanError != null) {
+                indexed += file.toIndexedFile(error = "目录访问失败: ${file.scanError}")
+                continue
+            }
             when {
                 file.extension == "cue" -> {
                     // CUE：读文本；失败记 error，仍入库（点击可看失败原因）

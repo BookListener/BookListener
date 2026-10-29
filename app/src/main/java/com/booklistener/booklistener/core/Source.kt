@@ -36,7 +36,9 @@ data class SourceFile(
     val relativePath: String,
     val isDirectory: Boolean,
     val sizeBytes: Long? = null,
-    val lastModified: Long? = null
+    val lastModified: Long? = null,
+    /** v2.2.11：目录树访问失败诊断（列目录 query 异常），scan 据此生成可读诊断行 */
+    val scanError: String? = null
 ) {
     /** 扩展名（小写，不含点；无扩展名返回空串） */
     val extension: String

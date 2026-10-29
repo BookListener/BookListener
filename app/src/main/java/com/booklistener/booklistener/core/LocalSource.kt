@@ -21,8 +21,22 @@ class LocalSource(
 
     override suspend fun listFiles(rootUri: String): List<SourceFile> {
         val tree = Uri.parse(rootUri)
-        val rootDocId = DocumentsContract.getTreeDocumentId(tree)
         val out = mutableListOf<SourceFile>()
+        val rootDocId = try {
+            DocumentsContract.getTreeDocumentId(tree)
+        } catch (e: Exception) {
+            // v2.2.11：rootUri 不是有效 tree uri 时不再静默空返回，落诊断行
+            out += SourceFile(
+                name = tree.lastPathSegment ?: rootUri,
+                path = tree.toString(),
+                relativePath = "",
+                isDirectory = false,
+                sizeBytes = null,
+                lastModified = null,
+                scanError = "not a valid tree uri: ${e.message ?: e.javaClass.simpleName}"
+            )
+            return out
+        }
         walk(tree, rootDocId, "", 0, out)
         return out
     }
@@ -36,17 +50,29 @@ class LocalSource(
     ) {
         if (depth > maxDepth) return
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentDocId)
-        resolver.query(
-            childrenUri,
-            arrayOf(
-                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE,
-                DocumentsContract.Document.COLUMN_SIZE,
-                DocumentsContract.Document.COLUMN_LAST_MODIFIED
-            ),
-            null, null, null
-        )?.use { c ->
+        val cursor = try {
+            resolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    DocumentsContract.Document.COLUMN_SIZE,
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED
+                ),
+                null, null, null
+            )
+        } catch (e: Exception) {
+            addUnreadable(out, dirRelativePath, parentDocId, childrenUri, e.message ?: e.javaClass.simpleName)
+            return
+        }
+        if (cursor == null) {
+            // v2.2.11：Provider 对 children query 返回 null（不抛异常）时也落诊断行，
+            // 否则"添加父目录"静默返回空、连错误都看不到
+            addUnreadable(out, dirRelativePath, parentDocId, childrenUri, "provider returned null")
+            return
+        }
+        cursor.use { c ->
             val idIdx = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
             val nameIdx = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
             val mimeIdx = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
@@ -74,5 +100,26 @@ class LocalSource(
                 }
             }
         }
+    }
+
+    /** v2.2.11：目录访问失败的诊断行（可读名称 + scanError），scan 据此展示，而非静默消失 */
+    private fun addUnreadable(
+        out: MutableList<SourceFile>,
+        dirRelativePath: String,
+        parentDocId: String,
+        childrenUri: Uri,
+        reason: String
+    ) {
+        out.add(
+            SourceFile(
+                name = if (dirRelativePath.isBlank()) parentDocId.substringAfterLast('/') else dirRelativePath.substringAfterLast('/'),
+                path = childrenUri.toString(),
+                relativePath = dirRelativePath,
+                isDirectory = false,
+                sizeBytes = null,
+                lastModified = null,
+                scanError = reason
+            )
+        )
     }
 }
