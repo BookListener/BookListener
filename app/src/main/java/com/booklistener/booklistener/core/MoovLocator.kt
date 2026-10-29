@@ -55,4 +55,45 @@ object MoovLocator {
         }
         return null
     }
+
+    /**
+     * v2.2.7：流式 box 链遍历定位 moov（文件级，替代头 1MB/尾 16MB 二分猜测）。
+     *
+     * 从文件头开始逐 box 读取 8 字节头（size+type），白名单类型按 size 跳过（含巨大的 mdat——
+     * mdat 是白名单，size 合法时直接跳到其末尾继续），moov 在文件任意位置（头/中/尾）都能命中；
+     * 损坏 box 逐字节重对齐。全程只读 box 头（每 box 8~16 字节），不读音频数据，大文件无 OOM。
+     * 返回 moov box 的 [start, endExclusive)；未命中返回 null。
+     */
+    fun streamMoovRange(channel: java.nio.channels.FileChannel, fileLength: Long): LongRange? {
+        var pos = 0L
+        val hdr = java.nio.ByteBuffer.allocate(16)
+        while (pos + 8 <= fileLength) {
+            channel.position(pos)
+            hdr.clear()
+            hdr.limit(8)
+            if (channel.read(hdr) < 8) return null
+            hdr.flip()
+            val size = hdr.int.toLong() and 0xFFFFFFFFL
+            val type = hdr.int
+            val boxLen: Long = when {
+                size == 1L -> { // 64 位 largesize
+                    if (pos + 16 > fileLength) return null
+                    hdr.clear()
+                    hdr.limit(8)
+                    if (channel.read(hdr) < 8) return null
+                    hdr.flip()
+                    hdr.long
+                }
+                size == 0L -> fileLength - pos // size=0：延伸到文件尾
+                else -> size
+            }
+            if (boxLen >= 8 && pos + boxLen <= fileLength && type in KNOWN_BOX_TYPES) {
+                if (type == MOOV) return pos..(pos + boxLen)
+                pos += boxLen
+            } else {
+                pos += 1 // 损坏/越界/未知类型：逐字节重对齐
+            }
+        }
+        return null
+    }
 }

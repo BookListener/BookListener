@@ -83,6 +83,35 @@ fun FolderManageScreen(
         NameDetailSheet(detail = nameDetail, onDismiss = { pendingNameDetail = null })
     }
 
+    // v2.2.6：扫描诊断弹窗（内容文件列表点信息图标；tag parse failed 行展示文件头/moov 定位详情）
+    var pendingDetail by remember { mutableStateOf<com.booklistener.core.IndexedFile?>(null) }
+    val detailFile = pendingDetail
+    if (detailFile != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDetail = null },
+            title = {
+                Text(
+                    text = detailFile.rawName ?: detailFile.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            text = {
+                Text(
+                    text = detailFile.error ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { pendingDetail = null }) {
+                    Text(stringResource(R.string.nav_cancel))
+                }
+            }
+        )
+    }
+
     // SAF 选择本地音频文件夹并固化
     val openFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -458,6 +487,10 @@ fun FolderManageScreen(
                                 // v5.0：仅 .cue 行可点击（打开该 cue 的虚拟轨列表，纯浏览不播放）；常规行无点击
                                 onClick = if (isCueFileRow(file)) {
                                     { viewModel.openVirtualTracks(file.uri, file.rawName ?: file.displayName) }
+                                } else null,
+                                // v2.2.6：tag parse failed 行点信息图标查看扫描诊断（error 首行为文案，其后为详情）
+                                onDiagnostics = if (file.error != null) {
+                                    { pendingDetail = file }
                                 } else null
                             )
                             // v2.0.12：文件列表行间格线（同设置页/账号列表风格）
@@ -622,7 +655,8 @@ private fun isCueFileRow(file: com.booklistener.core.IndexedFile): Boolean =
 @Composable
 private fun ManageFileRow(
     file: com.booklistener.core.IndexedFile,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onDiagnostics: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -674,7 +708,9 @@ private fun ManageFileRow(
                 imageVector = AppIcons.Info,
                 contentDescription = file.error,
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier
+                    .size(22.dp)
+                    .then(if (onDiagnostics != null) Modifier.clickable(onClick = onDiagnostics) else Modifier)
             )
         }
         if (onClick != null) {

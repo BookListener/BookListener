@@ -23,9 +23,8 @@ class ScanCoordinatorFactory(
         /** MP4 容器扩展名（ilst 原子树；含 alac——其容器仍是 mp4）；v2.2.4：m4b 同容器纳入 */
         val ILST_EXTS = setOf("m4a", "mp4", "alac", "m4b")
 
-        /** v2.2.5（spec: m4b-moov-range-read）：moov 区间探测阈值 */
-        private const val MOOV_HEAD_LIMIT = 1 shl 20          // 头部探测 1MB
-        private const val MOOV_TAIL_LIMIT = 16L shl 20        // 尾部探测 16MB
+        /** v2.2.7（spec: m4b-moov-range-read）：流式定位失败时整读回退的文件大小上限（防大文件 OOM） */
+        private const val MOOV_FALLBACK_LIMIT = 64L * 1024 * 1024
     }
 
     /** 本地：SAF 列目录 + 新解析器（MetadataExtractor + Mp4IlstReader，唯一后端）+ SAF 读 cue + 内嵌封面提取 */
@@ -36,9 +35,13 @@ class ScanCoordinatorFactory(
             tagReader = { file -> resolveLocalTags(metadataExtractor, file) },
             cueTextReader = { file -> readSafText(file.path) },
             indexStore = indexStore,
-            coverExtractor = coverManager?.let { mgr -> { uri -> mgr.extractCover(uri) } }
+            coverExtractor = coverManager?.let { mgr -> { uri -> mgr.extractCover(uri) } },
+            errorDetailProvider = { uri -> diagnostics[uri] }
         )
     }
+
+    /** v2.2.6：扫描诊断（uri → 文本；内容文件列表点信息图标弹窗展示，不入库） */
+    private val diagnostics = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
      * v2.2.0（spec: tag-fields-full）唯一解析后端：
@@ -50,11 +53,28 @@ class ScanCoordinatorFactory(
      */
     private fun resolveLocalTags(extractor: MetadataExtractor, file: SourceFile): ResolvedTags? {
         val ext = file.name.substringAfterLast('.', "").lowercase()
-        // MP4 容器走 moov 区间读取（失败回退整读，保底不丢识别）；其余格式保持整读现状
-        val bytes: ByteArray = if (ext in ILST_EXTS) {
-            readMoovRangeBytes(file.path) ?: readSafBytes(file.path) ?: return null
-        } else readSafBytes(file.path) ?: return null
-        return if (ext in ILST_EXTS) {
+        val isMp4 = ext in ILST_EXTS
+        val read = if (isMp4) readMoovRangeBytes(file.path) else MoovRead(null, "非 MP4 容器（整读）")
+        val bytes: ByteArray = read.bytes ?: run {
+            // v2.2.7：大文件（>64MB）定位失败不再整读（整读必然 OOM，v2.2.6 实测 615MB 失败）；
+            // 小文件保留整读回退（保底不丢识别）
+            val size = file.sizeBytes ?: 0L
+            if (size > MOOV_FALLBACK_LIMIT) {
+                diagnostics[file.path] =
+                    "tag parse failed\n文件: ${file.name}\n大小: ${file.sizeBytes ?: "?"} B\n${read.detail}\n整读回退跳过（>64MB 防 OOM）"
+                return null
+            }
+            val fb = readSafBytes(file.path)
+            if (fb == null) {
+                diagnostics[file.path] =
+                    "tag parse failed\n文件: ${file.name}\n大小: ${file.sizeBytes ?: "?"} B\n${read.detail}\n整读失败"
+                return null
+            }
+            fb
+        }
+        val diagBase =
+            "tag parse failed\n文件: ${file.name}\n大小: ${file.sizeBytes ?: "?"} B\n${read.detail}\n读取: ${bytes.size} B"
+        return if (isMp4) {
             val m3 = extractor.extract(bytes, ext)
             // 合并：Media3 标准映射帧 + 自研扩展原子（键名不同体系，全保留）
             val entries = Mp4IlstReader.read(bytes) + m3.entries
@@ -62,9 +82,11 @@ class ScanCoordinatorFactory(
             val chapters = if (ext == "m4b") {
                 Mp4ChapterReader.read(bytes).takeIf { it.isNotEmpty() }
             } else null
+            diagnostics[file.path] = "$diagBase\n解析: ilst=${entries.size} dur=${m3.durationMs} chapters=${chapters?.size ?: 0}"
             ResolvedTags.fromEntries(entries, m3.durationMs).copy(chapters = chapters)
         } else {
             val m3 = extractor.extract(bytes, ext)
+            diagnostics[file.path] = "$diagBase\n解析: dur=${m3.durationMs} entries=${m3.entries.size}"
             if (m3.entries.isEmpty() && m3.durationMs == null) null else ResolvedTags.fromEntries(m3.entries, m3.durationMs)
         }
     }
@@ -95,34 +117,39 @@ class ScanCoordinatorFactory(
             ?.use { it.readBytes() }
     }.getOrNull()
 
+    /** v2.2.6：moov 区间读取结果（bytes 为 null = 定位失败，由调用方回退整读） */
+    private class MoovRead(val bytes: ByteArray?, val detail: String)
+
     /**
-     * v2.2.5（spec: m4b-moov-range-read）：MP4 容器只读 moov 区间。
-     * 头部形态：读 [0, moovEnd)；尾部形态：读尾 16MB 定位 moov 区间。定位失败返回 null（调用方回退整读）。
+     * v2.2.7（spec: m4b-moov-range-read）：MP4 容器只读 moov 区间。
+     * 流式 box 链遍历定位 moov（文件任意位置，mdat 直接跳过，不读音频数据）；
+     * 命中后只读 moov 区间字节。定位失败 bytes=null（调用方按文件大小决定是否回退整读）。
      */
-    private fun readMoovRangeBytes(uri: String): ByteArray? = runCatching {
-        val afd = context.contentResolver.openAssetFileDescriptor(android.net.Uri.parse(uri), "r") ?: return null
+    private fun readMoovRangeBytes(uri: String): MoovRead = runCatching {
+        val afd = context.contentResolver.openAssetFileDescriptor(android.net.Uri.parse(uri), "r")
+            ?: return MoovRead(null, "openAssetFileDescriptor 失败")
         afd.use {
             val length = it.length
-            if (length <= 0) return null
+            if (length <= 0) return MoovRead(null, "文件长度=$length")
             java.io.FileInputStream(it.fileDescriptor).use { fis ->
                 val channel = fis.channel
-                val headLen = minOf(length, MOOV_HEAD_LIMIT.toLong()).toInt()
-                val headMoov = MoovLocator.headMoovRange(readExact(channel, 0, headLen))
-                if (headMoov != null) {
-                    val end = minOf(headMoov.last.toLong(), length).toInt()
-                    return readExact(channel, 0, end)
+                val head = readExact(channel, 0, minOf(length, 64L).toInt())
+                val headHex = head.take(48).joinToString("") { "%02x".format(it) }
+                val range = MoovLocator.streamMoovRange(channel, length)
+                if (range != null) {
+                    val bytes = readExact(channel, range.first, (range.last - range.first).toInt())
+                    return MoovRead(
+                        bytes,
+                        "moov: 流式命中 range=${range.first}..${range.last}（len=${bytes.size}B）\n头部hex: $headHex"
+                    )
                 }
-                // 尾部形态（非 faststart）：mdat 在前、moov 在文件末
-                val tailLen = minOf(length, MOOV_TAIL_LIMIT).toInt()
-                val tailStart = length - tailLen
-                val tailMoov = MoovLocator.tailMoovRange(readExact(channel, tailStart, tailLen))
-                    ?: return null
-                val absStart = tailStart + tailMoov.first
-                val absEnd = minOf(tailStart + tailMoov.last.toLong(), length).toInt()
-                return readExact(channel, absStart, absEnd - absStart.toInt())
+                MoovRead(
+                    null,
+                    "moov: 流式遍历未命中（文件 ${length}B）\n头部hex: $headHex"
+                )
             }
         }
-    }.getOrNull()
+    }.getOrElse { MoovRead(null, "读取异常: ${it.message}") }
 
     /** 从 [channel] 的 [start] 起精确读 [len] 字节 */
     private fun readExact(channel: java.nio.channels.FileChannel, start: Long, len: Int): ByteArray {

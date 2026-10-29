@@ -146,6 +146,8 @@ data class IndexedFile(
     // v2.2.0：设置侧链路重构
     val relativePath: String? = null,
     val error: String? = null,
+    // v2.2.6：扫描诊断详情（仅内存展示，不入库；点信息图标弹窗查看）
+    val errorDetail: String? = null,
     // v2.2.0（spec: tag-fields-full）：全字段标签结构化列（入库）
     val genre: String? = null,
     val year: Int? = null,

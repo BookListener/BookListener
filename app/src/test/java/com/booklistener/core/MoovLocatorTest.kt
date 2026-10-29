@@ -129,6 +129,72 @@ class MoovLocatorTest {
         assertEquals(m3Whole.entries.map { it.key }, m3Range.entries.map { it.key })
     }
 
+    @Test
+    fun `尾部形态 区间字节(纯moov) Media3 时长与整读等价`() {
+        // 真实样本重构为尾部形态：ftyp + 3MB mdat + moov（非 faststart）
+        val bytes = resource("tagprobe/probe_custom2.m4a")
+        val headLen = minOf(bytes.size, MOOV_HEAD_LIMIT)
+        val headMoov = MoovLocator.headMoovRange(bytes.copyOfRange(0, headLen))!!
+        val prefix = bytes.copyOfRange(0, headMoov.first)          // ftyp 等前导
+        val moovSegment = bytes.copyOfRange(headMoov.first, headMoov.last) // 纯 moov
+        val tailForm = concat(prefix, ByteArray(3 shl 20), moovSegment)     // mdat 填充 3MB
+
+        val moov = moovRange(tailForm)!!
+        // 尾部形态区间 = 纯 moov（无 ftyp/mdat）
+        assertEquals(moovSegment.toList(), moov.toList())
+
+        // 自研解析器：纯 moov 与整读等价
+        assertEquals(Mp4IlstReader.read(bytes).map { it.key }, Mp4IlstReader.read(moov).map { it.key })
+
+        // Media3：纯 moov 输入的时长/标准帧与整读等价
+        val m3Whole = MetadataExtractor().extract(bytes, "m4a")
+        val m3Range = MetadataExtractor().extract(moov, "m4a")
+        assertEquals("尾部形态 Media3 时长不等价", m3Whole.durationMs, m3Range.durationMs)
+        assertEquals(m3Whole.entries.map { it.key }, m3Range.entries.map { it.key })
+    }
+
+    @Test
+    fun `流式定位 moov 在文件中部 mdat 巨大 命中`() {
+        // 构造：ftyp + 3MB mdat + moov（moov 越过旧"头 1MB"探测窗口）
+        val moovBytes = box(fourcc("moov"), concat(mvhd(1000), udta(chpl(0L to "第一章"))))
+        val file = concat(
+            box(fourcc("ftyp"), ByteArray(8)),
+            box(fourcc("mdat"), ByteArray(3 shl 20)),
+            moovBytes
+        )
+        val tmp = java.io.File.createTempFile("moov_stream", ".m4b")
+        try {
+            tmp.writeBytes(file)
+            java.io.FileInputStream(tmp).use { fis ->
+                val range = MoovLocator.streamMoovRange(fis.channel, file.size.toLong())
+                assertNotNull("流式应命中 moov", range)
+                val expectedStart = 16L + 8 + (3 shl 20) // ftyp(16) + mdat 头(8) + mdat 数据(3MB)
+                assertEquals(expectedStart.toLong(), range!!.first)
+                assertEquals(expectedStart + moovBytes.size.toLong(), range.last)
+            }
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    @Test
+    fun `流式定位 moov 在头部 命中`() {
+        val moovBytes = box(fourcc("moov"), concat(mvhd(1000), udta(chpl(0L to "第一章"))))
+        val file = concat(box(fourcc("ftyp"), ByteArray(8)), moovBytes)
+        val tmp = java.io.File.createTempFile("moov_stream2", ".m4b")
+        try {
+            tmp.writeBytes(file)
+            java.io.FileInputStream(tmp).use { fis ->
+                val range = MoovLocator.streamMoovRange(fis.channel, file.size.toLong())
+                assertNotNull(range)
+                assertEquals(16L, range!!.first)
+                assertEquals((16 + moovBytes.size).toLong(), range.last)
+            }
+        } finally {
+            tmp.delete()
+        }
+    }
+
     private fun resource(name: String): ByteArray =
         javaClass.classLoader!!.getResourceAsStream(name)!!.use { it.readBytes() }
 }

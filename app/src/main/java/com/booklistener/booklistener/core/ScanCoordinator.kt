@@ -21,7 +21,9 @@ class ScanCoordinator(
     private val cueTextReader: suspend (SourceFile) -> String?,
     private val indexStore: EntryIndexStore,
     /** v2.1.15：提取音频内嵌封面（null 表示不提取作品封面，网盘无内嵌封面传 null） */
-    private val coverExtractor: (suspend (audioUri: String) -> String?)? = null
+    private val coverExtractor: (suspend (audioUri: String) -> String?)? = null,
+    /** v2.2.6：扫描失败诊断详情提供者（按 uri 取诊断文本，点信息图标弹窗查看） */
+    private val errorDetailProvider: (uri: String) -> String? = { null }
 ) {
 
     companion object {
@@ -161,7 +163,11 @@ class ScanCoordinator(
                         )
                     } else {
                         // 标签解析失败：文件名兜底，归入未知专辑
-                        file.toIndexedFile(error = "tag parse failed")
+                        // v2.2.6：error 首行保持 "tag parse failed"（列表副标题显示），
+                        // 其后附加扫描诊断（点信息图标弹窗查看完整内容；error 已入库，列表重载后仍可查看）
+                        file.toIndexedFile(
+                            error = errorDetailProvider(file.path) ?: "tag parse failed"
+                        )
                     }
                     }
                 }
@@ -225,13 +231,14 @@ class ScanCoordinator(
         return null
     }
 
-    private fun SourceFile.toIndexedFile(error: String?): IndexedFile = IndexedFile(
+    private fun SourceFile.toIndexedFile(error: String?, errorDetail: String? = null): IndexedFile = IndexedFile(
         displayName = name.substringBeforeLast('.').takeUnless { it.isEmpty() } ?: name,
         uri = path,
         rawName = name,
         sizeBytes = sizeBytes,
         relativePath = relativePath,
-        error = error
+        error = error,
+        errorDetail = errorDetail
     )
 
     private fun sortIndexed(files: List<IndexedFile>): List<IndexedFile> {
