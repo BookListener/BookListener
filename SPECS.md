@@ -348,7 +348,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 - 规则：`Mp4IlstReader.findBox` / `Mp4ChapterReader` 的 box 遍历对损坏/越界 box **逐字节重对齐**，且仅按已知 box 类型白名单（`KNOWN_BOX_TYPES`）按 size 跳转——垃圾区偶然组成的伪 box 不带走遍历；`size==0` 按损坏处理（不再解释为"到文件尾"）。
 
 ### 2. 扫描只读 moov 区间
-- 背景：单部 m4b ~1GB；本地扫描旧实现整文件读入内存（`readSafBytes`）→ OOM 风险。
-- 规则：本地扫描 `ILST_EXTS`（m4a/mp4/alac/m4b）只读 moov 区间——头部形态读 `[0, moovEnd)`（头 1MB 定位）；尾部形态（非 faststart，mdat 在前）读文件尾 16MB 定位 moov。标签/章节/时长全部位于 moov，mdat 音频数据不读。
-- 定位失败 → 回退整读（保底不丢识别）；解析器输入为区间字节，输出与整读一致（真实样本验证：标签条目、章节列表、Media3 时长/标准帧逐项相等）。
+- 背景：单部 m4b ~615MB；本地扫描旧实现整文件读入内存（`readSafBytes`）→ OOM 风险。
+- 规则（v2.2.7 修订）：本地扫描 `ILST_EXTS`（m4a/mp4/alac/m4b）只读 moov 区间——**流式 box 链遍历**（`MoovLocator.streamMoovRange`）从文件头逐 box 读 8 字节头（size+type），白名单类型按 size 跳过（含巨大的 mdat），损坏 box 逐字节重对齐；moov 位于文件任意位置（头/中/尾）均可命中，全程只读 box 头、不读音频数据。标签/章节/时长全部位于 moov，mdat 音频数据不读。
+- 定位失败 → 回退整读**仅限 ≤64MB 文件**（`MOOV_FALLBACK_LIMIT`）；>64MB 大文件定位失败直接判定失败并记诊断（整读必然 OOM，v2.2.6 实测 615MB 整读失败）。解析器输入为区间字节，输出与整读一致（真实样本验证：标签条目、章节列表、Media3 时长/标准帧逐项相等）。
 - 非 ILST 格式（mp3/flac/ogg）保持整读现状；WebDAV 网盘无标签解析，不涉及；播放侧为 Media3 流式，无此问题。
