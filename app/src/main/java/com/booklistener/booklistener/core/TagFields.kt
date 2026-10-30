@@ -107,13 +107,6 @@ object TagFields {
     /** 作曲：TCOM / ©wrt */
     fun composer(entries: List<TagEntry>): String? = first(entries, K_COMPOSER, A_COMPOSER)
 
-    /** 系列名：TXXX:SERIES / TIT1 / ©ser */
-    fun series(entries: List<TagEntry>): String? =
-        first(entries, K_SERIES, A_SERIES) ?: first(entries, K_SERIES_ALT)
-
-    /** 系列序号：TXXX:SERIESNUMBER / ©sno（字符串保序，文档建议纯数字） */
-    fun seriesNumber(entries: List<TagEntry>): String? = first(entries, K_SERIES_NUMBER, A_SERIES_NUMBER)
-
     /**
      * 媒体类型归一（文档 §5/§7）：
      * - MP4 stik 数值 → 语义名（2→Audiobook、9→Podcast…）
@@ -128,4 +121,77 @@ object TagFields {
 
     /** 编码工具：TSSE / ©too */
     fun encoder(entries: List<TagEntry>): String? = first(entries, K_ENCODER, A_ENCODER)
+
+    // ---- v2.2.22（spec: m4a-m4b-series-freeform-priority）：自由格式系列键 ----
+
+    private const val FF_PREFIX = "----:"
+    private const val FF_SERIES = "SERIES"
+    private const val FF_SERIES_PART = "SERIES-PART"
+
+    /**
+     * 自由格式系列键（----:<issuer>:<name>；issuer 缺省为旧格式 ----:<name>，视为独立命名空间）
+     * 按命名空间分组，系列名与系列序号**必须同源**（同一命名空间）：
+     * 1) 同一命名空间成对提供名+序号 → 两者同取；
+     * 2) 只提供其一 → 另一字段回退字段级标准降级链（返回 null，由 series()/seriesNumber() 降级 ©ser/©sno）；
+     * 3) 禁止跨命名空间拼凑（系列名取命名空间 A、系列序号取命名空间 B）。
+     * 命名空间内大小写不敏感归一（SERIES/series、SERIES-PART/series-part）；同名双键冲突取大写键。
+     * 返回 (系列名, 系列序号)，缺省侧为 null。
+     */
+    private fun freeformSeriesPair(entries: List<TagEntry>): Pair<String?, String?> {
+        data class Bucket(
+            var nameUpper: String? = null, var nameLower: String? = null,
+            var partUpper: String? = null, var partLower: String? = null
+        )
+
+        val buckets = LinkedHashMap<String, Bucket>()
+        for (e in entries) {
+            if (!e.key.startsWith(FF_PREFIX)) continue
+            val rest = e.key.removePrefix(FF_PREFIX)
+            val idx = rest.lastIndexOf(':')
+            val ns = if (idx >= 0) rest.substring(0, idx) else ""
+            val nm = if (idx >= 0) rest.substring(idx + 1) else rest
+            if (!nm.equals(FF_SERIES, ignoreCase = true) && !nm.equals(FF_SERIES_PART, ignoreCase = true)) continue
+            val b = buckets.getOrPut(ns) { Bucket() }
+            when {
+                nm == FF_SERIES -> if (b.nameUpper == null) b.nameUpper = e.value
+                nm.equals(FF_SERIES, ignoreCase = true) -> if (b.nameLower == null) b.nameLower = e.value
+                nm == FF_SERIES_PART -> if (b.partUpper == null) b.partUpper = e.value
+                else -> if (b.partLower == null) b.partLower = e.value
+            }
+        }
+        if (buckets.isEmpty()) return null to null
+        fun nameOf(ns: String): String? = buckets[ns]?.nameUpper ?: buckets[ns]?.nameLower
+        fun partOf(ns: String): String? = buckets[ns]?.partUpper ?: buckets[ns]?.partLower
+
+        // 1) 同命名空间成对优先
+        for (ns in buckets.keys) {
+            val n = nameOf(ns)
+            val p = partOf(ns)
+            if (n != null && p != null) return n to p
+        }
+        // 2) 仅名 → 名取之，序号回退（null → 调用方降级）
+        for (ns in buckets.keys) {
+            val n = nameOf(ns)
+            if (n != null) return n to null
+        }
+        // 3) 仅序号 → 序号取之，名回退
+        for (ns in buckets.keys) {
+            val p = partOf(ns)
+            if (p != null) return null to p
+        }
+        return null to null
+    }
+
+    /** 系列名：MP4 自由格式 ----:*:SERIES/series（命名空间同源）→ ©ser；ID3 TXXX:SERIES → TIT1 */
+    fun series(entries: List<TagEntry>): String? =
+        freeformSeriesPair(entries).first
+            ?: first(entries, A_SERIES)
+            ?: first(entries, K_SERIES)
+            ?: first(entries, K_SERIES_ALT)
+
+    /** 系列序号：MP4 自由格式 ----:*:SERIES-PART/series-part（命名空间同源）→ ©sno；ID3 TXXX:SERIESNUMBER */
+    fun seriesNumber(entries: List<TagEntry>): String? =
+        freeformSeriesPair(entries).second
+            ?: first(entries, A_SERIES_NUMBER)
+            ?: first(entries, K_SERIES_NUMBER)
 }

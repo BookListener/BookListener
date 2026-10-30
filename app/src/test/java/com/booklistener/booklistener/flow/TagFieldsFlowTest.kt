@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.booklistener.core.EntryIndexStore
 import com.booklistener.core.MetadataExtractor
+import com.booklistener.core.Mp4ChapterReader
 import com.booklistener.core.Mp4IlstReader
 import com.booklistener.core.ResolvedTags
 import com.booklistener.core.ScanCoordinator
@@ -68,18 +69,22 @@ class TagFieldsFlowTest {
         }
     }
 
-    /** 与 ScanCoordinatorFactory.resolveLocalTags 同链路：m4a → Media3(Mp4) + ilst；其余 → Media3 */
+    /** 与 ScanCoordinatorFactory.resolveLocalTags 同链路（v2.2.19：MP4 容器全部自研解析，不再调用 Media3）：
+     * m4a/mp4/alac/m4b → Mp4IlstReader.read + readDurationMs（+m4b 章节）；其余 → Media3 */
     private fun realTagReader(file: SourceFile): ResolvedTags? {
         val ext = file.name.substringAfterLast('.', "")
-        if (ext.lowercase() !in setOf("m4a", "mp4", "alac")) {
+        if (ext.lowercase() !in setOf("m4a", "mp4", "alac", "m4b")) {
             val m3 = extractor.extract(resource("tagprobe/${file.name}"), ext)
             if (m3.entries.isEmpty() && m3.durationMs == null) return null
             return ResolvedTags.fromEntries(m3.entries, m3.durationMs)
         }
         val bytes = resource("tagprobe/${file.name}")
-        val m3 = extractor.extract(bytes, ext)
-        val entries = Mp4IlstReader.read(bytes) + m3.entries
-        return ResolvedTags.fromEntries(entries, m3.durationMs)
+        val entries = Mp4IlstReader.read(bytes)
+        val durationMs = Mp4IlstReader.readDurationMs(bytes)
+        val chapters = if (ext.equals("m4b", ignoreCase = true)) {
+            Mp4ChapterReader.read(bytes).takeIf { it.isNotEmpty() }
+        } else null
+        return ResolvedTags.fromEntries(entries, durationMs).copy(chapters = chapters)
     }
 
     private fun scan(files: List<SourceFile>) {
@@ -179,6 +184,91 @@ class TagFieldsFlowTest {
 
         val extras = runBlocking { dao.getEntryTagExtrasByEntry(entryId) }
         assertTrue(extras.isEmpty())
+    }
+
+    // ---- 场景4：m4a 同命名空间成对（自由格式 SERIES + SERIES-PART 首选）----
+
+    @Test
+    fun `m4a 同命名空间成对 自由格式系列字段首选`() {
+        scan(listOf(sourceFile("probe_ff_pair.m4a")))
+
+        val rows = runBlocking { dao.getEntryIndex(entryId) }
+        assertEquals(1, rows.size)
+        val row = rows[0]
+        // 结构化列：自由格式优先，同命名空间成对同取
+        assertEquals("三体", row.series)
+        assertEquals("2", row.seriesNumber)
+        assertEquals("Audiobook", row.mediaType) // stik=2
+        assertEquals("大难不死的男孩", row.displayName)
+
+        // extras：命名空间保留的原始键名
+        val extras = runBlocking { dao.getEntryTagExtrasByEntry(entryId) }
+        val keys = extras.map { it.key }.toSet()
+        assertTrue("缺少 ----:nsA:SERIES", "----:nsA:SERIES" in keys)
+        assertTrue("缺少 ----:nsA:SERIES-PART", "----:nsA:SERIES-PART" in keys)
+
+        val work = runBlocking { dao.getWorksByEntry(entryId) }.single()
+        assertEquals("三体", work.series)
+        assertEquals("2", work.seriesNumber)
+        assertEquals("Audiobook", work.mediaType)
+    }
+
+    // ---- 场景5：m4a 跨命名空间禁止（名 nsA、序号 nsB → 序号回退 ©sno）----
+
+    @Test
+    fun `m4a 跨命名空间 序号不拼凑 回退标准原子`() {
+        scan(listOf(sourceFile("probe_ff_cross.m4a")))
+
+        val row = runBlocking { dao.getEntryIndex(entryId) }.single()
+        // 系列名取 nsA 自由格式；序号不取 nsB（跨命名空间禁止），回退 ©sno=1
+        assertEquals("三体", row.series)
+        assertEquals("1", row.seriesNumber)
+
+        val extras = runBlocking { dao.getEntryTagExtrasByEntry(entryId) }
+        val keys = extras.map { it.key }.toSet()
+        assertTrue("缺少 ----:nsA:SERIES", "----:nsA:SERIES" in keys)
+        assertTrue("缺少 ----:nsB:SERIES-PART（extras 仍全量保留）", "----:nsB:SERIES-PART" in keys)
+        assertTrue("缺少 ©sno", "\u00A9sno" in keys)
+    }
+
+    // ---- 场景6：m4a 仅小写镜像（series/series-part 同命名空间）----
+
+    @Test
+    fun `m4a 小写镜像 同命名空间成对命中`() {
+        scan(listOf(sourceFile("probe_ff_lower.m4a")))
+
+        val row = runBlocking { dao.getEntryIndex(entryId) }.single()
+        assertEquals("三体", row.series)
+        assertEquals("3", row.seriesNumber)
+
+        val extras = runBlocking { dao.getEntryTagExtrasByEntry(entryId) }
+        val keys = extras.map { it.key }.toSet()
+        assertTrue("缺少 ----:nsA:series", "----:nsA:series" in keys)
+        assertTrue("缺少 ----:nsA:series-part", "----:nsA:series-part" in keys)
+    }
+
+    // ---- 场景7：m4a 自由格式仅名（序号字段级回退 ©sno）----
+
+    @Test
+    fun `m4a 自由格式仅名 序号回退标准原子`() {
+        scan(listOf(sourceFile("probe_ff_nameonly.m4a")))
+
+        val row = runBlocking { dao.getEntryIndex(entryId) }.single()
+        // Q2：名取自由格式、序号回退 ©sno（字段级降级链）
+        assertEquals("三体", row.series)
+        assertEquals("2", row.seriesNumber)
+    }
+
+    // ---- 场景8：m4a 自由格式仅序号（名回退 ©ser）----
+
+    @Test
+    fun `m4a 自由格式仅序号 名回退标准原子`() {
+        scan(listOf(sourceFile("probe_ff_partonly.m4a")))
+
+        val row = runBlocking { dao.getEntryIndex(entryId) }.single()
+        // Q3：序号取自由格式、名回退 ©ser（字段级降级链）
+        assertEquals("旧系列名", row.series)
+        assertEquals("7", row.seriesNumber)
     }
 
     private fun resource(name: String): ByteArray =

@@ -232,15 +232,24 @@ object Mp4IlstReader {
         return null
     }
 
-    /** ---- 解析：payload = \0issuer\0name\0value（空字段表示缺省） */
+    /**
+     * ---- 解析：payload = \0issuer\0name\0value（空字段表示缺省）。
+     * v2.2.22（spec: m4a-m4b-series-freeform-priority）：保留命名空间（issuer），
+     * 键 = "----:<issuer>:<name>"；issuer 缺省保持旧格式 "----:<name>"（视为独立命名空间）。
+     */
     private fun parseFreeForm(buf: Reader, start: Int, len: Int): TagEntry? {
         if (len <= 0) return null
         val raw = buf.slice(start, len)
         // 首个字节可能为 \0（mean 缺省）；按 \0 拆分前两段后，余下为值
         val parts = raw.split('\u0000')
+        val issuer = parts.getOrNull(0)?.takeIf { it.isNotBlank() }
         val name = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
         val value = parts.drop(2).joinToString("").takeIf { it.isNotBlank() }
-        val key = if (name != null) "----:$name" else "----"
+        val key = when {
+            name == null -> "----"
+            issuer != null -> "----:$issuer:$name"
+            else -> "----:$name"
+        }
         return if (value != null) TagEntry(key, value, TagFields.SRC_MP4) else null
     }
 
