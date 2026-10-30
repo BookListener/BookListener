@@ -1,7 +1,7 @@
 # BookListener 关键规格记忆
 
 > 本文件记录项目核心业务规则与概念边界，开发前必须先读。任何与本文件冲突的实现都是 bug。
-> 最后更新：v2.2.5
+> 最后更新：v2.2.22
 
 ---
 
@@ -212,7 +212,7 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 ### 1. 解析器唯一后端（无降级）
 - 本地扫描标签解析只走两条路径，**MediaMetadataRetriever 彻底退出扫描链路**：
   - `MetadataExtractor`：Media3 提取器直驱（MP3/FLAC/OGG + MP4 标准原子映射帧），同时产出时长（SeekMap）。
-  - `Mp4IlstReader`：自研 MP4 ilst 原子树解析（moov→udta→meta→ilst→data），补齐 Media3 不可达的扩展原子 `©ser`/`©sno`/`stik`（m4a/mp4/alac 与 Media3 结果合并，原始键名全保留）。
+  - `Mp4IlstReader`：自研 MP4 ilst 原子树解析（moov→udta→meta→ilst→data），补齐 Media3 不可达的扩展原子 `©ser`/`©sno`/`stik`/`----` 自由格式（v2.2.19 起 m4a/mp4/alac/m4b 全自研解析、不再调用 Media3 Mp4Extractor；原始键名全保留）。
 - 解析失败不降级回退旧白名单：字段置空 + `error` 标记，显示名回退文件名（业务层语义）。
 
 ### 2. 字段入库范围（文档全字段）
@@ -223,6 +223,13 @@ v2.1.9 已删除 `enterFolderWithRecord`（条目级队列 ownerId=entryId）—
 ### 3. 键名兼容
 - TXXX 双风格：desc 非空（且非占位 `TXXX`）→ 键=desc；desc 为占位且 value 形如 `KEY:VALUE` → 按首冒号拆键值。
 - stik 数值→语义名：2→Audiobook、9/10/11→Music 等（文档 §3 映射表）。
+
+### 4. 系列字段解析优先级与命名空间同源配对（v2.2.22，spec: m4a-m4b-series-freeform-priority）
+- **键格式**：`parseFreeForm` 输出键保留命名空间 = `----:<issuer>:<name>`（issuer 非空）；issuer 缺省保持旧格式 `----:<name>`（视为独立命名空间）。
+- **系列名优先级**（m4a/m4b/mp4/alac 同一链路）：① 自由格式 `----:*:SERIES` / `----:*:series`（命名空间内大小写不敏感归一，同名双键冲突取大写键）→ ② `©ser` → ③ ID3 `TXXX:SERIES`（mp3 链路，次选 `TIT1`）。
+- **系列序号优先级**：① `----:*:SERIES-PART` / `----:*:series-part` → ② `©sno` → ③ ID3 `TXXX:SERIESNUMBER`（mp3 链路）。
+- **同源配对**：系列名与系列序号必须来自同一命名空间——同一命名空间成对提供则同取；只提供其一 → 另一字段回退字段级标准降级链（序号→`©sno`、名→`©ser`）；**禁止跨命名空间拼凑**。
+- 取值原样入库，不做数字提取/规范化；解析细节见 docs/TAG-FIELDS.md §2，flow 场景见 TagFieldsFlowTest。
 
 ---
 
